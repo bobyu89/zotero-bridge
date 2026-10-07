@@ -124,6 +124,22 @@
 		return rich;
 	}
 
+	// ---------- Tables ----------
+
+	function isTableRow(line) {
+		return /^\s*\|.*\|\s*$/.test(line);
+	}
+
+	function isTableSeparator(line) {
+		return /^\s*\|[\s:|-]+\|\s*$/.test(line) && line.includes("-");
+	}
+
+	function tableCells(line) {
+		return line.trim().replace(/^\||\|$/g, "")
+			.split(/(?<!\\)\|/)
+			.map(c => c.trim().replace(/\\\|/g, "|"));
+	}
+
 	// ---------- Markdown → Notion blocks ----------
 
 	function block(type, richText, extra) {
@@ -146,7 +162,11 @@
 	 * Convert Markdown to a flat list of Notion blocks (no nested children), so the
 	 * result can always be placed inside one container block.
 	 */
-	function mdToNotionBlocks(md) {
+	/**
+	 * @param {object} [opts] - { tables: true } emits real Notion table blocks (table > table_row),
+	 *   which is only valid when the blocks go directly on a page, not inside our container callout.
+	 */
+	function mdToNotionBlocks(md, opts = {}) {
 		let lines = String(md || "").replace(/\r\n?/g, "\n").split("\n");
 		let blocks = [];
 		let para = [];
@@ -228,12 +248,39 @@
 				blocks.push(...blocksFor(depth ? "bulleted_list_item" : "numbered_list_item", prefix + m[2]));
 				continue;
 			}
-			if (/^\|.*\|\s*$/.test(line)) {
-				// Tables: render each row as a paragraph (Notion tables can't nest in our container)
+			if (isTableRow(line)) {
 				flushPara();
-				if (/^\|[\s:|-]+\|\s*$/.test(line)) continue;
-				let cells = line.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
-				blocks.push(...blocksFor("paragraph", cells.join(" ｜ ")));
+				let rows = [];
+				let hasHeader = false;
+				while (i < lines.length && isTableRow(lines[i])) {
+					if (isTableSeparator(lines[i])) {
+						hasHeader = rows.length === 1;
+					}
+					else {
+						rows.push(tableCells(lines[i]));
+					}
+					i++;
+				}
+				i--;
+				if (opts.tables && rows.length) {
+					let width = Math.max(...rows.map(r => r.length));
+					let tableRows = rows.slice(0, 100).map(r => ({
+						object: "block",
+						type: "table_row",
+						table_row: {
+							cells: Array.from({ length: width }, (_, k) => toRichText(r[k] || "")),
+						},
+					}));
+					blocks.push({
+						object: "block",
+						type: "table",
+						table: { table_width: width, has_column_header: hasHeader, has_row_header: false, children: tableRows },
+					});
+				}
+				else {
+					// Inside the container callout tables can't nest, so render each row as a paragraph
+					for (let r of rows) blocks.push(...blocksFor("paragraph", r.join(" ｜ ")));
+				}
 				continue;
 			}
 			para.push(line.trim());
@@ -317,6 +364,24 @@
 				let quote = [m[1]];
 				while (i + 1 < lines.length && /^>/.test(lines[i + 1])) quote.push(lines[++i].replace(/^>\s?/, ""));
 				out.push(`<blockquote><p>${quote.map(inlineToHTML).join("<br>")}</p></blockquote>`);
+				continue;
+			}
+			if (isTableRow(line)) {
+				flushPara();
+				closeList();
+				let rows = [];
+				let headerRows = 0;
+				while (i < lines.length && isTableRow(lines[i])) {
+					if (isTableSeparator(lines[i])) headerRows = rows.length === 1 ? 1 : headerRows;
+					else rows.push(tableCells(lines[i]));
+					i++;
+				}
+				i--;
+				let html = rows.map((r, k) => {
+					let tag = k < headerRows ? "th" : "td";
+					return "<tr>" + r.map(c => `<${tag}>${inlineToHTML(c)}</${tag}>`).join("") + "</tr>";
+				}).join("");
+				out.push(`<table>${html}</table>`);
 				continue;
 			}
 			let ul = /^\s*[-*+]\s+(.*)$/.exec(line);
@@ -447,10 +512,39 @@
 		}
 	}
 
+	/**
+	 * Flatten Markdown into simple display blocks [{ type: "h"|"li"|"quote"|"p", level, text }]
+	 * with inline markup stripped, so the Zotero item pane can render it with textContent only.
+	 */
+	function mdToOutline(md) {
+		let out = [];
+		for (let line of String(md || "").replace(/\r\n?/g, "\n").split("\n")) {
+			let m;
+			if (!line.trim() || /^```/.test(line) || /^%%.*%%\s*$/.test(line) || isTableSeparator(line)) continue;
+			if ((m = /^(#{1,6})\s+(.*)$/.exec(line))) {
+				out.push({ type: "h", level: m[1].length, text: plainText(m[2]) });
+			}
+			else if ((m = /^(\s*)(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?(.*)$/.exec(line))) {
+				out.push({ type: "li", level: Math.floor(m[1].replace(/\t/g, "  ").length / 2), text: plainText(m[2]) });
+			}
+			else if ((m = /^>\s?(.*)$/.exec(line))) {
+				let t = m[1].replace(/^\[!\w+\][+-]?\s*/, "");
+				if (t.trim()) out.push({ type: "quote", text: plainText(t) });
+			}
+			else if (isTableRow(line)) {
+				out.push({ type: "p", text: tableCells(line).map(plainText).join(" ｜ ") });
+			}
+			else {
+				out.push({ type: "p", text: plainText(line.trim()) });
+			}
+		}
+		return out;
+	}
+
 	// Strip wikilink brackets for places that can't render them (Notion properties)
 	function plainText(md) {
 		return parseInline(String(md || "")).map(t => t.text).join("");
 	}
 
-	return { parseInline, toRichText, mdToNotionBlocks, mdToHtml, htmlToMd, plainText, chunkString, NOTION_TEXT_LIMIT };
+	return { parseInline, toRichText, mdToNotionBlocks, mdToHtml, htmlToMd, mdToOutline, plainText, chunkString, NOTION_TEXT_LIMIT };
 });

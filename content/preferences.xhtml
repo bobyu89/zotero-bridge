@@ -48,6 +48,11 @@
 		<hbox>
 			<button label="載入內建模板來修改" oncommand="ZoteroBridgePrefs.loadDefaultPrompt()"/>
 		</hbox>
+		<label value="文獻比較表模板（留空 = 內建：比較表、主題整理、研究缺口）："/>
+		<html:textarea id="zb-synthesis-prompt" rows="6" preference="extensions.zotero-bridge.llm.synthesisPrompt"/>
+		<hbox>
+			<button label="載入內建比較表模板來修改" oncommand="ZoteroBridgePrefs.loadDefaultSynthesisPrompt()"/>
+		</hbox>
 	</groupbox>
 
 	<groupbox>
@@ -85,6 +90,8 @@
 		<html:input type="password" preference="extensions.zotero-bridge.notion.token" placeholder="ntn_..."/>
 		<label value="預設資料庫連結（沒有符合任何分流規則時使用）："/>
 		<html:input type="text" preference="extensions.zotero-bridge.notion.database" placeholder="https://www.notion.so/..."/>
+		<label value="文獻比較表的 Notion 父頁面（選填；比較表會建立成這個頁面底下的子頁面，頁面也要分享給 integration）："/>
+		<html:input type="text" preference="extensions.zotero-bridge.notion.synthesisParent" placeholder="https://www.notion.so/..."/>
 		<hbox align="center">
 			<button label="測試連線並補齊資料庫欄位" oncommand="ZoteroBridgePrefs.testNotion()"/>
 		</hbox>

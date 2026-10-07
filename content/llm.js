@@ -191,14 +191,19 @@
 		return { text, model: json.model || model };
 	}
 
-	async function generateNote(settings, data, opts, fetch) {
-		let { system, user } = buildPrompt(data, opts);
-		let common = { apiKey: settings.apiKey, model: settings.model, system, user, fetch };
+	/** Run one system + user prompt on the configured provider. */
+	async function generateText(settings, system, user, fetch) {
 		if (!settings.apiKey) throw new Error("尚未設定 LLM API key");
+		let common = { apiKey: settings.apiKey, model: settings.model, system, user, fetch };
 		if (settings.provider === "openai") {
 			return callOpenAI(Object.assign(common, { baseURL: settings.baseURL }));
 		}
 		return callAnthropic(Object.assign(common, { effort: settings.effort }));
+	}
+
+	async function generateNote(settings, data, opts, fetch) {
+		let { system, user } = buildPrompt(data, opts);
+		return generateText(settings, system, user, fetch);
 	}
 
 	/** Pull the one-line summary out of the generated note (for the Notion "Summary" property). */
@@ -211,5 +216,8 @@
 		return section.split(/\n\s*\n/)[0].replace(/\s+/g, " ").trim().slice(0, 2000);
 	}
 
-	return { DEFAULT_MODELS, DEFAULT_SYSTEM_PROMPT, buildPrompt, callAnthropic, callOpenAI, generateNote, extractSummary };
+	return {
+		DEFAULT_MODELS, DEFAULT_SYSTEM_PROMPT, buildPrompt, formatAnnotationsForPrompt,
+		callAnthropic, callOpenAI, generateText, generateNote, extractSummary,
+	};
 });

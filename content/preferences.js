@@ -147,6 +147,14 @@
 			ta.dispatchEvent(new Event("input"));
 		},
 
+		loadDefaultSynthesisPrompt() {
+			let bridge = Zotero.ZoteroBridge;
+			let ta = document.getElementById("zb-synthesis-prompt");
+			if (!bridge || !ta) return;
+			ta.value = bridge.synthesis.DEFAULT_SYNTHESIS_PROMPT;
+			ta.dispatchEvent(new Event("input"));
+		},
+
 		async testNotion() {
 			let status = document.getElementById("zb-notion-status");
 			status.textContent = "測試中…";

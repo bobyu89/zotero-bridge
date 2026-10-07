@@ -46,7 +46,9 @@
 				baseURL: String(pref("llm.openaiBaseURL") || "").trim(),
 				systemPrompt: pref("llm.systemPrompt") || "",
 				fullTextLimit: Number(pref("llm.fullTextLimit")) || 0,
+				synthesisPrompt: pref("llm.synthesisPrompt") || "",
 			},
+			notionSynthesisParent: String(pref("notion.synthesisParent") || "").trim(),
 		};
 	}
 
@@ -383,6 +385,161 @@
 		pw.startCloseTimer(10000);
 	}
 
+	// ---------- cross-paper synthesis ----------
+
+	const MAX_SYNTHESIS_ITEMS = 60;
+
+	function stamp(date = new Date()) {
+		let p = n => String(n).padStart(2, "0");
+		return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())} ${p(date.getHours())}${p(date.getMinutes())}`;
+	}
+
+	/**
+	 * Compare several items: one LLM call over their AI notes (or abstracts + highlights),
+	 * written to Obsidian, Notion (under a chosen parent page) and a Zotero standalone note.
+	 * @param {object} scope { label, collection }
+	 */
+	function runSynthesis(items, scope) {
+		let p = running.then(() => runSynthesisNow(items, scope));
+		running = p.catch(() => {});
+		return p;
+	}
+
+	async function runSynthesisNow(items, scope) {
+		items = ZB.adapter.toRegularItems(items);
+		if (items.length < 2) {
+			notify("Zotero Bridge", "文獻比較表至少需要 2 篇文獻。");
+			return;
+		}
+		let settings;
+		try {
+			settings = readSettings();
+		}
+		catch (e) {
+			notify("Zotero Bridge 設定有誤", String(e.message || e));
+			return;
+		}
+		if (!settings.llm.apiKey) {
+			notify("Zotero Bridge", "文獻比較表需要 LLM API key：請到 設定 → Zotero Bridge 填入。");
+			return;
+		}
+		let extra = items.length > MAX_SYNTHESIS_ITEMS ? `（超過 ${MAX_SYNTHESIS_ITEMS} 篇，只會使用前 ${MAX_SYNTHESIS_ITEMS} 篇）` : "";
+		items = items.slice(0, MAX_SYNTHESIS_ITEMS);
+		let ok = Services.prompt.confirm(Zotero.getMainWindow(), "Zotero Bridge",
+			`將用 ${settings.llm.model} 比較 ${items.length} 篇文獻並產生文獻比較表${extra}，會產生一次 API 費用。要繼續嗎？`);
+		if (!ok) return;
+
+		let pw = new Zotero.ProgressWindow({ closeOnClick: true });
+		pw.changeHeadline("Zotero Bridge：文獻比較表");
+		pw.show();
+		let line = new pw.ItemProgress("note", `讀取 ${items.length} 篇文獻…`);
+		try {
+			let sources = [];
+			let withoutAI = 0;
+			for (let item of items) {
+				let data = await ZB.adapter.extractItemData(item, { fullTextLimit: 0 });
+				let aiMarkdown = data.aiNote ? readAINote(data.aiNote.html).md : "";
+				if (!aiMarkdown) withoutAI++;
+				sources.push({ item, data, aiMarkdown, annotationsText: ZB.llm.formatAnnotationsForPrompt(data) });
+			}
+			let { system, user, entries } = ZB.synthesis.buildSynthesisPrompt(sources, {
+				systemPrompt: settings.llm.synthesisPrompt,
+			});
+			line.setText(`AI 分析 ${items.length} 篇文獻中…（可能需要一兩分鐘）`);
+			let result = await ZB.llm.generateText(settings.llm, system, user, (u, i) => fetch(u, i));
+			let md = result.text.trim();
+			let model = result.model || settings.llm.model;
+			let generatedAt = new Date().toISOString();
+			let title = `文獻比較：${scope.label}（${items.length} 篇）`;
+			let outputs = [];
+			let errors = [];
+
+			let notionUrl = "";
+			if (settings.notionToken && settings.notionSynthesisParent) {
+				line.setText("建立 Notion 頁面…");
+				try {
+					let client = new ZB.notion.NotionClient({ token: settings.notionToken, fetch: (u, i) => fetch(u, i) });
+					let blocks = ZB.markdown.mdToNotionBlocks(ZB.synthesis.buildSynthesisPlain(md, entries), { tables: true });
+					let page = await client.createChildPage(settings.notionSynthesisParent, `${title} ${stamp()}`, blocks, "📊");
+					notionUrl = page.url;
+					outputs.push("Notion");
+				}
+				catch (e) {
+					errors.push(`Notion：${e.message || e}`);
+				}
+			}
+
+			if (settings.vaultPath) {
+				line.setText("寫入 Obsidian…");
+				try {
+					// Link each source to its literature note when that note exists in the vault
+					let linkTargets = {};
+					for (let [i, src] of sources.entries()) {
+						let route = ZB.core.resolveRoute(src.data, settings.rules, settings.defaults);
+						let target = await resolveObsidianPath(settings, ZB.core.splitFolder(route.obsidianFolder),
+							ZB.core.noteBasename(src.data, settings.filenameFormat), src.data);
+						if (await IOUtils.exists(target.path)) linkTargets[entries[i].id] = target.relPath.replace(/\.md$/i, "");
+					}
+					let dir = PathUtils.join(settings.vaultPath, ...ZB.core.splitFolder(settings.defaults.obsidianFolder), "文獻比較");
+					await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
+					let path = PathUtils.join(dir, `${ZB.core.sanitizeFilename(title)} ${stamp()}.md`);
+					await IOUtils.writeUTF8(path, ZB.synthesis.buildSynthesisNote(md, entries, {
+						title, scope: scope.label, model, generatedAt, notionUrl, linkTargets,
+					}));
+					outputs.push("Obsidian");
+				}
+				catch (e) {
+					errors.push(`Obsidian：${e.message || e}`);
+				}
+			}
+
+			line.setText("存入 Zotero…");
+			try {
+				let note = new Zotero.Item("note");
+				note.libraryID = items[0].libraryID;
+				note.setNote(`<h1>📊 ${escapeHTML(title)}</h1>\n<p><em>由 ${escapeHTML(model)} 於 ${generatedAt} 產生（Zotero Bridge）</em></p>\n`
+					+ ZB.markdown.mdToHtml(ZB.synthesis.buildSynthesisPlain(md, entries)));
+				note.addTag("zotero-bridge-synthesis");
+				if (scope.collection && scope.collection.libraryID === note.libraryID) note.addToCollection(scope.collection.id);
+				for (let item of items) {
+					if (item.libraryID === note.libraryID) note.addRelatedItem(item);
+				}
+				await note.saveTx();
+				selfModified.add(note.id);
+				setTimeout(() => selfModified.delete(note.id), AUTO_SYNC_DELAY_MS * 2);
+				outputs.push("Zotero 筆記");
+			}
+			catch (e) {
+				errors.push(`Zotero：${e.message || e}`);
+			}
+
+			line.setText(`${title} — 已寫入 ${outputs.join("、") || "（無）"}`);
+			if (errors.length) {
+				line.setError();
+				errors.forEach(e => Zotero.logError(new Error(e)));
+				pw.addDescription(errors.join("\n"));
+			}
+			else {
+				line.setProgress(100);
+			}
+			if (withoutAI) pw.addDescription(`其中 ${withoutAI} 篇沒有 AI 筆記，改用摘要與劃線；先產生 AI 筆記可提高比較表品質。`);
+			if (settings.notionToken && !settings.notionSynthesisParent) {
+				pw.addDescription("想同步到 Notion：請在設定填入「文獻比較表的 Notion 父頁面」。");
+			}
+			pw.startCloseTimer(errors.length ? 20000 : 10000);
+		}
+		catch (e) {
+			Zotero.logError(e);
+			line.setText(`失敗：${e.message || e}`);
+			line.setError();
+			pw.startCloseTimer(20000);
+		}
+	}
+
+	function escapeHTML(s) {
+		return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+	}
+
 	// ---------- settings-pane helpers ----------
 
 	/** Check the token and every configured database; add missing columns. Returns report lines. */
@@ -421,8 +578,8 @@
 		{ l10nID: "zotero-bridge-menu-notion", action: { targets: ["notion"], ai: "reuse" } },
 	];
 
-	function buildMenus(getItems) {
-		return ITEM_ACTIONS.map((entry) => {
+	function buildMenus(getItems, getScope) {
+		let menus = ITEM_ACTIONS.map((entry) => {
 			if (entry.separator) return { menuType: "separator" };
 			return {
 				menuType: "menuitem",
@@ -432,6 +589,28 @@
 				},
 			};
 		});
+		menus.push({ menuType: "separator" }, {
+			menuType: "menuitem",
+			l10nID: "zotero-bridge-menu-synthesis",
+			onCommand: (ev, context) => {
+				runSynthesis(getItems(context), getScope(context)).catch(e => Zotero.logError(e));
+			},
+		});
+		return menus;
+	}
+
+	function selectedCollections(context) {
+		return (context.collectionTreeRows || []).filter(r => r.isCollection && r.isCollection()).map(r => r.ref);
+	}
+
+	function itemScope(context) {
+		let rows = selectedCollections(context);
+		return { label: rows.length ? rows.map(c => c.name).join("、") + "（選取）" : "選取的文獻", collection: null };
+	}
+
+	function collectionScope(context) {
+		let cols = selectedCollections(context);
+		return { label: cols.map(c => c.name).join("、") || "分類", collection: cols[0] || null };
 	}
 
 	function collectionItems(context) {
@@ -455,7 +634,7 @@
 				menuType: "submenu",
 				l10nID: "zotero-bridge-menu",
 				icon,
-				menus: buildMenus(context => context.items || []),
+				menus: buildMenus(context => context.items || [], itemScope),
 			}],
 		});
 		let collectionMenu = Zotero.MenuManager.registerMenu({
@@ -470,7 +649,7 @@
 					let rows = context.collectionTreeRows || [];
 					context.setVisible(rows.some(r => r.isCollection && r.isCollection()));
 				},
-				menus: buildMenus(collectionItems),
+				menus: buildMenus(collectionItems, collectionScope),
 			}],
 		});
 		let toolsMenu = Zotero.MenuManager.registerMenu({
@@ -484,6 +663,81 @@
 			}],
 		});
 		menuIDs = [itemMenu, collectionMenu, toolsMenu].filter(Boolean);
+	}
+
+	// ---------- item pane: AI note section ----------
+
+	let paneID = null;
+	let paneRefresh = new WeakMap();
+
+	function renderPane({ doc, body, item, setSectionSummary }) {
+		body.replaceChildren();
+		let el = (tag, text, style) => {
+			let e = doc.createElement(tag);
+			if (text !== undefined) e.textContent = text;
+			if (style) e.setAttribute("style", style);
+			return e;
+		};
+		let button = (label, action) => {
+			let b = el("button", label, "margin: 4px 6px 4px 0;");
+			b.addEventListener("click", () => {
+				run([item], action).then(() => {
+					let refresh = paneRefresh.get(body);
+					if (refresh) refresh();
+				}).catch(e => Zotero.logError(e));
+			});
+			return b;
+		};
+		let note = item && item.isRegularItem() ? ZB.adapter.getAINote(item) : null;
+		let actions = el("div");
+		if (!note) {
+			setSectionSummary("尚未產生");
+			body.append(el("p", "這篇文獻還沒有 AI 文獻筆記。", "margin: 4px 0; color: var(--fill-secondary);"));
+			actions.append(button("產生 AI 筆記並同步", { targets: ["notion", "obsidian"], ai: "missing" }));
+			body.append(actions);
+			return;
+		}
+		let { md, model, at } = readAINote(note.getNote());
+		let summary = ZB.markdown.plainText(ZB.llm.extractSummary(md));
+		setSectionSummary(summary.slice(0, 80));
+		if (model || at) body.append(el("div", [model, at && at.slice(0, 10)].filter(Boolean).join(" · "), "font-size: 0.9em; color: var(--fill-secondary); margin-bottom: 4px;"));
+		for (let block of ZB.markdown.mdToOutline(md)) {
+			if (block.type === "h") {
+				body.append(el("div", block.text, "font-weight: 600; margin: 8px 0 2px;"));
+			}
+			else if (block.type === "li") {
+				body.append(el("div", "• " + block.text, `margin: 1px 0 1px ${0.8 + block.level}em; text-indent: -0.8em;`));
+			}
+			else if (block.type === "quote") {
+				body.append(el("div", block.text, "margin: 2px 0; padding-left: 8px; border-inline-start: 3px solid var(--fill-quinary); font-style: italic;"));
+			}
+			else {
+				body.append(el("div", block.text, "margin: 2px 0;"));
+			}
+		}
+		actions.append(
+			button("同步到 Notion + Obsidian", { targets: ["notion", "obsidian"], ai: "reuse" }),
+			button("重新產生", { targets: ["notion", "obsidian"], ai: "regenerate" }),
+		);
+		body.append(actions);
+	}
+
+	function registerItemPane() {
+		let icon = rootURI + "content/icons/bridge.svg";
+		paneID = Zotero.ItemPaneManager.registerSection({
+			paneID: "zotero-bridge-ai-note",
+			pluginID,
+			header: { l10nID: "zotero-bridge-pane-header", icon },
+			sidenav: { l10nID: "zotero-bridge-pane-sidenav", icon },
+			onInit: ({ body, refresh }) => {
+				paneRefresh.set(body, refresh);
+			},
+			onItemChange: ({ item, setEnabled }) => {
+				setEnabled(!!item && item.isRegularItem());
+				return true;
+			},
+			onRender: renderPane,
+		}) || null;
 	}
 
 	// ---------- auto-sync ----------
@@ -518,16 +772,19 @@
 		pluginID = opts.id;
 		rootURI = opts.rootURI;
 		registerMenus();
+		registerItemPane();
 		registerNotifier();
 	}
 
 	function shutdown() {
 		for (let id of menuIDs) Zotero.MenuManager.unregisterMenu(id);
 		menuIDs = [];
+		if (paneID) Zotero.ItemPaneManager.unregisterSection(paneID);
+		paneID = null;
 		if (notifierID) Zotero.Notifier.unregisterObserver(notifierID);
 		notifierID = null;
 		if (autoSyncTimer) clearTimeout(autoSyncTimer);
 	}
 
-	ZB.main = { init, shutdown, run, testNotion, readSettings, readAINote };
+	ZB.main = { init, shutdown, run, runSynthesis, renderPane, testNotion, readSettings, readAINote };
 })(this);

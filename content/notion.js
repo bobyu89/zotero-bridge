@@ -181,6 +181,19 @@
 			return results;
 		}
 
+		/** Create a page under another page (used for literature syntheses). Returns the new page. */
+		async createChildPage(parentInput, title, blocks, emoji) {
+			let parentId = parseNotionId(parentInput);
+			if (!parentId) throw new Error(`無法從「${parentInput}」解析出 Notion 頁面 ID`);
+			let page = await this.request("POST", "pages", {
+				parent: { type: "page_id", page_id: parentId },
+				icon: emoji ? { type: "emoji", emoji } : undefined,
+				properties: { title: { title: [{ type: "text", text: { content: String(title).slice(0, 2000) } }] } },
+			});
+			if (blocks.length) await this.appendChildren(page.id, blocks);
+			return page;
+		}
+
 		/**
 		 * Replace the plugin-managed container block on a page, keeping the user's own blocks.
 		 * The container is a callout whose text starts with CONTAINER_MARKER.

@@ -19,6 +19,7 @@ function makeEnv({ prefs, fetch }) {
 	let menus = [];
 	let progressLines = [];
 	let errors = [];
+	let panes = [];
 
 	class MockItem {
 		constructor(type, fields = {}) {
@@ -54,6 +55,8 @@ function makeEnv({ prefs, fetch }) {
 		setNote(h) { this.noteHTML = h; }
 		getNoteTitle() { return "note"; }
 		getItemTypeIconName() { return this.itemType; }
+		addToCollection(id) { this.collectionsAdded = (this.collectionsAdded || []).concat(id); }
+		addRelatedItem(item) { this.related = (this.related || []).concat(item.key); }
 		async saveTx() {
 			if (this.parentID && !items.get(this.parentID).children.includes(this.id)) {
 				items.get(this.parentID).children.push(this.id);
@@ -75,6 +78,10 @@ function makeEnv({ prefs, fetch }) {
 			unregisterMenu: () => true,
 		},
 		Notifier: { registerObserver: () => "obs", unregisterObserver: () => {} },
+		ItemPaneManager: {
+			registerSection: (opts) => { panes.push(opts); return opts.paneID; },
+			unregisterSection: () => true,
+		},
 		PreferencePanes: { register: async () => "pane" },
 		getMainWindows: () => [],
 		getMainWindow: () => ({}),
@@ -136,7 +143,7 @@ function makeEnv({ prefs, fetch }) {
 		},
 	});
 	vm.runInContext(fs.readFileSync(path.join(ROOT, "bootstrap.js"), "utf8"), context, { filename: "bootstrap.js" });
-	return { context, Zotero, MockItem, addChild, menus, progressLines, items, prefStore, errors };
+	return { context, Zotero, MockItem, addChild, menus, progressLines, items, prefStore, errors, panes };
 }
 
 function notionMock(log) {
@@ -200,6 +207,7 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	});
 	await vm.runInContext(`startup({ id: "zotero-bridge@bobyu89.github.io", version: "0.1.0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
 	assert.deepEqual(env.menus.map(m => m.target), ["main/library/item", "main/library/collection", "main/menubar/tools"]);
+	assert.equal(env.panes[0].paneID, "zotero-bridge-ai-note");
 
 	let { MockItem, addChild } = env;
 	let item = new MockItem("journalArticle", {
@@ -319,4 +327,94 @@ test("AI failure still writes Obsidian, and an unconfigured Notion is skipped", 
 	let text = fs.readFileSync(path.join(vault, "WHO 2020 - Nursing Theory.md"), "utf8");
 	assert.match(text, /^title: "Nursing Theory"$/m);
 	assert.doesNotMatch(text, /AI 文獻筆記/);
+});
+
+test("item pane shows the AI note; synthesis from a collection writes Obsidian, Notion and a Zotero note", async () => {
+	let vault = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-vault-"));
+	let log = [];
+	let fetch = async (url, init) => {
+		let body = init.body ? JSON.parse(init.body) : undefined;
+		log.push({ url, method: init.method, body });
+		let ok = json => ({ status: 200, ok: true, headers: { get: () => null }, text: async () => JSON.stringify(json) });
+		if (url.startsWith("https://api.anthropic.com/")) {
+			return ok({
+				model: "claude-opus-5-5", stop_reason: "end_turn",
+				content: [{ type: "text", text: "## 綜合摘要\n兩篇都有效 [S1, S2]。\n\n## 文獻比較表\n| 文獻 | 設計 |\n|---|---|\n| [S1] | RCT |\n| [S2] | cohort |\n" }],
+			});
+		}
+		if (url === "https://api.notion.com/v1/pages") return ok({ id: "syn-page", url: "https://www.notion.so/syn-page" });
+		if (url === "https://api.notion.com/v1/blocks/syn-page/children") return ok({ results: [] });
+		return { status: 404, ok: false, headers: { get: () => null }, text: async () => "{}" };
+	};
+	let env = makeEnv({
+		fetch,
+		prefs: {
+			"extensions.zotero-bridge.obsidian.vaultPath": vault,
+			"extensions.zotero-bridge.obsidian.folder": "Zotero",
+			"extensions.zotero-bridge.obsidian.filenameFormat": "citekey",
+			"extensions.zotero-bridge.notion.token": "ntn_test",
+			"extensions.zotero-bridge.notion.synthesisParent": "https://www.notion.so/Research-22222222222222222222222222222222",
+			"extensions.zotero-bridge.routing.rules": "[]",
+			"extensions.zotero-bridge.llm.enabled": true,
+			"extensions.zotero-bridge.llm.provider": "anthropic",
+			"extensions.zotero-bridge.llm.anthropicKey": "sk-ant-test",
+			"extensions.zotero-bridge.llm.anthropicModel": "claude-opus-5-5",
+		},
+	});
+	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
+	let a = new env.MockItem("journalArticle", { title: "A", year: "2024", citationKey: "chen2024", creators: [{ lastName: "Chen", creatorType: "author" }] });
+	let b = new env.MockItem("journalArticle", { title: "B", year: "2021", citationKey: "lee2021", creators: [{ lastName: "Lee", creatorType: "author" }], abstractNote: "abstract B" });
+	let aiNote = new env.MockItem("note");
+	aiNote.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 claude-opus-5-5 於 2026-10-01T00:00:00Z 產生（Zotero Bridge）</em></p><h2>一句話摘要</h2><p>衛教降低跌倒。</p><ul><li>設計：RCT</li></ul>";
+	aiNote.tags = ["zotero-bridge-ai"];
+	env.addChild(a, aiNote);
+	// Item A already has a literature note in the vault, so the synthesis links to it
+	await fsp.mkdir(path.join(vault, "Zotero"), { recursive: true });
+	await fsp.writeFile(path.join(vault, "Zotero", "chen2024.md"), "---\nzotero_key: \"library/" + a.key + "\"\n---\n");
+
+	// Item pane
+	let doc = new JSDOM("<div id=b></div>").window.document;
+	let body = doc.getElementById("b");
+	let summary;
+	env.panes[0].onRender({ doc, body, item: a, setSectionSummary: s => { summary = s; } });
+	assert.equal(summary, "衛教降低跌倒。");
+	assert.match(body.textContent, /claude-opus-5-5 · 2026-10-01/);
+	assert.match(body.textContent, /• 設計：RCT/);
+	assert.equal(body.querySelectorAll("button").length, 2);
+	env.panes[0].onRender({ doc, body, item: b, setSectionSummary: s => { summary = s; } });
+	assert.equal(summary, "尚未產生");
+	assert.match(body.textContent, /還沒有 AI 文獻筆記/);
+
+	// Synthesis from the collection menu
+	let collection = { id: 7, name: "碩論", libraryID: 1, getChildItems: () => [a, b] };
+	let collMenu = env.menus[1].menus[0].menus.find(m => m.l10nID === "zotero-bridge-menu-synthesis");
+	collMenu.onCommand({}, { collectionTreeRows: [{ isCollection: () => true, ref: collection }] });
+	await env.context.ZB.main.run([], {});
+	assert.deepEqual(env.errors, []);
+	let line = env.progressLines.at(-1);
+	assert.equal(line.error, undefined, line.text);
+	assert.match(line.text, /已寫入 Notion、Obsidian、Zotero 筆記/);
+
+	let llm = log.find(l => l.url.startsWith("https://api.anthropic.com/"));
+	assert.match(llm.body.messages[0].content, /<source id="S1">[\s\S]*<ai_note>[\s\S]*衛教降低跌倒/);
+	assert.match(llm.body.messages[0].content, /<source id="S2">[\s\S]*abstract B/);
+
+	let create = log.find(l => l.url === "https://api.notion.com/v1/pages");
+	assert.deepEqual(create.body.parent, { type: "page_id", page_id: "22222222-2222-2222-2222-222222222222" });
+	let appended = log.find(l => l.url.endsWith("/blocks/syn-page/children"));
+	assert.ok(appended.body.children.some(bl => bl.type === "table"));
+
+	let dir = path.join(vault, "Zotero", "文獻比較");
+	let files = fs.readdirSync(dir);
+	assert.equal(files.length, 1);
+	let text = fs.readFileSync(path.join(dir, files[0]), "utf8");
+	assert.match(text, /兩篇都有效 \[\[Zotero\/chen2024\|Chen, 2024\]\]; \(Lee, 2021\)/);
+	assert.match(text, /^\| \[\[Zotero\/chen2024\\\|Chen, 2024\]\] \| RCT \|$/m);
+	assert.match(text, /^notion: "https:\/\/www\.notion\.so\/syn-page"$/m);
+
+	let synNote = [...env.items.values()].find(i => i.tags.includes("zotero-bridge-synthesis"));
+	assert.ok(synNote);
+	assert.deepEqual(synNote.collectionsAdded, [7]);
+	assert.deepEqual(synNote.related.sort(), [a.key, b.key].sort());
+	assert.match(synNote.noteHTML, /<table>/);
 });

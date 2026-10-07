@@ -5,7 +5,7 @@
         {
           "version": "0.1.0",
           "update_link": "https://github.com/bobyu89/-/releases/download/zotero-bridge-v0.1.0/zotero-bridge-0.1.0.xpi",
-          "update_hash": "sha256:27fcbacf83985e538aef5e2eaee48aa51b9b6f2633dd8bfa9e571f86080df19a",
+          "update_hash": "sha256:922b7c56567679b8ccaaf6b16b1386dc2b714173ce4c80fe9c53f2557c9e4589",
           "applications": {
             "zotero": {
               "strict_min_version": "10.0",
