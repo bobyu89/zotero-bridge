@@ -34,6 +34,20 @@ test("buildProperties only writes properties that exist with the right type", ()
 	assert.equal(p.Year.number, 2024);
 	assert.deepEqual(p.Tags.multi_select, [{ name: "a，b" }, { name: "c" }]);
 	assert.equal(notion.buildProperties(schema, { year: "n.d." }).Year.number, null);
+	let full = { titleName: "Title", props: Object.fromEntries(Object.entries(notion.PROPERTY_SCHEMA).map(([k, v]) => [k, Object.keys(v)[0]])) };
+	full.props.Title = "title";
+	let all = notion.buildProperties(full, {
+		title: "T", volume: "12", issue: "3", pages: "45-67", publisher: "Wiley", url: "https://x.y",
+		abstract: "a".repeat(2500), date: "2024-03-01", dateAdded: "2024-05-01T08:00:00Z",
+	});
+	assert.equal(all.Volume.rich_text[0].text.content, "12");
+	assert.equal(all.Pages.rich_text[0].text.content, "45-67");
+	assert.equal(all.Publisher.rich_text[0].text.content, "Wiley");
+	assert.equal(all.URL.url, "https://x.y");
+	assert.deepEqual(all.Abstract.rich_text.map(r => r.text.content.length), [2000, 500]);
+	assert.deepEqual(all["Date Added"].date, { start: "2024-05-01T08:00:00Z" });
+	// Every schema column is filled by buildProperties
+	assert.deepEqual(Object.keys(all).filter(k => k !== "Title").sort(), Object.keys(notion.PROPERTY_SCHEMA).sort());
 });
 
 test("NotionClient: resolve data source, upsert flow and container replacement", async () => {

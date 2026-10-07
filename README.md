@@ -39,8 +39,15 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 1. 到 <https://www.notion.so/profile/integrations> 建立一個 **Internal integration**，複製 token（`ntn_` 開頭）
 2. 在 Notion 建立一個資料庫（可以是空白的 Table）。右上角 `•••` → **Connections** → 加入剛剛的 integration
 3. 複製資料庫連結（`https://www.notion.so/...`），貼到「預設資料庫連結」或分流規則
-4. 按 **測試連線並補齊資料庫欄位**，插件會自動建立以下欄位：
-   `Authors, Year, Publication, Item Type, DOI, Zotero, Obsidian, Tags, Collections, Library, Citation Key, Zotero Key, Summary, APA, Last Synced`
+4. 按 **測試連線並補齊資料庫欄位**，插件會用 Zotero 的書目欄位當作資料庫表頭，自動建立以下欄位：
+
+   | 類別 | 欄位 |
+   |---|---|
+   | 書目資料 | 標題（沿用資料庫原本的標題欄）、`Authors`、`Year`、`Date`、`Publication`、`Volume`、`Issue`、`Pages`、`Publisher`、`Item Type`、`DOI`、`URL`、`Abstract` |
+   | 整理用 | `Tags`、`Collections`、`Library`、`Citation Key`、`APA`、`Summary`（AI 一句話摘要） |
+   | 連結與同步 | `Zotero`、`Obsidian`、`Zotero Key`、`Date Added`、`Last Synced` |
+
+   > 請不要改這些欄位的名稱，插件是靠名稱寫入的；改名後會再建立一個新的同名欄位。你可以自由新增自己的欄位（例如「閱讀狀態」、「評分」），插件不會動它們。
 
 ### 2. Obsidian
 

@@ -17,12 +17,20 @@
 	const MIN_INTERVAL_MS = 340; // Notion allows ~3 requests/second per integration
 
 	// Database schema the plugin writes to. The title property keeps whatever name the database uses.
+	// Columns follow Zotero's bibliographic fields (in this order), then the plugin's own fields.
 	const PROPERTY_SCHEMA = {
 		"Authors": { rich_text: {} },
 		"Year": { number: {} },
+		"Date": { rich_text: {} },
 		"Publication": { rich_text: {} },
+		"Volume": { rich_text: {} },
+		"Issue": { rich_text: {} },
+		"Pages": { rich_text: {} },
+		"Publisher": { rich_text: {} },
 		"Item Type": { select: {} },
 		"DOI": { url: {} },
+		"URL": { url: {} },
+		"Abstract": { rich_text: {} },
 		"Zotero": { url: {} },
 		"Obsidian": { url: {} },
 		"Tags": { multi_select: {} },
@@ -32,6 +40,7 @@
 		"Zotero Key": { rich_text: {} },
 		"Summary": { rich_text: {} },
 		"APA": { rich_text: {} },
+		"Date Added": { date: {} },
 		"Last Synced": { date: {} },
 	};
 
@@ -234,8 +243,9 @@
 
 	/**
 	 * Build page properties, only for properties that exist in the schema with the expected type.
-	 * values: { title, authors, year, publication, itemType, doi, zotero, obsidian, tags, collections,
-	 *           library, citationKey, zoteroKey, summary, apa, lastSynced }
+	 * values: { title, authors, year, date, publication, volume, issue, pages, publisher, itemType, doi,
+	 *           url, abstract, zotero, obsidian, tags, collections, library, citationKey, zoteroKey,
+	 *           summary, apa, dateAdded, lastSynced }
 	 */
 	function buildProperties(schema, v) {
 		let p = {};
@@ -246,7 +256,15 @@
 		set("Authors", "rich_text", { rich_text: rt(v.authors) });
 		let year = parseInt(v.year, 10);
 		set("Year", "number", { number: Number.isFinite(year) ? year : null });
+		set("Date", "rich_text", { rich_text: rt(v.date) });
 		set("Publication", "rich_text", { rich_text: rt(v.publication) });
+		set("Volume", "rich_text", { rich_text: rt(v.volume) });
+		set("Issue", "rich_text", { rich_text: rt(v.issue) });
+		set("Pages", "rich_text", { rich_text: rt(v.pages) });
+		set("Publisher", "rich_text", { rich_text: rt(v.publisher) });
+		set("URL", "url", { url: v.url || null });
+		set("Abstract", "rich_text", { rich_text: rt(v.abstract) });
+		set("Date Added", "date", { date: v.dateAdded ? { start: v.dateAdded } : null });
 		set("Item Type", "select", { select: v.itemType ? { name: optionName(v.itemType) } : null });
 		set("DOI", "url", { url: v.doi ? `https://doi.org/${v.doi}` : null });
 		set("Zotero", "url", { url: v.zotero || null });
