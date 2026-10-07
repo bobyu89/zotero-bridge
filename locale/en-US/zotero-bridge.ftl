@@ -1,0 +1,16 @@
+zotero-bridge-menu =
+    .label = Zotero Bridge
+zotero-bridge-menu-collection =
+    .label = Zotero Bridge: Sync Whole Collection
+zotero-bridge-menu-sync =
+    .label = Sync to Notion + Obsidian (generate AI note if missing)
+zotero-bridge-menu-regenerate =
+    .label = Regenerate AI Note and Sync
+zotero-bridge-menu-no-ai =
+    .label = Sync Without AI (reuse existing AI note)
+zotero-bridge-menu-obsidian =
+    .label = Sync to Obsidian Only
+zotero-bridge-menu-notion =
+    .label = Sync to Notion Only
+zotero-bridge-menu-settings =
+    .label = Zotero Bridge Settings…
