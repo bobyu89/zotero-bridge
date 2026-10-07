@@ -2,6 +2,7 @@ pref("extensions.zotero-bridge.obsidian.vaultPath", "");
 pref("extensions.zotero-bridge.obsidian.vaultName", "");
 pref("extensions.zotero-bridge.obsidian.folder", "Zotero");
 pref("extensions.zotero-bridge.obsidian.filenameFormat", "citekey");
+pref("extensions.zotero-bridge.obsidian.createBase", true);
 pref("extensions.zotero-bridge.includeNotes", true);
 pref("extensions.zotero-bridge.notion.token", "");
 pref("extensions.zotero-bridge.notion.database", "");

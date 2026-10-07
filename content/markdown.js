@@ -15,6 +15,15 @@
 })(this, function () {
 	const NOTION_TEXT_LIMIT = 2000;
 	const NOTION_RICH_TEXT_ITEMS = 100;
+	// Obsidian 1.14 highlight color emoji → Notion background color
+	const HIGHLIGHT_COLORS = {
+		"🔴": "red",
+		"🟠": "orange",
+		"🟡": "yellow",
+		"🟢": "green",
+		"🔵": "blue",
+		"🟣": "purple",
+	};
 
 	// ---------- Inline parsing (shared) ----------
 
@@ -22,7 +31,7 @@
 	function parseInline(src) {
 		let tokens = [];
 		// Underscore emphasis only at word boundaries, so snake_case stays literal
-		let re = /(`[^`]+`)|(\*\*[^*]+?\*\*|(?<![\p{L}\p{N}])__[^_]+?__(?![\p{L}\p{N}]))|(\*[^*\s][^*]*?\*|(?<![\p{L}\p{N}])_[^_\s][^_]*?_(?![\p{L}\p{N}]))|(\[\[[^\]]+\]\])|(\[[^\]]+\]\([^)\s]+\))/gu;
+		let re = /(<u>[^<]+<\/u>)|(==[^=\n]+?==)|(`[^`]+`)|(\*\*[^*]+?\*\*|(?<![\p{L}\p{N}])__[^_]+?__(?![\p{L}\p{N}]))|(\*[^*\s][^*]*?\*|(?<![\p{L}\p{N}])_[^_\s][^_]*?_(?![\p{L}\p{N}]))|(\[\[[^\]]+\]\])|(\[[^\]]+\]\([^)\s]+\))/gu;
 		let last = 0;
 		let m;
 		let push = (text, style = {}) => {
@@ -32,21 +41,37 @@
 			push(src.slice(last, m.index));
 			let s = m[0];
 			if (m[1]) {
-				push(s.slice(1, -1), { code: true });
+				for (let t of parseInline(s.slice(3, -4))) push(t.text, Object.assign({}, t, { underline: true }));
 			}
 			else if (m[2]) {
-				for (let t of parseInline(s.slice(2, -2))) push(t.text, Object.assign({}, t, { bold: true }));
+				// Obsidian 1.14 colored highlight: ==🟡text==
+				let inner = s.slice(2, -2);
+				let color = "";
+				for (let emoji of Object.keys(HIGHLIGHT_COLORS)) {
+					if (inner.startsWith(emoji)) {
+						color = HIGHLIGHT_COLORS[emoji];
+						inner = inner.slice(emoji.length);
+						break;
+					}
+				}
+				for (let t of parseInline(inner)) push(t.text, Object.assign({}, t, { highlight: color || "yellow" }));
 			}
 			else if (m[3]) {
-				for (let t of parseInline(s.slice(1, -1))) push(t.text, Object.assign({}, t, { italic: true }));
+				push(s.slice(1, -1), { code: true });
 			}
 			else if (m[4]) {
+				for (let t of parseInline(s.slice(2, -2))) push(t.text, Object.assign({}, t, { bold: true }));
+			}
+			else if (m[5]) {
+				for (let t of parseInline(s.slice(1, -1))) push(t.text, Object.assign({}, t, { italic: true }));
+			}
+			else if (m[6]) {
 				// [[Target|Alias]] → Alias ; [[Target]] → Target
 				let inner = s.slice(2, -2);
 				let alias = inner.includes("|") ? inner.split("|").slice(1).join("|") : inner;
 				push(alias, { wikilink: inner.split("|")[0] });
 			}
-			else if (m[5]) {
+			else if (m[7]) {
 				let lm = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(s);
 				push(lm[1], { link: lm[2] });
 			}
@@ -85,6 +110,8 @@
 				if (t.bold) ann.bold = true;
 				if (t.italic) ann.italic = true;
 				if (t.code) ann.code = true;
+				if (t.underline) ann.underline = true;
+				if (t.highlight) ann.color = `${t.highlight}_background`;
 				if (Object.keys(ann).length) item.annotations = ann;
 				rich.push(item);
 			}
@@ -229,6 +256,8 @@
 		return parseInline(src).map((t) => {
 			let h = escapeHTML(t.wikilink ? `[[${t.wikilink === t.text ? t.text : t.wikilink + "|" + t.text}]]` : t.text);
 			if (t.code) h = `<code>${h}</code>`;
+			if (t.highlight) h = `<mark>${h}</mark>`;
+			if (t.underline) h = `<u>${h}</u>`;
 			if (t.italic) h = `<em>${h}</em>`;
 			if (t.bold) h = `<strong>${h}</strong>`;
 			if (t.link) h = `<a href="${escapeHTML(t.link)}">${h}</a>`;
@@ -359,6 +388,14 @@
 			}
 			case "code":
 				return "`" + node.textContent + "`";
+			case "u": {
+				let t = inlineText(node, ctx).trim();
+				return t ? `<u>${t}</u>` : "";
+			}
+			case "mark": {
+				let t = inlineText(node, ctx).trim();
+				return t ? `==${t}==` : "";
+			}
 			case "pre":
 				return "\n\n```\n" + node.textContent.replace(/\n$/, "") + "\n```\n\n";
 			case "a": {

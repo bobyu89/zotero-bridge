@@ -260,7 +260,11 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	assert.match(text, /^fulltext_truncated: true$/m);
 	assert.match(text, /\[\[Fall prevention\]\]/);
 	assert.match(text, /My \*\*own\*\* note/);
-	assert.match(text, /> 🟡 Falls decreased/);
+	assert.match(text, /> ==🟡Falls decreased==/);
+	// Bases overview created once in the default folder
+	let base = path.join(vault, "Zotero", "Zotero 文獻庫.base");
+	assert.match(fs.readFileSync(base, "utf8"), /type: kanban/);
+	fs.writeFileSync(base, "user edited");
 
 	// User writes in their section, then a sync without AI reuses the stored note
 	fs.appendFileSync(file, "\n我的心得：值得引用。\n");
@@ -277,6 +281,7 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	assert.match(text2, /\[\[Fall prevention\]\]/, "AI note read back from Zotero");
 	assert.match(text2, /^ai_model: "claude-opus-5-5"$/m);
 	assert.equal((text2.match(/zotero-bridge:start/g) || []).length, 1);
+	assert.equal(fs.readFileSync(base, "utf8"), "user edited", "existing .base is never overwritten");
 
 	await vm.runInContext("shutdown()", env.context);
 	assert.equal(env.Zotero.ZoteroBridge, undefined);

@@ -23,13 +23,16 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
   - Notion：只替換標題為「📚 Zotero Bridge｜…」的那個 callout 區塊，頁面上的其他內容保留。
 - **自動同步（選用）**：條目、劃線或筆記變更後，自動同步到兩邊。自動同步不會呼叫 AI。
 
-## 安裝
+## 安裝（從 GitHub 下載）
 
-1. 下載 [`dist/zotero-bridge-0.1.0.xpi`](dist/zotero-bridge-0.1.0.xpi)
+1. 到 GitHub 的 **[Releases 頁面](https://github.com/bobyu89/-/releases)**，下載最新版 `zotero-bridge-x.y.z.xpi`
+   - 用 Firefox 下載時，請在連結上按右鍵 →「另存連結」，不要直接點開，否則 Firefox 會嘗試把它當成自己的擴充功能安裝
 2. Zotero → 工具 → 插件 → 右上角齒輪 → **Install Plugin From File…** → 選擇 `.xpi`
 3. Zotero → 設定 → **Zotero Bridge**，依下列步驟設定
 
-> 需要 Zotero 10。
+之後有新版本時，Zotero 會自動從 GitHub 檢查並更新（工具 → 插件 → 齒輪 → Check for Updates 也可以手動檢查）。
+
+> 需要 Zotero 10；Obsidian 建議 1.14 以上（彩色劃線與 Bases 看板）。
 
 ### 1. Notion
 
@@ -44,6 +47,7 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 - **Vault 資料夾路徑**：選擇 vault 的根目錄
 - **預設子資料夾**：例如 `Zotero`
 - **檔名格式**：建議用 Citation key。Zotero 10 有內建 Citation Key 欄位；有裝 Better BibTeX 也會讀取。
+- **Bases 總表**：預設會在子資料夾建立 `Zotero 文獻庫.base`（只建立一次，之後不會覆寫你的修改）
 
 ### 3. AI（擇一）
 
@@ -84,18 +88,13 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 
 選「同步到兩邊」但只設定了其中一邊時，沒設定的那邊會自動略過。某一步失敗（例如 AI 逾時）時，其他步驟照常完成，錯誤會顯示在進度視窗與 `說明 → 除錯輸出記錄`。
 
-### Obsidian 推薦搭配
+### Obsidian 1.14 搭配功能
 
+- **彩色劃線**：Zotero 的劃線顏色會轉成 Obsidian 1.14 的彩色 highlight，例如 `==🟡Falls decreased by 30%==`。Zotero 的洋紅色對應紫色，灰色對應主題預設色（Obsidian 只有六種顏色）。同步到 Notion 時也會轉成對應的背景色。
+- **Bases 文獻總表**（`Zotero 文獻庫.base`，核心外掛 Bases，不需要 Dataview）：
+  - 「文獻總表」：表格，列出標題、作者、年份、期刊、閱讀狀態、分類
+  - 「閱讀進度」：1.14 新增的看板（kanban），依 `status` 分成 待讀／閱讀中／已讀／已引用。把卡片拖到別欄就會改筆記的 `status`，重新同步也不會被覆寫
 - **Graph view**：AI 筆記裡的 `[[Fall prevention]]` 等關鍵概念會把相關文獻自動串起來
-- **Dataview**：用 frontmatter 建立文獻總表
-
-````markdown
-```dataview
-TABLE year, publication, citekey
-FROM "Zotero/碩論"
-SORT year DESC
-```
-````
 
 ## 和 Notero 一起用？
 

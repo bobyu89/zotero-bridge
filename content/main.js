@@ -28,6 +28,7 @@
 			vaultPath,
 			vaultName: String(pref("obsidian.vaultName") || "").trim() || (vaultPath ? PathUtils.filename(vaultPath) : ""),
 			filenameFormat: pref("obsidian.filenameFormat") || "citekey",
+			createBase: pref("obsidian.createBase") !== false,
 			includeNotes: pref("includeNotes") !== false,
 			notionToken: String(pref("notion.token") || "").trim(),
 			defaults: {
@@ -198,6 +199,16 @@
 		}
 	}
 
+	// Create the Obsidian Bases overview (table + reading-status kanban) once; never overwrite it
+	async function ensureBaseFile(settings) {
+		if (!settings.vaultPath || !settings.createBase) return;
+		let dir = PathUtils.join(settings.vaultPath, ...ZB.core.splitFolder(settings.defaults.obsidianFolder));
+		let path = PathUtils.join(dir, "Zotero 文獻庫.base");
+		if (await IOUtils.exists(path)) return;
+		await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
+		await IOUtils.writeUTF8(path, ZB.core.buildBaseFile());
+	}
+
 	async function syncNotion(client, databaseInput, data, opts, ctx) {
 		let dsId = await client.resolveDataSourceId(databaseInput);
 		let schema = ctx.schemaCache.get(dsId);
@@ -337,6 +348,14 @@
 					line.setText(`${title} — ${e.message || e}`);
 					line.setError();
 				}
+			}
+		}
+		if (action.targets.has("obsidian") && ok) {
+			try {
+				await ensureBaseFile(settings);
+			}
+			catch (e) {
+				Zotero.logError(e);
 			}
 		}
 		if (pw) {

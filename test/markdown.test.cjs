@@ -17,6 +17,16 @@ test("parseInline handles styles, links and wikilinks", () => {
 	assert.equal(t[9].wikilink, "F");
 });
 
+test("Obsidian colored highlights become Notion background colors", () => {
+	let rich = md.toRichText("a ==🔴red== b ==plain== c");
+	assert.deepEqual(rich.map(r => [r.text.content, r.annotations && r.annotations.color]),
+		[["a ", undefined], ["red", "red_background"], [" b ", undefined], ["plain", "yellow_background"], [" c", undefined]]);
+	assert.equal(md.plainText("==🟢done=="), "done");
+	let u = md.toRichText("🔵 <u>under</u>");
+	assert.deepEqual(u.map(r => [r.text.content, r.annotations && r.annotations.underline]), [["🔵 ", undefined], ["under", true]]);
+	assert.equal(md.htmlToMd(md.mdToHtml("x ==y=="), parse), "x ==y==");
+});
+
 test("toRichText drops non-web links and chunks long text", () => {
 	let rich = md.toRichText("[p. 5](zotero://open-pdf/x) and [doi](https://doi.org/1)");
 	assert.equal(rich[0].text.content, "p. 5");

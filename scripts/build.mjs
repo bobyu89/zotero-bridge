@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from "n
 import { join, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateRawSync } from "node:zlib";
+import { createHash } from "node:crypto";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const INCLUDE = ["manifest.json", "bootstrap.js", "prefs.js", "content", "locale"];
@@ -82,5 +83,26 @@ const files = INCLUDE.flatMap(p => walk(join(root, p)));
 const entries = files.map(f => ({ name: relative(root, f).split("\\").join("/"), data: readFileSync(f) }));
 mkdirSync(join(root, "dist"), { recursive: true });
 const out = join(root, "dist", `zotero-bridge-${manifest.version}.xpi`);
-writeFileSync(out, zip(entries));
+const xpi = zip(entries);
+writeFileSync(out, xpi);
 console.log(`Built ${relative(root, out)} (${entries.length} files)`);
+
+// Point Zotero's update check at the GitHub Release asset for this version
+const id = manifest.applications.zotero.id;
+const updatesPath = join(root, "updates.json");
+const updates = JSON.parse(readFileSync(updatesPath, "utf8"));
+const list = updates.addons[id].updates.filter(u => u.version !== manifest.version);
+list.push({
+	version: manifest.version,
+	update_link: `https://github.com/bobyu89/-/releases/download/zotero-bridge-v${manifest.version}/zotero-bridge-${manifest.version}.xpi`,
+	update_hash: "sha256:" + createHash("sha256").update(xpi).digest("hex"),
+	applications: {
+		zotero: {
+			strict_min_version: manifest.applications.zotero.strict_min_version,
+			strict_max_version: manifest.applications.zotero.strict_max_version,
+		},
+	},
+});
+updates.addons[id].updates = list;
+writeFileSync(updatesPath, JSON.stringify(updates, null, 2) + "\n");
+console.log(`Updated updates.json for ${manifest.version}`);

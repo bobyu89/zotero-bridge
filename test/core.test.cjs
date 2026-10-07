@@ -62,7 +62,9 @@ test("new Obsidian note has frontmatter, managed block and user section", () => 
 	assert.match(body, /## 🤖 AI 文獻筆記/);
 	assert.match(body, /\[\[Fall prevention\]\]/);
 	assert.match(body, /^### 一句話摘要$/m, "AI note headings nest under the section heading");
-	assert.match(body, /> 🟡 Falls decreased by 30%\n> — \[p\. 5\]\(zotero:\/\/open-pdf\/library\/items\/PDF00001\?page=5&annotation=ANN00001\)/);
+	// Obsidian 1.14 colored highlight
+	assert.match(body, /> ==🟡Falls decreased by 30%==\n> — \[p\. 5\]\(zotero:\/\/open-pdf\/library\/items\/PDF00001\?page=5&annotation=ANN00001\)/);
+	assert.match(frontmatter, /^status: "待讀"$/m);
 	assert.match(body, /💬 key result {2}\nsecond line/);
 	assert.match(body, /#result/);
 	assert.match(body, /\*\[便利貼\]\*/);
@@ -99,6 +101,35 @@ test("re-sync keeps user content and user frontmatter keys, replaces managed par
 		aiMarkdown: "## 一句話摘要\nnew summary",
 	});
 	assert.equal(third, second);
+});
+
+test("highlights: multi-line, magenta/gray mapping, underline", () => {
+	let d = sampleItem();
+	d.attachments[0].annotations = [
+		{ key: "A", type: "highlight", text: "line one\nline == two", color: "#e56eee", pageLabel: "1" },
+		{ key: "B", type: "highlight", text: "gray", color: "#aaaaaa", pageLabel: "2" },
+		{ key: "C", type: "underline", text: "under", color: "#2ea8e5", pageLabel: "3" },
+	];
+	let md = core.annotationsMarkdown(d);
+	assert.match(md, /^> ==🟣line one==\n> ==🟣line =\\= two==$/m);
+	assert.match(md, /^> ==gray==$/m);
+	assert.match(md, /^> 🔵 <u>under<\/u>$/m);
+});
+
+test("status is set on creation only and kept afterwards", () => {
+	let first = core.buildObsidianNote(null, sampleItem(), {});
+	let moved = first.replace('status: "待讀"', 'status: "已讀"');
+	let again = core.buildObsidianNote(moved, sampleItem(), {});
+	assert.match(again, /^status: "已讀"$/m);
+	assert.equal((again.match(/^status:/gm) || []).length, 1);
+});
+
+test("buildBaseFile has a table and a status kanban", () => {
+	let base = core.buildBaseFile();
+	assert.match(base, /^ {4}- file\.hasProperty\("zotero_key"\)$/m);
+	assert.match(base, /^ {2}- type: table$/m);
+	assert.match(base, /^ {2}- type: kanban\n {4}name: 閱讀進度\n {4}groupBy:\n {6}property: note\.status\n {6}direction: ASC$/m);
+	assert.match(base, /groupOrder:\n {6}- 待讀\n {6}- 閱讀中\n {6}- 已讀\n {6}- 已引用/);
 });
 
 test("re-sync when the user deleted the markers re-inserts the managed block", () => {

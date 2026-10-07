@@ -23,19 +23,24 @@
 		"ai_model", "ai_generated", "fulltext_truncated", "date_added", "last_synced",
 	];
 
+	// `highlight` is the Obsidian 1.14 highlight color emoji (==🟡text==); "" = theme default.
+	// Obsidian has six highlight colors, so magenta maps to purple and gray to the default.
 	const COLORS = {
-		"#ffd400": { name: "yellow", emoji: "🟡", notion: "yellow_background" },
-		"#ff6666": { name: "red", emoji: "🔴", notion: "red_background" },
-		"#5fb236": { name: "green", emoji: "🟢", notion: "green_background" },
-		"#2ea8e5": { name: "blue", emoji: "🔵", notion: "blue_background" },
-		"#a28ae5": { name: "purple", emoji: "🟣", notion: "purple_background" },
-		"#e56eee": { name: "magenta", emoji: "🩷", notion: "pink_background" },
-		"#f19837": { name: "orange", emoji: "🟠", notion: "orange_background" },
-		"#aaaaaa": { name: "gray", emoji: "⚪", notion: "gray_background" },
+		"#ffd400": { name: "yellow", emoji: "🟡", highlight: "🟡", notion: "yellow_background" },
+		"#ff6666": { name: "red", emoji: "🔴", highlight: "🔴", notion: "red_background" },
+		"#5fb236": { name: "green", emoji: "🟢", highlight: "🟢", notion: "green_background" },
+		"#2ea8e5": { name: "blue", emoji: "🔵", highlight: "🔵", notion: "blue_background" },
+		"#a28ae5": { name: "purple", emoji: "🟣", highlight: "🟣", notion: "purple_background" },
+		"#e56eee": { name: "magenta", emoji: "🩷", highlight: "🟣", notion: "pink_background" },
+		"#f19837": { name: "orange", emoji: "🟠", highlight: "🟠", notion: "orange_background" },
+		"#aaaaaa": { name: "gray", emoji: "⚪", highlight: "", notion: "gray_background" },
 	};
 
+	// Reading-status values for the Bases kanban view; only set when a note is first created
+	const STATUSES = ["待讀", "閱讀中", "已讀", "已引用"];
+
 	function colorInfo(hex) {
-		return COLORS[String(hex || "").toLowerCase()] || { name: "other", emoji: "⚫", notion: "default" };
+		return COLORS[String(hex || "").toLowerCase()] || { name: "other", emoji: "⚫", highlight: "", notion: "default" };
 	}
 
 	function sanitizeFilename(name) {
@@ -235,8 +240,15 @@
 		let page = ann.pageLabel ? `p. ${ann.pageLabel}` : "link";
 		let link = `[${page}](${annotationURI(data, attachment, ann)})`;
 		let out = [];
-		if (ann.type === "highlight" || ann.type === "underline") {
-			out.push(quoteLines(`${color.emoji} ${ann.text || ""}`.trim()));
+		if (ann.type === "highlight") {
+			// Obsidian 1.14 colored highlight, one per line (a highlight can't span lines)
+			let lines = String(ann.text || "").split(/\r?\n/).filter(l => l.trim())
+				.map(l => `==${color.highlight}${l.trim().replace(/==/g, "=\\=")}==`);
+			out.push(quoteLines(lines.join("\n") || `${color.emoji} *[劃線]*`));
+			out.push(`> — ${link}`);
+		}
+		else if (ann.type === "underline") {
+			out.push(quoteLines(`${color.emoji} <u>${ann.text || ""}</u>`));
 			out.push(`> — ${link}`);
 		}
 		else if (ann.type === "image" || ann.type === "ink") {
@@ -316,7 +328,8 @@
 		let fmObj = managedFrontmatter(data, opts);
 		let managed = buildManagedSection(data, opts);
 		if (!existing) {
-			return buildFrontmatter(fmObj, null)
+			// `status` is the user's to change (e.g. by dragging in the kanban), so it is only set here
+			return buildFrontmatter(Object.assign({}, fmObj, { status: STATUSES[0] }), null)
 				+ `\n# ${data.title || "Untitled"}\n\n`
 				+ managed + "\n\n" + USER_SECTION;
 		}
@@ -334,6 +347,53 @@
 			body = body.slice(0, at) + "\n\n" + managed + "\n" + body.slice(at);
 		}
 		return fm + (body.startsWith("\n") ? body : "\n" + body);
+	}
+
+	// ---------- Obsidian Bases (1.14+) ----------
+
+	/** A .base file listing every synced note, with a table and a reading-status kanban. */
+	function buildBaseFile() {
+		return [
+			"filters:",
+			"  and:",
+			"    - file.hasProperty(\"zotero_key\")",
+			"properties:",
+			"  note.title:",
+			"    displayName: 標題",
+			"  note.authors:",
+			"    displayName: 作者",
+			"  note.year:",
+			"    displayName: 年份",
+			"  note.publication:",
+			"    displayName: 期刊",
+			"  note.status:",
+			"    displayName: 閱讀狀態",
+			"  note.collections:",
+			"    displayName: 分類",
+			"views:",
+			"  - type: table",
+			"    name: 文獻總表",
+			"    order:",
+			"      - file.name",
+			"      - note.title",
+			"      - note.authors",
+			"      - note.year",
+			"      - note.publication",
+			"      - note.status",
+			"      - note.collections",
+			"  - type: kanban",
+			"    name: 閱讀進度",
+			"    groupBy:",
+			"      property: note.status",
+			"      direction: ASC",
+			"    groupOrder:",
+			...STATUSES.map(st => `      - ${st}`),
+			"    order:",
+			"      - note.title",
+			"      - note.year",
+			"      - note.authors",
+			"",
+		].join("\n");
 	}
 
 	// ---------- Routing ----------
@@ -388,6 +448,6 @@
 		noteBasename, splitFolder, demoteHeadings, zoteroSelectURI, annotationURI, obsidianURI, tagToObsidian,
 		yamlScalar, splitFrontmatter, parseFrontmatterBlocks, buildFrontmatter, managedFrontmatter,
 		annotationsMarkdown, buildManagedSection, buildObsidianNote,
-		resolveRoute, parseRules, truncate,
+		resolveRoute, parseRules, truncate, buildBaseFile, STATUSES,
 	};
 });
