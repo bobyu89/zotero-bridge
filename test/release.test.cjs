@@ -16,7 +16,7 @@ test("updates.json lists the current version with the hash of the committed .xpi
 	assert.equal(entry.update_hash, "sha256:" + crypto.createHash("sha256").update(xpi).digest("hex"),
 		"dist/*.xpi is stale: run `npm run build`");
 	assert.equal(entry.update_link,
-		`https://github.com/bobyu89/-/releases/download/zotero-bridge-v${manifest.version}/zotero-bridge-${manifest.version}.xpi`);
+		`https://github.com/bobyu89/zotero-bridge/releases/download/v${manifest.version}/zotero-bridge-${manifest.version}.xpi`);
 });
 
 // Read our own zip format (no data descriptors) back into { name: Buffer }

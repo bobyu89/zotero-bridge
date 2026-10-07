@@ -94,7 +94,7 @@ const updates = JSON.parse(readFileSync(updatesPath, "utf8"));
 const list = updates.addons[id].updates.filter(u => u.version !== manifest.version);
 list.push({
 	version: manifest.version,
-	update_link: `https://github.com/bobyu89/-/releases/download/zotero-bridge-v${manifest.version}/zotero-bridge-${manifest.version}.xpi`,
+	update_link: `https://github.com/bobyu89/zotero-bridge/releases/download/v${manifest.version}/zotero-bridge-${manifest.version}.xpi`,
 	update_hash: "sha256:" + createHash("sha256").update(xpi).digest("hex"),
 	applications: {
 		zotero: {

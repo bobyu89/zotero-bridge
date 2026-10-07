@@ -1,0 +1,7 @@
+# 把以下內容加到 ~/.codex/config.toml（OpenAI Codex CLI 的設定檔）
+# Codex 會自動讀取 vault 根目錄的 AGENTS.md 作為工作守則。
+
+[mcp_servers.zotero]
+command = "uvx"
+args = ["zotero-mcp@latest"]
+env = { "ZOTERO_LOCAL" = "true" }
