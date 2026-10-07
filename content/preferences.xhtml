@@ -1,0 +1,115 @@
+<vbox id="zotero-bridge-prefs" onload="ZoteroBridgePrefs.init()" class="zotero-bridge-prefs">
+	<groupbox>
+		<label><html:h2>AI 文獻筆記</html:h2></label>
+		<checkbox label="同步時用 LLM 產生結構化文獻筆記（存成 Zotero 子筆記，並同步到 Notion / Obsidian）" preference="extensions.zotero-bridge.llm.enabled"/>
+		<hbox align="center">
+			<label value="服務商："/>
+			<menulist id="zb-provider" preference="extensions.zotero-bridge.llm.provider" native="true">
+				<menupopup>
+					<menuitem label="Anthropic（Claude）" value="anthropic"/>
+					<menuitem label="OpenAI（GPT / Codex）" value="openai"/>
+				</menupopup>
+			</menulist>
+		</hbox>
+		<vbox id="zb-anthropic-box">
+			<label value="Claude API key（console.anthropic.com）："/>
+			<html:input type="password" preference="extensions.zotero-bridge.llm.anthropicKey" placeholder="sk-ant-..."/>
+			<hbox align="center">
+				<label value="模型："/>
+				<html:input type="text" preference="extensions.zotero-bridge.llm.anthropicModel" placeholder="claude-opus-5-5"/>
+				<label value="思考深度（effort）："/>
+				<menulist preference="extensions.zotero-bridge.llm.effort" native="true">
+					<menupopup>
+						<menuitem label="low" value="low"/>
+						<menuitem label="medium（預設）" value="medium"/>
+						<menuitem label="high" value="high"/>
+						<menuitem label="xhigh" value="xhigh"/>
+						<menuitem label="max" value="max"/>
+					</menupopup>
+				</menulist>
+			</hbox>
+		</vbox>
+		<vbox id="zb-openai-box">
+			<label value="OpenAI API key（platform.openai.com）："/>
+			<html:input type="password" preference="extensions.zotero-bridge.llm.openaiKey" placeholder="sk-..."/>
+			<hbox align="center">
+				<label value="模型："/>
+				<html:input type="text" preference="extensions.zotero-bridge.llm.openaiModel" placeholder="gpt-5.5"/>
+			</hbox>
+			<label value="API base URL（選填，使用相容服務時才需要）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.llm.openaiBaseURL" placeholder="https://api.openai.com/v1"/>
+		</vbox>
+		<hbox align="center">
+			<label value="全文最多送出字元數（0 = 不送全文，只用摘要與註記）："/>
+			<html:input type="number" min="0" step="10000" preference="extensions.zotero-bridge.llm.fullTextLimit"/>
+		</hbox>
+		<label value="筆記模板（system prompt；留空 = 使用內建的護理／醫學文獻模板）："/>
+		<html:textarea id="zb-system-prompt" rows="8" preference="extensions.zotero-bridge.llm.systemPrompt"/>
+		<hbox>
+			<button label="載入內建模板來修改" oncommand="ZoteroBridgePrefs.loadDefaultPrompt()"/>
+		</hbox>
+		<label value="文獻比較表模板（留空 = 內建：比較表、主題整理、研究缺口）："/>
+		<html:textarea id="zb-synthesis-prompt" rows="6" preference="extensions.zotero-bridge.llm.synthesisPrompt"/>
+		<hbox>
+			<button label="載入內建比較表模板來修改" oncommand="ZoteroBridgePrefs.loadDefaultSynthesisPrompt()"/>
+		</hbox>
+	</groupbox>
+
+	<groupbox>
+		<label><html:h2>Obsidian</html:h2></label>
+		<label value="Vault 資料夾路徑："/>
+		<hbox align="center">
+			<html:input id="zb-vault-path" type="text" preference="extensions.zotero-bridge.obsidian.vaultPath" style="flex: 1"/>
+			<button label="選擇資料夾…" oncommand="ZoteroBridgePrefs.pickVault()"/>
+		</hbox>
+		<hbox align="center">
+			<label value="Vault 名稱（選填，預設為資料夾名稱；用於 obsidian:// 連結）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.obsidian.vaultName"/>
+		</hbox>
+		<hbox align="center">
+			<label value="預設子資料夾："/>
+			<html:input type="text" preference="extensions.zotero-bridge.obsidian.folder" placeholder="Zotero"/>
+		</hbox>
+		<hbox align="center">
+			<label value="檔名格式："/>
+			<menulist preference="extensions.zotero-bridge.obsidian.filenameFormat" native="true">
+				<menupopup>
+					<menuitem label="Citation key（沒有時用 作者 年份 - 標題）" value="citekey"/>
+					<menuitem label="作者 年份 - 標題" value="authorYearTitle"/>
+					<menuitem label="標題" value="title"/>
+				</menupopup>
+			</menulist>
+		</hbox>
+		<checkbox label="一併同步 Zotero 子筆記" preference="extensions.zotero-bridge.includeNotes"/>
+		<checkbox label="建立「Zotero 文獻庫.base」總表（表格 + 閱讀進度看板，需要 Obsidian 1.14 以上）" preference="extensions.zotero-bridge.obsidian.createBase"/>
+	</groupbox>
+
+	<groupbox>
+		<label><html:h2>Notion</html:h2></label>
+		<label value="Integration token（notion.so/profile/integrations 建立，並把資料庫分享給這個 integration）："/>
+		<html:input type="password" preference="extensions.zotero-bridge.notion.token" placeholder="ntn_..."/>
+		<label value="預設資料庫連結（沒有符合任何分流規則時使用）："/>
+		<html:input type="text" preference="extensions.zotero-bridge.notion.database" placeholder="https://www.notion.so/..."/>
+		<label value="文獻比較表的 Notion 父頁面（選填；比較表會建立成這個頁面底下的子頁面，頁面也要分享給 integration）："/>
+		<html:input type="text" preference="extensions.zotero-bridge.notion.synthesisParent" placeholder="https://www.notion.so/..."/>
+		<hbox align="center">
+			<button label="測試連線並補齊資料庫欄位" oncommand="ZoteroBridgePrefs.testNotion()"/>
+		</hbox>
+		<html:pre id="zb-notion-status" class="zb-status"/>
+	</groupbox>
+
+	<groupbox>
+		<label><html:h2>分流規則（不同文獻庫／分類 → 不同 Notion 資料庫與 Obsidian 資料夾）</html:h2></label>
+		<description>由上往下比對，第一條符合的規則生效；欄位留空時使用上方預設值。「分類路徑」用 / 分隔，例如 碩論/文獻回顧，會包含子分類。</description>
+		<html:div id="zb-rules"/>
+		<hbox>
+			<button label="新增規則" oncommand="ZoteroBridgePrefs.addRule()"/>
+		</hbox>
+		<html:pre id="zb-rules-status" class="zb-status"/>
+	</groupbox>
+
+	<groupbox>
+		<label><html:h2>自動同步</html:h2></label>
+		<checkbox label="Zotero 條目、註記或筆記變更時自動同步到 Notion 與 Obsidian（不會自動呼叫 AI，沿用既有 AI 筆記）" preference="extensions.zotero-bridge.autoSync"/>
+	</groupbox>
+</vbox>

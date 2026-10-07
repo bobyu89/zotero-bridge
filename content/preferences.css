@@ -1,0 +1,30 @@
+@namespace html url("http://www.w3.org/1999/xhtml");
+.zotero-bridge-prefs html|input[type="text"],
+.zotero-bridge-prefs html|input[type="password"],
+.zotero-bridge-prefs html|textarea {
+	min-width: 24em;
+}
+.zotero-bridge-prefs html|textarea {
+	width: 100%;
+	font-family: monospace;
+}
+.zotero-bridge-prefs .zb-status {
+	white-space: pre-wrap;
+	margin: 4px 0;
+}
+.zotero-bridge-prefs .zb-rules-table {
+	border-collapse: collapse;
+	width: 100%;
+}
+.zotero-bridge-prefs .zb-rules-table th {
+	text-align: start;
+	font-weight: 600;
+	padding: 2px 4px;
+}
+.zotero-bridge-prefs .zb-rules-table td {
+	padding: 2px 4px;
+}
+.zotero-bridge-prefs .zb-rules-table td html|input {
+	min-width: 8em;
+	width: 100%;
+}

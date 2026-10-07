@@ -1,0 +1,19 @@
+{
+  "addons": {
+    "zotero-bridge@bobyu89.github.io": {
+      "updates": [
+        {
+          "version": "0.1.1",
+          "update_link": "https://github.com/bobyu89/zotero-bridge/releases/download/v0.1.1/zotero-bridge-0.1.1.xpi",
+          "update_hash": "sha256:8984a9b7b2d270ae627fd45854f9c19baf570cd948eca250578501a122499298",
+          "applications": {
+            "zotero": {
+              "strict_min_version": "10.0",
+              "strict_max_version": "10.0.*"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
