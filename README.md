@@ -27,6 +27,8 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 
 ## 安裝（從 GitHub 下載）
 
+> 🧭 **第一次安裝？用 [安裝精靈](https://bobyu89.github.io/zotero-bridge/) 一步一步完成**：依你的電腦、AI 服務商、同步目的地（Notion／Obsidian）調整步驟，每步打勾確認，進度會記住。
+
 1. 到 GitHub 的 **[Releases 頁面](https://github.com/bobyu89/zotero-bridge/releases)**，下載最新版 `zotero-bridge-x.y.z.xpi`
    - 用 Firefox 下載時，請在連結上按右鍵 →「另存連結」，不要直接點開，否則 Firefox 會嘗試把它當成自己的擴充功能安裝
 2. Zotero → 工具 → 插件 → 右上角齒輪 → **Install Plugin From File…** → 選擇 `.xpi`
@@ -159,5 +161,6 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi
 | `content/markdown.js` | Markdown ⇄ Notion blocks ⇄ HTML |
 | `content/synthesis.js` | 跨文獻比較表：提示詞、引文轉換、APA 參考文獻 |
 | `research-brain/` | Claude Code／Codex 研究大腦設定檔 |
+| `site/index.html` | 安裝精靈網頁（GitHub Pages） |
 
 發布新版本：修改 `manifest.json` 的 `version` → `npm run build` → 推送到 `main`，GitHub Actions 會自動建立 Release，Zotero 會自動更新。
