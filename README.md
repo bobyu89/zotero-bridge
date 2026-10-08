@@ -140,6 +140,17 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 
 安裝請看 [研究大腦說明](research-brain/README.md)。
 
+## Zotero 升級時
+
+Zotero 現在大約每幾個月就出一個大版本（8 → 9 → 10）。插件宣告支援到 **Zotero 10.x**；Zotero 11 推出時，Zotero 會先把插件停用，直到確認相容為止。
+
+確認方式（維護者）：
+1. 在 Zotero 11 beta 上安裝插件，照[安裝精靈](https://bobyu89.github.io/zotero-bridge/)第 7 步試跑一篇文獻、一次文獻比較表。
+2. 沒有問題就執行 `npm run compat -- 11.*`，把 `manifest.json` 與 `updates.json` 推到 `main`。已安裝的使用者會自動恢復啟用，不用發新版。
+3. 有問題就修正後發新版。
+
+依 Zotero 官方規定，相容版本最多只能宣告到「目前已測試的大版本」（例如 `10.*`），不能預先宣告未來版本。
+
 ## 開發
 
 ```bash
