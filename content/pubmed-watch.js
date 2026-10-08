@@ -878,9 +878,10 @@
 		Zotero.Prefs.set(PREF + "pubmedWatch.watches", JSON.stringify(list), true);
 	}
 
-	function addWatch() {
+	/** A new watch at the end of the list; `fields` ({ name, query }) fills it in (search-links.js). */
+	function addWatch(fields) {
 		let list = readRawWatches();
-		list.push({ id: newWatchID(), name: "", query: "", collection: "", days: DEFAULT_DAYS, since: "", enabled: true });
+		list.push(Object.assign({ id: newWatchID(), name: "", query: "", collection: "", days: DEFAULT_DAYS, since: "", enabled: true }, fields || {}));
 		writeRawWatches(list);
 	}
 
@@ -985,9 +986,9 @@
 		NEW_TAG, WATCH_TAG_PREFIX, DEFAULT_COLLECTION_ROOT, DIGEST_FOLDER, DEFAULT_DAYS, DEFAULT_MAX, QUEUE_LIMIT, EUTILS,
 		STARTUP_DELAY_MS, TICK_MS,
 		defaultCollection, normalizeSince, normalizeWatch, parseWatches, watchTerm, ncbiDate, searchWindow,
-		esearchURL, esummaryURL, parseESearch, parseESummary, createThrottle, planCandidates, pmidFromExtra, normalizeDOI,
+		eutilsURL, esearchURL, esummaryURL, parseESearch, parseESummary, createThrottle, planCandidates, pmidFromExtra, normalizeDOI,
 		describeResult, digestLine, buildDigestNote, localDate,
-		runtime, config, readWatches, readState, findExisting, ensureCollection, checkWatch, runAll, dueWatches,
+		runtime, config, readWatches, readState, ncbiSettings, getJSON, findExisting, ensureCollection, checkWatch, runAll, dueWatches,
 		init, shutdown, testQuery, addWatch, renderPrefs, registerMenus,
 		get timerActive() { return !!timer; },
 	};

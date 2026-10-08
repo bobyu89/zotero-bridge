@@ -69,3 +69,18 @@ pref("extensions.zotero-bridge.citationChase.email", "");
 pref("extensions.zotero-bridge.citationChase.maxRequests", "100");
 pref("extensions.zotero-bridge.citationChase.maxPerSeed", "200");
 pref("extensions.zotero-bridge.citationChase.direction", "both");
+// Medical-literature search links (content/search-links.js): source order and hidden sources
+// (comma-separated IDs), custom sources (JSON array of { name, url with {q}, needsAccess }), the
+// library proxy prefix (EZproxy, only for sources that need institutional access) and sources it
+// skips, item-menu entries, item pane links, the 「🔎 延伸搜尋」 note callout, C in the PICO string,
+// MeSH suggestions from NCBI in Tools → 醫學文獻快速搜尋…
+pref("extensions.zotero-bridge.searchLinks.order", "");
+pref("extensions.zotero-bridge.searchLinks.disabled", "");
+pref("extensions.zotero-bridge.searchLinks.custom", "[]");
+pref("extensions.zotero-bridge.searchLinks.proxyPrefix", "");
+pref("extensions.zotero-bridge.searchLinks.proxyExclude", "");
+pref("extensions.zotero-bridge.searchLinks.menuCount", "8");
+pref("extensions.zotero-bridge.searchLinks.paneLinks", true);
+pref("extensions.zotero-bridge.searchLinks.noteCallout", true);
+pref("extensions.zotero-bridge.searchLinks.picoComparison", false);
+pref("extensions.zotero-bridge.searchLinks.meshHelper", true);

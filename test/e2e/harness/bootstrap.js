@@ -259,6 +259,7 @@ const TESTS = [
 				pubmedWatch: ["init", "shutdown", "runAll", "registerMenus"],
 				dashboard: ["update", "afterSync", "registerMenus"],
 				citationChase: ["chaseCollection", "chaseItems", "importChecked", "registerMenus"],
+				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "registerMenus"],
 				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly"],
 			};
 			let missing = [];
@@ -341,6 +342,8 @@ const TESTS = [
 				"zotero-bridge-chase-item": "main/library/item",
 				"zotero-bridge-chase-collection": "main/library/collection",
 				"zotero-bridge-chase-tools": "main/menubar/tools",
+				"zotero-bridge-search-item": "main/library/item",
+				"zotero-bridge-search-tools": "main/menubar/tools",
 			};
 			d.registered = mine.map(o => `${o.menuID} → ${o.target}`);
 			let problems = [];
@@ -405,7 +408,7 @@ const TESTS = [
 				if (!ctx.l10n.has(m[1])) ctx.l10n.set(m[1], null);
 			}
 			let ids = [...ctx.l10n.keys()];
-			let args = { count: 3, reason: "E2E" };
+			let args = { count: 3, reason: "E2E", name: "E2E" };
 			let report = {};
 			let problems = [];
 			for (let locale of ["en-US", "zh-TW"]) {
@@ -462,7 +465,7 @@ const TESTS = [
 					let ours = [...popup.querySelectorAll("[data-l10n-id]")].filter(e => e.dataset.l10nId.startsWith("zotero-bridge-"));
 					// Labels with variables get their args in onShowing; give them some here
 					for (let el of ours) {
-						if (!el.dataset.l10nArgs) el.dataset.l10nArgs = JSON.stringify({ count: 3, reason: "E2E" });
+						if (!el.dataset.l10nArgs) el.dataset.l10nArgs = JSON.stringify({ count: 3, reason: "E2E", name: "E2E" });
 					}
 					await doc.l10n.translateFragment(popup);
 					rendered[target] = ours.map(e => `${e.dataset.l10nId}: ${e.getAttribute("label")}`);
