@@ -185,6 +185,8 @@
 		let messages = [];
 		let quoteCheck = null;
 		let ai = null;
+		// PNGs of image/ink annotations, when this sync uses them (annotation-images.js)
+		let images = await ZB.images.collect(data, { targets: action.targets, ai: needAI }, ctx, messages);
 		if (needAI) {
 			ctx.status("AI 產生筆記中…");
 			try {
@@ -192,6 +194,7 @@
 					systemPrompt: settings.llm.systemPrompt,
 					notesMarkdown,
 					fullTextTruncated: data.fullTextTruncated,
+					images: await ZB.images.forPrompt(images, settings.llm, ctx, messages),
 				}, (url, init) => fetch(url, init), Object.assign({ onRetry: retryStatus(ctx.status) }, ctx.retry));
 				recordAIUsage(result, ctx.usage);
 				let at = nowISO();
@@ -231,7 +234,7 @@
 			try {
 				if (!route.notionDatabase) throw new Error(`沒有對應的資料庫（規則：${route.ruleName || "預設"}）`);
 				notionUrl = await syncNotion(ctx.notion(settings.notionToken), route.notionDatabase, data, {
-					ai, notesMarkdown, obsidianURI: obsidian && obsidian.uri, messages,
+					ai, notesMarkdown, obsidianURI: obsidian && obsidian.uri, messages, images,
 				}, ctx);
 			}
 			catch (e) {
@@ -242,7 +245,8 @@
 		if (action.targets.has("obsidian")) {
 			ctx.status("寫入 Obsidian…");
 			try {
-				await writeObsidian(obsidian, data, { ai, notesMarkdown, notionUrl });
+				let noteData = await ZB.images.writeToVault(obsidian, data, images, messages);
+				await writeObsidian(obsidian, noteData, { ai, notesMarkdown, notionUrl });
 				if (ctx.obsidianIndex) ctx.obsidianIndex.add(`${data.libraryPath}/${data.key}`, obsidian.path, obsidian.relParts);
 			}
 			catch (e) {
@@ -495,11 +499,13 @@
 				properties,
 			});
 		}
-		let md = ZB.core.buildManagedSection(data, {
+		// Image annotations are uploaded just before the blocks that show them are written
+		let uploaded = await ZB.images.uploadToNotion(client, data, opts.images, ctx, opts.messages || []);
+		let md = ZB.core.buildManagedSection(uploaded.data, {
 			aiMarkdown: opts.ai && opts.ai.md,
 			notesMarkdown: opts.notesMarkdown,
 		});
-		let blocks = ZB.markdown.mdToNotionBlocks(md);
+		let blocks = ZB.markdown.mdToNotionBlocks(md, { images: uploaded.ids });
 		await client.replaceManagedContainer(page.id, "自動同步區（重新同步會覆寫，個人筆記請寫在此區塊外）", blocks);
 		return page.url;
 	}

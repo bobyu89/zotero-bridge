@@ -21,6 +21,7 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 - **APA 7 引文由 Zotero 產生**：使用內建 CSL 引文處理器，不讓 LLM 編造參考文獻。
 - **分流規則**：例如「群組文獻庫 → 團隊 Notion DB」、「我的文獻庫／碩論 → 碩論 DB + `Zotero/碩論` 資料夾」。
 - **雙向連結**：Notion 頁面有 `Obsidian` 欄位（`obsidian://` 連結）；Obsidian 筆記的 frontmatter 有 `notion` 連結，也有開回 Zotero 的連結；每條劃線都能點回 PDF 的原位置。
+- **圖片劃線（表格、圖）**：在 PDF 閱讀器框選的圖片劃線與手繪註記，會連同 Zotero 產生的截圖一起同步：Obsidian 嵌入筆記、Notion 成為圖片區塊；也可以讓 Claude 讀這些截圖（見[圖片劃線](#圖片劃線表格圖)）。
 - **重新同步不會蓋掉你的內容**：
   - Obsidian：只覆寫 `%% zotero-bridge:start %%` 到 `%% zotero-bridge:end %%` 之間的區塊；你自己加的 frontmatter 欄位（例如 `status`、`aliases`）和區塊外的內容都會保留。
   - Notion：只替換標題為「📚 Zotero Bridge｜…」的那個 callout 區塊，頁面上的其他內容保留。
@@ -81,6 +82,7 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 - 要用 API key，**ChatGPT／Claude 的訂閱方案不能直接用在這裡**，API 另外計費。
 - 「Codex」系列是寫程式專用模型。整理文獻用一般模型效果較好，所以預設 `gpt-5.5`；想用 Codex 模型可以自行填入模型名稱。
 - **全文最多送出字元數**：預設 150,000 字元。超過會截斷，筆記的 frontmatter 會標記 `fulltext_truncated: true`，也會告訴 LLM 後段沒有提供。設成 0 表示只送摘要與註記，較省錢。
+- **AI 也看圖片劃線**（預設關閉）：把圖片劃線與手繪註記的截圖一起傳給 Claude，見[圖片劃線](#圖片劃線表格圖)。
 - 一次替超過 5 篇文獻產生 AI 筆記前會先跳出確認視窗；有用量紀錄時會附上預估費用（依過去呼叫的平均 tokens 估算）。
 - API 暫時忙碌或網路中斷（HTTP 408／409／429／500／502／503／504、Claude 的 529 overloaded）會自動重試最多 4 次，間隔以指數退避並遵守伺服器的 `retry-after`；金鑰錯誤（401）、請求錯誤（400）或模型拒絕處理不會重試。
 - **本月 AI 用量**：設定頁顯示本月呼叫次數、tokens 與估計費用（美元），可重設；每次 AI 執行後，進度視窗也會顯示一行用量摘要。價格表（每百萬 tokens 美元）內建 `claude-opus-5-5` $4／$20、`claude-sonnet-5-5` $2／$10、`claude-haiku-4-5` $1／$5，可以在設定修改；OpenAI 模型沒有內建價格，只顯示 tokens（可自行加入價格）。估計值僅供參考，實際金額以服務商帳單為準。
@@ -120,6 +122,17 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 - **不想接續**：**工具 → 放棄未完成的 Zotero Bridge 同步**。
 
 開始新的多篇同步時，會取代上一次未完成的紀錄。單篇同步和自動同步不會記錄。
+
+### 圖片劃線（表格、圖）
+
+護理研究的主要結果常在表格和圖裡。在 Zotero 的 PDF 閱讀器用「選取區域」框選表格或圖（圖片劃線），或用手繪工具畫記（手繪註記），同步時會一起帶出截圖：
+
+- **Obsidian**：截圖存到筆記所在資料夾底下的 `attachments/`，檔名是 `<條目KEY>-<註記KEY>.png`（例如 `Zotero/attachments/ABCD2345-EFGH6789.png`），依劃線順序嵌入筆記的 Annotations 區（`![[...]]`）：上方是顏色標記與頁碼連結，下方是你的評註。內容沒變時不會重寫檔案。用條目 KEY 命名，所以改了 citekey 或標題，截圖也不用改名。
+- **刪除註記**：在 Zotero 刪掉圖片劃線後再同步到 Obsidian，對應的截圖會從 `attachments/` 刪除。插件只刪「這篇文獻的 `條目KEY-註記KEY.png`」格式的檔案，你自己放在 `attachments/` 的圖片和其他文獻的截圖都不會動；關閉「匯出圖片劃線」後也不會再刪任何檔案。把筆記搬到別的資料夾後，舊資料夾 `attachments/` 裡的截圖不會跟著搬，可以自行刪除。
+- **Notion**：截圖用 Notion 的檔案上傳 API 上傳，成為自動同步區裡的圖片區塊。上傳的檔案若沒有馬上放進頁面，一小時後就會失效，而自動同步區每次同步都會整個重建，所以**每次同步到 Notion 都會重新上傳**（每張圖多 2 次 API 請求）。單一檔案上限 20 MB（Notion 免費方案為 5 MB）；上傳失敗時頁面照常同步，只是少了圖片，進度視窗會顯示 ⚠️。
+- **截圖從哪來**：Zotero 會快取每個圖片／手繪註記的截圖。沒有快取時（例如在另一台電腦劃的線剛同步過來），插件會請 Zotero 當場從 PDF 產生；產生不了（例如這台電腦沒有 PDF 檔）時，進度視窗會顯示 ⚠️，筆記保留顏色、頁碼與評註（Obsidian 裡上次同步的截圖會繼續沿用）。
+- **AI 也看圖片劃線**（設定 → AI 文獻筆記，預設關閉）：產生 AI 筆記時把截圖一起傳給 Claude，讓它讀表格裡的數字。每張圖都會增加 token 用量；一次最多 20 張，單張超過約 3.7 MB 或 8000 像素的會略過。OpenAI 模式不會送圖片。不論是否開啟，圖片劃線的評註文字都會送給 AI。
+- **不想要截圖**：設定 → Obsidian 取消「匯出圖片劃線」，就和以前一樣只有文字說明。
 
 ### 文獻比較表
 
@@ -254,6 +267,7 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi
 | `content/markdown.js` | Markdown ⇄ Notion blocks ⇄ HTML |
 | `content/synthesis.js` | 跨文獻比較表：提示詞、引文轉換、APA 參考文獻 |
 | `content/export.js` | 參考文獻檔匯出（CSL JSON／BibTeX）與 citekey 產生 |
+| `content/annotation-images.js` | 圖片劃線與手繪註記：取得 Zotero 截圖、複製到 vault、上傳到 Notion、傳給 Claude |
 | `research-brain/` | Claude Code／Codex 研究大腦設定檔 |
 | `site/index.html` | 安裝精靈網頁（GitHub Pages） |
 

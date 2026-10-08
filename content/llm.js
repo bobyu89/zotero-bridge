@@ -393,8 +393,26 @@
 		return callAnthropic(Object.assign(common, { effort: settings.effort }));
 	}
 
+	/**
+	 * Claude user content with images: each image after a short label, all before the prompt text
+	 * (images work best before the question). images: [{ label, mediaType, data (base64) }]
+	 */
+	function imageContent(user, images) {
+		let content = [];
+		for (let img of images) {
+			content.push({ type: "text", text: img.label });
+			content.push({ type: "image", source: { type: "base64", media_type: img.mediaType, data: img.data } });
+		}
+		content.push({ type: "text", text: user });
+		return content;
+	}
+
 	async function generateNote(settings, data, opts, fetch, callOpts) {
 		let { system, user } = buildPrompt(data, opts);
+		// Image annotations (annotation-images.js; only offered for Claude)
+		if (opts && opts.images && opts.images.length && settings.provider !== "openai") {
+			user = imageContent(user, opts.images);
+		}
 		return generateText(settings, system, user, fetch, callOpts);
 	}
 
@@ -636,7 +654,7 @@
 
 	return {
 		DEFAULT_MODELS, DEFAULT_SYSTEM_PROMPT, buildPrompt, formatAnnotationsForPrompt,
-		callAnthropic, callOpenAI, generateText, generateNote, extractSummary,
+		callAnthropic, callOpenAI, generateText, generateNote, imageContent, extractSummary,
 		RETRY_STATUSES, MAX_RETRIES, postWithRetry, retryAfterMs, backoffDelay, parseUsage,
 		STUDY_FIELDS, STUDY_DESIGNS, APPRAISAL_VERDICTS, STUDY_DATA_HEADING, STUDY_DATA_PROMPT, APPRAISAL_HEADING,
 		normalizeStudyData, extractStudyData, hasStudyData, studyDataBlock,

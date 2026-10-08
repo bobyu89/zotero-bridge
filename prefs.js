@@ -4,6 +4,8 @@ pref("extensions.zotero-bridge.obsidian.folder", "Zotero");
 pref("extensions.zotero-bridge.obsidian.filenameFormat", "citekey");
 pref("extensions.zotero-bridge.obsidian.createBase", true);
 pref("extensions.zotero-bridge.includeNotes", true);
+pref("extensions.zotero-bridge.images.export", true);
+pref("extensions.zotero-bridge.images.sendToAI", false);
 pref("extensions.zotero-bridge.notion.database", "");
 pref("extensions.zotero-bridge.notion.synthesisParent", "");
 pref("extensions.zotero-bridge.routing.rules", "[]");

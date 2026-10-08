@@ -165,6 +165,7 @@
 	/**
 	 * @param {object} [opts] - { tables: true } emits real Notion table blocks (table > table_row),
 	 *   which is only valid when the blocks go directly on a page, not inside our container callout.
+	 *   { images: { target: fileUploadId } } turns a line `![[target]]` into an image block.
 	 */
 	function mdToNotionBlocks(md, opts = {}) {
 		let lines = String(md || "").replace(/\r\n?/g, "\n").split("\n");
@@ -194,6 +195,12 @@
 				let content = code.join("\n");
 				let rich = chunkString(content, NOTION_TEXT_LIMIT).map(c => ({ type: "text", text: { content: c } }));
 				blocks.push(block("code", rich.length ? rich : [], { language: "plain text" }));
+				continue;
+			}
+			if ((m = /^!\[\[([^\]|]+?)(?:\|[^\]]*)?\]\]\s*$/.exec(line)) && opts.images && opts.images[m[1]]) {
+				// An embedded file uploaded with the File Upload API (annotation images); other embeds stay text
+				flushPara();
+				blocks.push({ object: "block", type: "image", image: { type: "file_upload", file_upload: { id: opts.images[m[1]] } } });
 				continue;
 			}
 			if (/^%%.*%%\s*$/.test(line)) {
