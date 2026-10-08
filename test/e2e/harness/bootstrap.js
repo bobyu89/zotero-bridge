@@ -356,14 +356,22 @@ const TESTS = [
 			});
 			await step("failingElements", async () => {
 				let failing = [];
-				let all = [...doc.querySelectorAll("[data-l10n-id]")];
+				let all = [];
+				let walk = (root) => {
+					for (let el of root.querySelectorAll("*")) {
+						if (el.hasAttribute("data-l10n-id")) all.push(el);
+						let sr = el.openOrClosedShadowRoot || el.shadowRoot;
+						if (sr) walk(sr);
+					}
+				};
+				walk(doc);
 				d.l10nElements = all.length;
 				for (let el of all) {
 					try {
 						await doc.l10n.translateElements([el]);
 					}
 					catch (e) {
-						failing.push(`${el.localName}#${el.id || ""} ${el.dataset.l10nId} args=${el.dataset.l10nArgs || ""} (${e})`);
+						failing.push(`${el.localName}#${el.id || ""}.${el.className || ""} in ${el.getRootNode().host ? el.getRootNode().host.localName : "document"}: ${el.dataset.l10nId} args=${el.dataset.l10nArgs || ""} (${e})`);
 					}
 				}
 				d.failingElements = failing.slice(0, 20);
@@ -1205,9 +1213,32 @@ async function baseline() {
 		await Zotero.uiReadyPromise;
 		await delay(10000);
 		let errors = startupMessages().filter(m => m.kind === "error");
+		// Diagnostics: does the main window's re-translation fail without the plugin too, and does
+		// registering a plugin-like l10n source make it log?
+		let diag = {};
+		let win = Zotero.getMainWindow();
+		try {
+			await win.document.l10n.translateRoots();
+			diag.translateRoots = "ok";
+		}
+		catch (e) {
+			diag.translateRoots = `rejected: ${e}`;
+		}
+		let from = messages.length;
+		try {
+			let reg = win.L10nRegistry.getInstance();
+			let src = win.L10nFileSource.createMock("zb-e2e-baseline", "app", Services.locale.availableLocales,
+				"zb-e2e-baseline:{locale}/", Services.locale.availableLocales.map(l => ({ path: `zb-e2e-baseline:${l}/x.ftl`, source: "zb-e2e-x = x\n" })));
+			reg.registerSources([src]);
+			await delay(1500);
+			diag.registerMockSource = messages.slice(from).filter(m => m.kind === "error").map(m => m.text);
+		}
+		catch (e) {
+			diag.registerMockSource = `threw ${e}`;
+		}
 		await IOUtils.writeUTF8(PathUtils.join(workDir, "baseline.json"),
-			JSON.stringify({ zoteroVersion: Zotero.version, errors }, null, 2));
-		log(`baseline: ${errors.length} console error(s) without the plugin`);
+			JSON.stringify({ zoteroVersion: Zotero.version, errors, diag }, null, 2));
+		log(`baseline: ${errors.length} console error(s) without the plugin; ${JSON.stringify(diag)}`);
 	}
 	catch (e) {
 		log(`baseline failed: ${errText(e)}`);
