@@ -1,0 +1,57 @@
+name: link-check
+
+# Live check of the external services: every search URL of content/search-links.js and
+# site/search.html, NCBI E-utilities (pubmed-watch.js, MeSH helper) and OpenAlex (citation-chase.js).
+# Report: the run's summary and the "link-check-report" artifact. Fails only on clear breakage
+# (404, malformed URL, NCBI/OpenAlex field mismatch); sites that block CI are reported as inconclusive.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 2 * * 1"   # Mondays 02:23 UTC
+  pull_request:
+    paths:
+      - content/search-links.js
+      - content/pubmed-watch.js
+      - content/citation-chase.js
+      - site/search.html
+      - test/live/**
+      - .github/workflows/link-check.yml
+  # workflow_dispatch only works once this file is on the default branch; a push that touches
+  # these files runs the check on any branch.
+  push:
+    paths:
+      - content/search-links.js
+      - content/pubmed-watch.js
+      - content/citation-chase.js
+      - site/search.html
+      - test/live/**
+      - .github/workflows/link-check.yml
+
+concurrency:
+  group: link-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  live:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Headless Chromium for JavaScript-rendered search pages (optional)
+        continue-on-error: true
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.52.0
+          npx playwright install --with-deps chromium
+      - name: Check links and APIs
+        run: node test/live/check-links.mjs --out "$RUNNER_TEMP/link-check"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: link-check-report
+          path: ${{ runner.temp }}/link-check/
+          if-no-files-found: warn
