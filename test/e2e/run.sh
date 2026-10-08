@@ -44,6 +44,7 @@ user_pref("extensions.update.autoUpdateDefault", false);
 user_pref("app.update.auto", false);
 user_pref("app.update.enabled", false);
 user_pref("browser.dom.window.dump.enabled", true);
+user_pref("extensions.logging.enabled", true);
 user_pref("extensions.zotero.useDataDir", true);
 user_pref("extensions.zotero.dataDir", "$WORK/data");
 user_pref("extensions.zotero.sync.autoSync", false);
@@ -62,15 +63,28 @@ done
 echo "Plugin: $PLUGIN_ID $VERSION; harness: $HARNESS_ID; work dir: $WORK"
 
 LAUNCH=(xvfb-run -a -s "-screen 0 1600x1200x24" "$ZOTERO_DIR/zotero" -profile "$WORK/profile" -no-remote -ZoteroDebugText)
-STATUS=0
 if [ "$EXPECT_KEYSTORE" = true ]; then
 	# A private D-Bus session with an unlocked keyring: libsecret (Mozilla's OSKeyStore on Linux) works
 	timeout --kill-after=30 "$TIMEOUT" dbus-run-session -- bash -c \
 		'printf e2e | gnome-keyring-daemon --unlock --components=secrets >/dev/null; exec "$@"' bash "${LAUNCH[@]}" \
-		> "$WORK/zotero.log" 2>&1 || STATUS=$?
+		> "$WORK/zotero.log" 2>&1 &
 else
-	timeout --kill-after=30 "$TIMEOUT" "${LAUNCH[@]}" > "$WORK/zotero.log" 2>&1 || STATUS=$?
+	timeout --kill-after=30 "$TIMEOUT" "${LAUNCH[@]}" > "$WORK/zotero.log" 2>&1 &
 fi
+PID=$!
+# Don't wait the whole timeout when the harness never starts (plugin not installed, Zotero stuck)
+for _ in $(seq 1 ${ZB_E2E_START_TIMEOUT:-240}); do
+	if grep -aq '\[zb-e2e\] harness started' "$WORK/zotero.log" 2>/dev/null || ! kill -0 "$PID" 2>/dev/null; then break; fi
+	sleep 1
+done
+if ! grep -aq '\[zb-e2e\] harness started' "$WORK/zotero.log"; then
+	echo "The harness did not start within ${ZB_E2E_START_TIMEOUT:-240} s; stopping Zotero"
+	pkill -TERM -f "$WORK/profile" || true
+	sleep 5
+	pkill -KILL -f "$WORK/profile" || true
+fi
+STATUS=0
+wait "$PID" || STATUS=$?
 echo "Zotero exited with status $STATUS"
 grep -a '\[zb-e2e\]' "$WORK/zotero.log" || true
 node "$ROOT/test/e2e/report.mjs" "$WORK"
