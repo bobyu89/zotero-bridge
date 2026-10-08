@@ -1256,6 +1256,8 @@
 		menuIDs.push(...ZB.pubmedWatch.registerMenus({ pluginID, icon }));
 		// Research dashboard (dashboard.js): Tools menu
 		menuIDs.push(...ZB.dashboard.registerMenus({ pluginID, icon }));
+		// Citation searching for reviews (citation-chase.js): item, collection and Tools menus
+		menuIDs.push(...ZB.citationChase.registerMenus({ pluginID, icon }));
 	}
 
 	// ---------- item pane: AI note section ----------

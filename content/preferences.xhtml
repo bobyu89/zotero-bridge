@@ -181,6 +181,31 @@
 		<label value="PRISMA 頁面的 Notion 父頁面（選填；留空時使用文獻比較表的父頁面，頁面也要分享給 integration）："/>
 		<html:input type="text" preference="extensions.zotero-bridge.screening.notionParent" placeholder="https://www.notion.so/..."/>
 		<description class="zb-hint">改了前綴或排除原因後，舊標籤不會自動改名。資料庫來源：在匯入的文獻加上標籤「來源/PubMed」等；沒有標籤時使用條目的「圖書館目錄」（Library Catalog）欄位（例如從 PubMed 匯入的是「PubMed」）。</description>
+		<label value="其他方法的來源（PRISMA 流程圖右側欄；以逗號分隔，留空 = 引文追蹤、網站、機構）："/>
+		<html:input type="text" preference="extensions.zotero-bridge.screening.otherSources" placeholder="引文追蹤, 網站, 機構"/>
+	</groupbox>
+
+	<groupbox>
+		<label><html:h2>引文追蹤（OpenAlex）</html:h2></label>
+		<description>從納入研究查詢參考文獻（往回）與引用它的文獻（往前），列成 Obsidian 候選清單；勾選後再匯入 Zotero。OpenAlex 免費、不需要 API key。</description>
+		<hbox align="center">
+			<label value="Email（OpenAlex polite pool，建議填）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.citationChase.email" placeholder="you@example.com"/>
+		</hbox>
+		<hbox align="center">
+			<label value="方向："/>
+			<menulist preference="extensions.zotero-bridge.citationChase.direction" native="true">
+				<menupopup>
+					<menuitem label="往回＋往前（預設）" value="both"/>
+					<menuitem label="只查參考文獻（往回）" value="backward"/>
+					<menuitem label="只查引用它的文獻（往前）" value="forward"/>
+				</menupopup>
+			</menulist>
+			<label value="每次最多請求："/>
+			<html:input type="text" preference="extensions.zotero-bridge.citationChase.maxRequests" placeholder="100" size="5"/>
+			<label value="每篇每個方向最多："/>
+			<html:input type="text" preference="extensions.zotero-bridge.citationChase.maxPerSeed" placeholder="200" size="5"/>
+		</hbox>
 	</groupbox>
 
 	<groupbox>

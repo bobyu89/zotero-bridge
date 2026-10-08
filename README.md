@@ -31,6 +31,7 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 - **系統性／範圍回顧篩選（PRISMA 2020）**：在 Zotero 用右鍵或右側面板標記標題摘要與全文的納入／排除（排除原因可自訂），找出可能重複的文獻，一鍵產生 PRISMA 2020 計數、Mermaid 流程圖與納入研究的證據表（Obsidian 筆記 + Excel 可開的 CSV，可選 Notion 頁面），並檢查計數是否一致（見[系統性／範圍回顧篩選](#系統性範圍回顧篩選)）。
 - **PubMed 新文獻追蹤**：儲存 PubMed 檢索式（可用 MeSH），手動或定期把新發表的文獻匯入指定的 Zotero 分類（用 Zotero 內建匯入器，書目完整、不會重複匯入），並在 Obsidian 產生每日新文獻清單（見[PubMed 新文獻追蹤](#pubmed-新文獻追蹤)）。
 - **研究儀表板**：Obsidian 裡的一頁 `研究儀表板.md` 總覽閱讀進度（Mermaid 圓餅圖、各分類完成率）、研究設計與證據等級分布、待讀最久與資料待補的文獻、回顧專案的 PRISMA 納入篇數、AI 用量與本週新增；另有 `研究儀表板.base` 的證據等級表、掃描檔待 OCR、依分類的待讀清單（見[研究儀表板](#研究儀表板)）。
+- **引文追蹤（Citation searching）**：從納入研究用 OpenAlex（免費、不需 API key）查參考文獻與引用它的文獻，和文獻庫比對去重後列成 Obsidian 勾選清單與 CSV；勾選的再一鍵匯入 Zotero，PRISMA 流程圖自動加上「其他方法」欄（見[引文追蹤](#引文追蹤citation-searching)）。
 - **Zotero 內直接看 AI 筆記**：條目右側面板新增「AI 文獻筆記」區塊，顯示摘要與重點，並有「同步」「重新產生」按鈕。
 - **批次同步可中途停止、之後接續**：同步很多篇時可以從工具選單停止；Zotero 關閉或當掉也不會從頭來過，失敗的文獻可以一鍵重試。
 - **閱讀狀態三邊同步**：在 Zotero（標籤）、Notion（`Status` 欄位）或 Obsidian（看板拖曳）任一邊改閱讀狀態，下次同步時另外兩邊會跟著改（見[閱讀狀態同步](#閱讀狀態同步)）。
@@ -238,7 +239,7 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 
 注意：
 - 同一篇文獻在 Zotero 只有一組標籤，放在兩個回顧專案的分類裡會共用篩選決定；兩個回顧需要各自的決定時，請用不同的文獻庫（例如群組文獻庫）。
-- 流程圖是新的 systematic review、只檢索資料庫與登錄庫（databases and registers）的版本；有其他來源（引文追蹤、網站）時，請依 PRISMA 2020 範本自行補上右側的欄位。插件無法分辨同一研究的多篇報告，「Studies included」與「Reports of included studies」顯示相同數字，需要時請手動修改。
+- 流程圖是新的 systematic review 版本。標籤為 `來源/引文追蹤`、`來源/網站`、`來源/機構` 的文獻（可在設定的「其他方法的來源」修改）算在右側「其他方法」（Identification of studies via other methods）欄：Records identified from（Citation searching、Websites、Organisations）→ Reports sought for retrieval → Reports not retrieved → Reports assessed → Reports excluded（各原因）→ 與左欄合計的 Studies included；frontmatter 另有 `prisma_other_identified`、`prisma_other_included` 等。這一欄沒有標題摘要篩選，直接給全文決定不會出現警告；若有重複或標題摘要排除，會多一個「Records excluded」框讓數字對得起來（PRISMA 範本沒有這個框，可自行刪除）。同時有資料庫來源標籤（例如 `來源/CINAHL`）的文獻算在左欄。插件無法分辨同一研究的多篇報告，「Studies included」與「Reports of included studies」顯示相同數字，需要時請手動修改。
 - 計數是依標籤計算，請在投稿前對照一致性檢查確認。
 
 ### PubMed 新文獻追蹤
@@ -280,6 +281,31 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 - 依「加入 PubMed 的日期」（Entrez Date）查詢，所以晚一點才被收錄的舊文獻也會出現；只想要近年的研究請填「只要出版日期在此之後」。
 - 匯入一律存到「我的文獻庫」。
 - 檢索式改了之後，下次檢查仍從上次檢查的時間點開始；想重新回溯，可以刪掉這個追蹤再新增一次。
+### 引文追蹤（Citation searching）
+
+PRISMA 2020 要求報告「其他方法」找到的文獻，最常見的是引文追蹤：查納入研究的參考文獻（往回，backward）與引用它們的文獻（往前，forward）。插件用 [OpenAlex](https://openalex.org)（免費、不需 API key）查詢，**只列出候選清單，不會自動匯入**。
+
+**1. 查詢**：全文篩選有了「全文：納入」之後，在回顧專案的分類上按右鍵 → **Zotero Bridge：引文追蹤 → 引文追蹤：全文納入的研究（OpenAlex）**（或先選取分類，再用 工具 → 引文追蹤：目前分類全文納入的研究）。也可以選取幾篇文獻 → 右鍵 → **Zotero Bridge：引文追蹤所選文獻（OpenAlex）**；左側有選分類時清單屬於該分類，沒有時存成「所選文獻 引文追蹤.md」。
+
+- 以 DOI（或 Extra 欄的 `PMID: …`）找到該研究在 OpenAlex 的資料，再查它引用的文獻與引用它的文獻；兩者都沒有的研究會標示「沒有 DOI 或 PMID，無法查詢」。
+- 查詢在背景進行（每秒最多 5 次請求），進度視窗顯示目前查到第幾篇，不會卡住 Zotero。每次最多 100 次請求，每篇研究每個方向最多 200 篇（依被引次數由高到低）；超過時會在筆記標示「已達上限」。可在 設定 → 引文追蹤（OpenAlex）調整，也可以只查往回或往前。
+- 建議在設定填入 email：OpenAlex 會把帶 email 的請求放到回應較穩定的 polite pool（email 只會送給 OpenAlex）。
+
+**2. 候選清單**：`Zotero/Reviews/<分類名稱> 引文追蹤.md`
+- **查詢結果**：每篇納入研究找到幾篇參考文獻／被引文獻、有沒有查詢失敗
+- **候選文獻**：不在文獻庫中的文獻，一篇一行的勾選清單（標題、年份、期刊、被引次數、← 來自哪篇研究的參考文獻／→ 引用了哪篇研究、DOI 連結）；同一篇從多篇研究找到只列一次，排在前面
+- **總表**：全部找到的文獻，最後一欄標示「已在本回顧」或「已在文獻庫」（以 DOI、PMID，或標題＋年份（前後一年內）比對；兩筆 DOI 不同時不會因標題相同而視為同一篇）
+- 同時產生 `<分類名稱> 引文追蹤.csv`（Excel 可直接開啟）
+- 重新查詢只覆寫 `%% zotero-bridge:start %%` 區塊，已勾選的項目會保留勾選；「✍️ 我的筆記」不會被動到。
+
+**3. 匯入勾選的文獻**：在 Obsidian 把要加入的文獻勾選（`- [x]`），回到 Zotero 選取分類 → 右鍵 **Zotero Bridge：引文追蹤 → 匯入引文追蹤勾選的文獻**（或 工具 → 匯入引文追蹤勾選的文獻）。
+- 用 Zotero 內建的「依識別碼新增」（DOI／PMID）查詢書目資料，存進該分類，加上標籤 `來源/引文追蹤`；**不會加任何篩選標籤**，也不會下載 PDF（之後可用 Zotero 的「尋找可用的 PDF」）。
+- 已在文獻庫中的會略過；匯入成功的那一行會加上「✅ 已匯入」，下次不會重複匯入。查不到的會列在進度視窗，可以手動加入。
+- 只讀取插件區塊內勾選的項目；沒有 DOI／PMID 的候選文獻沒有勾選框，請手動加入。
+
+**4. 篩選與 PRISMA**：匯入的文獻照常篩選（可直接給全文決定）。產生 PRISMA 流程圖時，`來源/引文追蹤` 的文獻會算在右側「其他方法」欄（Citation searching），納入的研究也會出現在證據表。網站、機構等其他來源的文獻請自行加上 `來源/網站`、`來源/機構` 標籤。
+
+注意：OpenAlex 的資料並不完整（尤其是中文期刊與較舊的文獻），引文追蹤的結果請搭配原文參考文獻列表確認。
 
 ### 在 Zotero 裡看 AI 筆記
 
@@ -517,6 +543,7 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi
 | `content/export.js` | 參考文獻檔匯出（CSL JSON／BibTeX）與 citekey 產生 |
 | `content/screening.js` | 系統性／範圍回顧篩選：篩選標籤、找重複、PRISMA 2020 計數與一致性檢查、Mermaid 流程圖、證據表（Obsidian／CSV／Notion） |
 | `content/pubmed-watch.js` | PubMed 新文獻追蹤：E-utilities 查詢（速率限制）、去重、用 Zotero 匯入器匯入、自動檢查、Obsidian 每日清單 |
+| `content/citation-chase.js` | 引文追蹤：OpenAlex 往回／往前查詢（節流、請求上限、分頁）、與文獻庫比對去重、Obsidian 勾選清單與 CSV、依 DOI／PMID 匯入勾選的文獻 |
 | `content/annotation-images.js` | 圖片劃線與手繪註記：取得 Zotero 截圖、複製到 vault、上傳到 Notion、傳給 Claude |
 | `research-brain/` | Claude Code／Codex 研究大腦設定檔 |
 | `site/index.html` | 安裝精靈網頁（GitHub Pages） |
