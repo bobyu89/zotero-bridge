@@ -3,273 +3,172 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>醫學文獻快速搜尋</title>
+<title>醫學文獻快速搜尋｜Zotero Bridge</title>
 <meta name="description" content="一個檢索詞同時查 PubMed、CINAHL、Cochrane、華藝、臺灣博碩士論文等資料庫；PICO 檢索式產生器、EZproxy 校外連線、儲存檢索。">
+<meta name="theme-color" content="#16233F">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="zb.css">
 <style>
-/* 與安裝精靈（index.html）共用色彩與字體；版面：上方整寬的搜尋卡，下方 PICO（左）＋已存檢索與校外連線（右） */
-:root {
-  --bg: #F3F4F7;
-  --surface: #FFFFFF;
-  --ink: #1B1D22;
-  --muted: #5B6270;
-  --line: #DCDFE6;
-  --accent: #B3243A;      /* Zotero 紅 */
-  --accent-ink: #FFFFFF;
-  --accent-soft: #F7E4E7;
-  --ok: #1E7449;
-  --ok-soft: #E1F1E8;
-  --warn: #7E5300;
-  --warn-soft: #FFF2D1;
-  --chip: #ECEEF2;
-  --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
-  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #111317; --surface: #1A1D23; --ink: #E8EAEE; --muted: #9AA1AD; --line: #2B3038;
-    --accent: #EF6A7D; --accent-ink: #1A0B0E; --accent-soft: #3A1D23;
-    --ok: #5DC690; --ok-soft: #142D20; --warn: #E9B54E; --warn-soft: #30270F; --chip: #252931;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #111317; --surface: #1A1D23; --ink: #E8EAEE; --muted: #9AA1AD; --line: #2B3038;
-  --accent: #EF6A7D; --accent-ink: #1A0B0E; --accent-soft: #3A1D23;
-  --ok: #5DC690; --ok-soft: #142D20; --warn: #E9B54E; --warn-soft: #30270F; --chip: #252931;
-  color-scheme: dark;
-}
-
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-html, body { margin: 0; }
-body {
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--font-body);
-  font-size: 16px;
-  line-height: 1.75;
-  padding-inline: 16px;
-  padding-block: 24px 64px;
-}
-a { color: var(--accent); text-underline-offset: 3px; }
-a:focus-visible, button:focus-visible, select:focus-visible, summary:focus-visible, input:focus-visible, textarea:focus-visible {
-  outline: 2px solid var(--accent); outline-offset: 2px;
-}
-
-.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 24px; }
-
-header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
-header.top h1 {
-  font-family: var(--font-display); font-weight: 900; font-size: clamp(28px, 5vw, 40px);
-  line-height: 1.2; margin: 0; text-wrap: balance; letter-spacing: 0.02em;
-}
-header.top h1 span { color: var(--accent); }
-header.top p { margin: 4px 0 0; color: var(--muted); max-width: 52ch; }
-.meta { font-size: 13px; color: var(--muted); text-align: right; display: grid; gap: 2px; }
-
-.layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 24px; align-items: start; }
-.side { display: grid; gap: 24px; min-width: 0; }
-
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: clamp(20px, 4vw, 32px); min-width: 0; display: grid; gap: 18px; }
-.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0; }
-.card h2 { font-family: var(--font-display); font-size: clamp(22px, 3.2vw, 26px); line-height: 1.3; margin: 0; text-wrap: balance; }
-.card h3 { font-size: 15px; margin: 0; }
-.card p { margin: 0; }
-.head { display: grid; gap: 4px; }
-.lead { color: var(--muted); font-size: 15px; max-width: 70ch; }
-.small { font-size: 13px; color: var(--muted); }
-code, .mono { font-family: var(--font-mono); font-size: 0.88em; background: var(--chip); padding: 1px 6px; border-radius: 5px; overflow-wrap: anywhere; }
-
-/* 表單元件 */
-input[type=search], input[type=text], input[type=url], input[type=number], textarea, select {
-  font: inherit; font-size: 16px; color: var(--ink); background: var(--surface);
-  border: 1.5px solid var(--line); border-radius: 9px; padding: 9px 12px; min-width: 0; width: 100%;
-}
-textarea { resize: vertical; line-height: 1.5; min-height: 64px; }
-input::placeholder, textarea::placeholder { color: var(--muted); opacity: .75; }
-input:focus, textarea:focus, select:focus { border-color: var(--accent); outline: none; }
-label.lbl { font-size: 14px; font-weight: 700; display: block; margin-bottom: 6px; }
-
-.btn {
-  font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; border-radius: 9px; padding: 9px 16px;
-  border: 1.5px solid var(--accent); background: var(--accent); color: var(--accent-ink); text-decoration: none;
-  display: inline-flex; gap: 6px; align-items: center; justify-content: center; white-space: nowrap;
-}
-.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
-.btn.ghost:hover { border-color: var(--muted); }
-.btn.small { font-size: 13px; padding: 4px 10px; font-weight: 500; border-radius: 7px; }
-.btn:disabled { opacity: .4; cursor: not-allowed; }
-.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* 版面：上方整寬的搜尋卡（檢索詞 → 資料庫），下方 PICO（左）＋已存檢索與校外連線（右），最後是網址狀態表 */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+.side { display: grid; gap: 20px; min-width: 0; }
 
 /* 搜尋列 */
 .qrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
-#q { font-size: 18px; padding: 12px 14px; border-radius: 11px; }
-.openall { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
-.openall select { width: auto; max-width: 100%; font-size: 15px; padding: 7px 10px; }
+#q { font-size: 18px; min-height: 50px; padding: 10px 14px; border-radius: 10px; }
+#openAllBtn { min-height: 50px; padding-inline: 20px; font-size: 16px; border-radius: 10px; }
+.openall { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.openall select { width: auto; max-width: 100%; font-size: 15px; min-height: 38px; padding: 6px 10px; }
 #qhint { flex-basis: 100%; }
 
-/* 資料庫按鈕 */
+/* 資料庫 */
 .groups { display: grid; gap: 18px; }
-.group { display: grid; gap: 8px; border-radius: 12px; }
-.group h3 { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.group { display: grid; gap: 8px; border-radius: var(--r-m); transition: background-color .2s ease; }
+.group h3 { display: flex; gap: 4px 10px; align-items: baseline; flex-wrap: wrap; font-size: 15px; }
 .group h3 .small { font-weight: 400; }
-.group.hl { background: var(--accent-soft); padding: 12px; margin: -4px; }
-.group .hl-tag { display: none; font-size: 12px; font-weight: 700; color: var(--accent); }
+.group.hl { background: var(--pen-soft); padding: 12px; margin: -4px -4px 0; }
+.group .hl-tag { display: none; font-size: 12px; font-weight: 700; color: var(--pen); }
 .group.hl .hl-tag { display: inline; }
-.dbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.dbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
 a.db {
-  display: grid; gap: 1px; align-content: start; padding: 9px 12px 8px; border: 1.5px solid var(--line); border-radius: 10px;
+  display: grid; gap: 2px; align-content: start; padding: 9px 12px 9px; min-height: 56px; border: 1px solid var(--line-strong); border-radius: var(--r-m);
   background: var(--surface); color: var(--ink); text-decoration: none; line-height: 1.35; position: relative;
+  transition: border-color .15s ease, background-color .15s ease;
 }
-a.db:hover { border-color: var(--accent); }
-a.db b { font-size: 15px; }
-a.db .m { font-size: 12px; color: var(--muted); }
-a.db .m .lock { color: var(--warn); font-weight: 700; }
-a.db.in-preset { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
-a.db .cp { position: absolute; top: 7px; right: 9px; font-size: 12px; color: var(--muted); }
-a.db b { padding-right: 14px; }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--muted); }
-.legend .lock { color: var(--warn); font-weight: 700; }
+a.db:hover { border-color: var(--pen); }
+a.db:hover b { color: var(--pen); }
+a.db b { font-size: 15px; font-weight: 600; padding-right: 18px; }
+a.db .m { font-size: 12px; color: var(--ink-2); display: block; }
+a.db .acc.inst { color: var(--unclear); font-weight: 600; white-space: nowrap; }
+a.db .acc.inst .ico { margin-right: 3px; vertical-align: -1px; }
+a.db.proxied .acc.inst { color: var(--yes); }
+a.db .acc .ico { width: 12px; height: 12px; }
+a.db.in-preset { border-color: var(--pen); background: var(--pen-soft); box-shadow: inset 0 0 0 1px var(--pen); }
+a.db .cp { position: absolute; top: 9px; right: 9px; color: var(--ink-2); }
+a.db .cp .ico { width: 14px; height: 14px; display: block; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 12px; color: var(--ink-2); line-height: 1.6; }
+.legend > span { display: inline-flex; gap: 4px; align-items: baseline; }
+.legend .ico { width: 12px; height: 12px; align-self: center; flex: none; }
+.legend .lock { color: var(--unclear); font-weight: 600; }
 
-/* 提示框 */
-.note { border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; font-size: 14px; }
-.note.tip { background: var(--ok-soft); }
-.note.tip strong { color: var(--ok); }
-.note.warn { background: var(--warn-soft); }
-.note.warn strong { color: var(--warn); }
-.note.info { background: var(--chip); }
 .gloss { display: flex; flex-wrap: wrap; gap: 6px; }
 .gloss span { background: var(--surface); border: 1px solid var(--line); border-radius: 99px; padding: 1px 10px; font-size: 13px; }
-.gloss span i { font-style: normal; color: var(--muted); }
+.gloss span i { font-style: normal; color: var(--ink-2); }
 
 /* PICO */
-.pico { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.concept { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 8px; align-content: start; }
-.concept .ct { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: center; }
+.pico { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.concept { border: 1px solid var(--line); border-radius: var(--r-m); padding: 12px; display: grid; gap: 8px; align-content: start; background: var(--surface); }
+.concept .ct { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; align-items: center; }
 .concept .letter {
-  width: 30px; height: 30px; border-radius: 8px; background: var(--accent-soft); color: var(--accent);
-  display: grid; place-items: center; font-family: var(--font-mono); font-weight: 500; font-size: 15px;
+  width: 32px; height: 32px; border-radius: 8px; background: var(--mast); color: var(--mast-ink);
+  display: grid; place-items: center; font-weight: 700; font-size: 16px;
 }
 .concept .ct b { font-size: 15px; line-height: 1.3; display: block; }
-.concept .ct > div span { font-size: 12px; color: var(--muted); display: block; line-height: 1.3; }
-.concept .meshrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; }
-.concept .meshrow input { font-size: 14px; padding: 7px 10px; }
+.concept .ct > div span { font-size: 12px; color: var(--ink-2); display: block; line-height: 1.3; }
+.concept .meshrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.concept .meshrow input { font-size: 14px; min-height: 36px; padding: 6px 10px; }
 .concept .meshrow a { font-size: 13px; white-space: nowrap; }
-.concept textarea { font-size: 15px; }
-.concept .inc { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.concept textarea { font-size: 15px; min-height: 64px; }
+.concept .inc { font-size: 13px; color: var(--ink-2); display: flex; gap: 8px; align-items: flex-start; line-height: 1.5; }
+.concept .inc input { margin-top: 1px; }
 
-fieldset.filters { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px 14px; margin: 0; display: grid; gap: 10px; min-width: 0; }
-fieldset.filters legend { font-size: 14px; font-weight: 700; padding: 0 6px; }
-.frow { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; align-items: center; }
-.frow > span:first-child { font-size: 13px; color: var(--muted); }
-.checks { display: flex; flex-wrap: wrap; gap: 4px 14px; }
-.checks label { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; cursor: pointer; }
-input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); margin: 0; }
-.years { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.years input { width: 92px; font-size: 15px; padding: 6px 10px; }
+fieldset.filters { border: 1px solid var(--line); border-radius: var(--r-m); padding: 10px 14px 14px; margin: 0; display: grid; gap: 10px; min-width: 0; }
+fieldset.filters legend { font-size: 14px; font-weight: 600; padding: 0 6px; }
+.frow { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; align-items: center; }
+.frow > span:first-child { font-size: 13px; color: var(--ink-2); }
+.checks { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.checks label { display: inline-flex; gap: 7px; align-items: center; font-size: 14px; cursor: pointer; min-height: 32px; }
+.years { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.years input { width: 96px; font-size: 15px; min-height: 36px; padding: 6px 10px; }
 
-.outs { display: grid; gap: 14px; }
+.outs { display: grid; gap: 16px; }
 .out { display: grid; gap: 6px; }
 .out .oh { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: space-between; }
 .out .oh h3 { font-size: 14px; }
 pre.q {
-  margin: 0; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; background: var(--chip); border-radius: 10px;
+  margin: 0; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; background: var(--panel); border-radius: var(--r-m);
   padding: 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 44px; color: var(--ink);
 }
-pre.q.empty { color: var(--muted); font-family: var(--font-body); }
-.out ul { margin: 0; padding-left: 1.2em; font-size: 13px; color: var(--muted); }
+pre.q.empty { color: var(--ink-2); font-family: var(--font-ui); }
+.out ul { margin: 0; padding-left: 1.2em; font-size: 13px; color: var(--ink-2); }
 
 /* 已存檢索 */
 ul.saved { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-ul.saved li { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: grid; gap: 4px; }
-ul.saved .nm { font-weight: 700; font-size: 14px; overflow-wrap: anywhere; }
-ul.saved .sn { font-family: var(--font-mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.empty-list { font-size: 13px; color: var(--muted); }
+ul.saved li { border: 1px solid var(--line); border-radius: var(--r-m); padding: 10px 12px; display: grid; gap: 4px; }
+ul.saved .nm { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+ul.saved .sn { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.empty-list { font-size: 13px; color: var(--ink-2); }
 
-details.more { border: 1px solid var(--line); border-radius: 10px; }
-details.statuscard { background: var(--surface); border-radius: 14px; }
-details.statuscard summary { padding: 14px 18px; font-size: 15px; }
+details.statuscard { border-radius: var(--r-l); }
+details.statuscard > summary { padding: 14px 18px; font-size: 15px; }
 details.statuscard .body { padding: 0 18px 18px; }
-details.more summary { cursor: pointer; padding: 10px 14px; font-weight: 500; font-size: 14px; list-style: none; display: flex; gap: 8px; align-items: center; }
-details.more summary::-webkit-details-marker { display: none; }
-details.more summary::before { content: "＋"; color: var(--accent); font-weight: 700; }
-details.more[open] summary::before { content: "－"; }
-details.more .body { padding: 0 14px 14px; display: grid; gap: 10px; font-size: 14px; }
-details.more ol { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
-.pstate { font-size: 13px; }
-.pstate.ok { color: var(--ok); }
-.pstate.bad { color: var(--warn); }
+.pstate { font-size: 13px; color: var(--ink-2); margin-top: 6px; }
+.pstate.ok { color: var(--yes); }
+.pstate.bad { color: var(--unclear); }
 
 /* 網址格式表 */
-.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
-table { border-collapse: collapse; width: 100%; font-size: 13px; }
-th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { background: var(--chip); font-weight: 700; white-space: nowrap; }
-td:first-child { white-space: nowrap; font-weight: 500; }
-td code { font-size: 12px; }
-tr:last-child td { border-bottom: 0; }
+#statusTable { font-size: 13px; }
+#statusTable th, #statusTable td { padding: 7px 10px; }
+#statusTable td:first-child { white-space: nowrap; font-weight: 600; }
+#statusTable td code { font-size: 12px; }
 .st { font-size: 12px; font-weight: 700; padding: 0 6px; border-radius: 4px; white-space: nowrap; }
-.st.sure { background: var(--ok-soft); color: var(--ok); }
-.st.guess { background: var(--warn-soft); color: var(--warn); }
-.st.home { background: var(--chip); color: var(--muted); }
-.ci { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; }
-.ci.blocked { color: var(--warn); }
-
-#toast {
-  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); transform: translate(-50%, 16px);
-  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; max-width: calc(100vw - 32px);
-  opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease; box-shadow: 0 6px 24px rgba(0,0,0,.18); z-index: 10;
-}
-#toast.show { opacity: 1; transform: translate(-50%, 0); }
-
-footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
+.st.sure { background: var(--yes-soft); color: var(--yes); }
+.st.guess { background: var(--unclear-soft); color: var(--unclear); }
+.st.home { background: var(--panel); color: var(--ink-2); }
+.ci { display: block; font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+.ci.blocked { color: var(--unclear); }
 
 @media (max-width: 900px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
-  .meta { text-align: left; }
 }
 @media (max-width: 560px) {
   .pico { grid-template-columns: minmax(0, 1fr); }
   .qrow { grid-template-columns: minmax(0, 1fr); }
-  .frow { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .frow { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .dbs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pagehead h1 { font-size: 26px; }
 }
 @media (max-width: 640px) {
   #statusTable thead { display: none; }
   #statusTable tr { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); align-items: baseline; }
   #statusTable tr:last-child { border-bottom: 0; }
   #statusTable td { border: 0; padding: 0; white-space: normal; }
-  #statusTable td:nth-child(3) { font-size: 12px; color: var(--muted); }
+  #statusTable td:nth-child(3) { font-size: 12px; color: var(--ink-2); }
   #statusTable td:nth-child(4) { grid-column: 1 / -1; }
 }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
-<div class="wrap" id="app">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></symbol>
+  <symbol id="i-device" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></symbol>
+</svg>
+<a class="skip" href="#q">跳到檢索詞</a>
 
-  <header class="top">
-    <div>
-      <h1>醫學文獻 <span>快速搜尋</span></h1>
-      <p>輸入一次檢索詞，按資料庫就在新分頁開啟搜尋結果；用 PICO 組出 PubMed／CINAHL 檢索式。</p>
-    </div>
-    <div class="meta">
-      <a href="./">← Zotero Bridge 安裝精靈</a>
+<header class="mast">
+  <div class="mast-in">
+    <span class="home"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 11h1.5V8.6A5.6 5.6 0 0 1 8 4.5a5.6 5.6 0 0 1 5.5 4.1V11H15v1.5H1zm3 0h1.5V9.2a2.6 2.6 0 0 1 5 0V11H12V8.8A4.1 4.1 0 0 0 8 6a4.1 4.1 0 0 0-4 2.8z"/></svg><a href="./">← Zotero Bridge 安裝精靈</a></span>
+    <nav aria-label="網站">
+      <span class="here" aria-current="page">醫學文獻快速搜尋</span>
       <a href="appraisal.html">📋 文獻評讀表（CASP／JBI）</a>
-      <span>設定與已存檢索只存在這台裝置的瀏覽器</span>
-    </div>
-  </header>
+    </nav>
+  </div>
+</header>
 
+<div class="wrap" id="app">
+  <div class="pagehead">
+    <h1>醫學文獻快速搜尋</h1>
+    <span class="local"><svg class="ico" aria-hidden="true"><use href="#i-device"/></svg>設定與已存檢索只存在這台裝置</span>
+    <p>輸入一次檢索詞，點資料庫就在新分頁開啟搜尋結果；用 PICO 組出 PubMed／CINAHL 檢索式。</p>
+  </div>
+
+  <main class="shell">
   <!-- 1 搜尋 -->
   <section class="card" id="searchCard" aria-labelledby="h-search">
-    <div class="head">
-      <p class="eyebrow">Search</p>
-      <h2 id="h-search">輸入檢索詞，選資料庫</h2>
-    </div>
+    <h2 id="h-search" class="vh">檢索詞與資料庫</h2>
     <div class="qrow">
       <input type="search" id="q" placeholder="例：falls older adults exercise、跌倒 長者 運動" autocomplete="off" enterkeyhint="search" aria-label="檢索詞" aria-describedby="qhint">
       <button class="btn" type="button" id="openAllBtn">全部開啟</button>
@@ -277,7 +176,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     <div class="openall">
       <label for="preset" class="small">「全部開啟」要開的組合</label>
       <select id="preset" aria-label="一次開啟的資料庫組合"></select>
-      <span class="small" id="qhint">按 Enter 也會開啟這個組合。紅框的資料庫就是會開的分頁；瀏覽器擋下時，請允許本網站開啟彈出式視窗。</span>
+      <span class="small" id="qhint">按 Enter 也會開啟這個組合，藍框的資料庫就是會開的分頁。瀏覽器擋下時，請允許本網站開啟彈出式視窗。</span>
     </div>
 
     <div class="note tip" id="cjkNote" hidden>
@@ -292,8 +191,8 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     <div class="groups" id="groups"></div>
 
     <div class="legend">
-      <span><span class="lock">🔒 需權限</span>：學校訂閱的資料庫；校外請設定 EZproxy 前綴，或在校內網路使用</span>
-      <span>⧉ 會先複製檢索詞：這些網站沒有可靠的搜尋網址，打開後直接貼上（Ctrl／⌘＋V）</span>
+      <span><svg class="ico" aria-hidden="true" style="color:var(--unclear)"><use href="#i-lock"/></svg><span><span class="lock">需權限</span>：學校訂閱的資料庫；校外請設定 EZproxy 前綴，或在校內網路使用</span></span>
+      <span><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg><span>會先複製檢索詞：這些網站沒有可靠的搜尋網址，打開後直接貼上（Ctrl／⌘＋V）</span></span>
     </div>
   </section>
 
@@ -301,30 +200,29 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     <!-- 2 PICO -->
     <section class="card" id="picoCard" aria-labelledby="h-pico">
       <div class="head">
-        <p class="eyebrow">PICO</p>
         <h2 id="h-pico">PICO 檢索式產生器</h2>
         <p class="lead">每個概念填同義詞（逗號或換行分隔），MeSH 主題詞另外填。同一概念內用 OR，概念之間用 AND。片語會自動加引號；可用 <code>*</code> 截字，例如 <code>exercis*</code>。</p>
       </div>
 
       <div class="pico">
         <div class="concept" data-k="p">
-          <div class="ct"><span class="letter">P</span><div><b>族群／問題</b><span>Population / Problem</span></div></div>
+          <div class="ct"><span class="letter" aria-hidden="true">P</span><div><b>族群／問題</b><span>Population / Problem</span></div></div>
           <textarea id="p-terms" rows="2" placeholder="older adults, elderly, aged" aria-label="P 同義詞"></textarea>
           <div class="meshrow"><input type="text" id="p-mesh" placeholder="MeSH 主題詞（選填）例：Aged" aria-label="P 的 MeSH 主題詞"><a href="#" class="meshlink" data-k="p" target="_blank" rel="noopener">查 MeSH ↗</a></div>
         </div>
         <div class="concept" data-k="i">
-          <div class="ct"><span class="letter">I</span><div><b>介入措施</b><span>Intervention</span></div></div>
+          <div class="ct"><span class="letter" aria-hidden="true">I</span><div><b>介入措施</b><span>Intervention</span></div></div>
           <textarea id="i-terms" rows="2" placeholder="exercise, physical activity, balance training" aria-label="I 同義詞"></textarea>
           <div class="meshrow"><input type="text" id="i-mesh" placeholder="MeSH 主題詞（選填）例：Exercise" aria-label="I 的 MeSH 主題詞"><a href="#" class="meshlink" data-k="i" target="_blank" rel="noopener">查 MeSH ↗</a></div>
         </div>
         <div class="concept" data-k="c">
-          <div class="ct"><span class="letter">C</span><div><b>對照（選填）</b><span>Comparison</span></div></div>
+          <div class="ct"><span class="letter" aria-hidden="true">C</span><div><b>對照（選填）</b><span>Comparison</span></div></div>
           <textarea id="c-terms" rows="2" placeholder="usual care, standard care" aria-label="C 同義詞"></textarea>
           <div class="meshrow"><input type="text" id="c-mesh" placeholder="MeSH 主題詞（選填）" aria-label="C 的 MeSH 主題詞"><a href="#" class="meshlink" data-k="c" target="_blank" rel="noopener">查 MeSH ↗</a></div>
           <label class="inc"><input type="checkbox" id="c-include" checked> 放進檢索式（取消會找到更多篇，對照組常寫得不一致）</label>
         </div>
         <div class="concept" data-k="o">
-          <div class="ct"><span class="letter">O</span><div><b>結果</b><span>Outcome</span></div></div>
+          <div class="ct"><span class="letter" aria-hidden="true">O</span><div><b>結果</b><span>Outcome</span></div></div>
           <textarea id="o-terms" rows="2" placeholder="falls, accidental falls, fall rate" aria-label="O 同義詞"></textarea>
           <div class="meshrow"><input type="text" id="o-mesh" placeholder="MeSH 主題詞（選填）例：Accidental Falls" aria-label="O 的 MeSH 主題詞"><a href="#" class="meshlink" data-k="o" target="_blank" rel="noopener">查 MeSH ↗</a></div>
         </div>
@@ -382,14 +280,13 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
       <!-- 3 已存檢索 -->
       <section class="card" id="savedCard" aria-labelledby="h-saved">
         <div class="head">
-          <p class="eyebrow">Saved</p>
           <h2 id="h-saved">已存檢索</h2>
-          <p class="lead">儲存上方的檢索詞和 PICO，之後一鍵載入。</p>
+          <p class="lead">把上方的檢索詞和 PICO 存起來，之後一鍵載入。</p>
         </div>
         <div class="note warn" id="storeWarn" hidden><p><strong>這個瀏覽器不能儲存資料</strong>（例如無痕視窗或封鎖網站資料）。已存檢索在關閉分頁後會消失，請用「匯出」保存。</p></div>
         <div class="qrow">
           <input type="text" id="saveName" placeholder="名稱，例如：碩論 跌倒預防" aria-label="檢索名稱">
-          <button class="btn small" type="button" id="saveBtn">儲存</button>
+          <button class="btn" type="button" id="saveBtn">儲存</button>
         </div>
         <ul class="saved" id="savedList"></ul>
         <div class="row">
@@ -402,9 +299,8 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
       <!-- 4 EZproxy -->
       <section class="card" id="proxyCard" aria-labelledby="h-proxy">
         <div class="head">
-          <p class="eyebrow">Off-campus</p>
           <h2 id="h-proxy">校外連線（EZproxy）</h2>
-          <p class="lead">填入學校圖書館的 EZproxy 前綴後，標示 🔒 的資料庫會透過學校登入開啟。留空就直接連線（在校內網路通常已有權限）。</p>
+          <p class="lead">填入學校圖書館的 EZproxy 前綴後，標示「需權限」的資料庫會透過學校登入開啟。留空就直接連線（在校內網路通常已有權限）。</p>
         </div>
         <div>
           <label for="proxy" class="lbl">EZproxy 前綴</label>
@@ -433,8 +329,9 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
       <div class="table-wrap"><table id="statusTable"><thead><tr><th>資料庫</th><th>狀態</th><th>權限</th><th>開啟的網址（{q}＝檢索詞）</th></tr></thead><tbody></tbody></table></div>
     </div>
   </details>
+  </main>
 
-  <footer>
+  <footer class="foot">
     <span>本頁不會把檢索詞送到任何伺服器，只是幫你開啟各資料庫的搜尋網址。各資料庫的檢索語法不同，PubMed 的欄位標籤不能直接用在其他資料庫。</span>
     <span>Zotero Bridge · <a href="https://github.com/bobyu89/zotero-bridge#readme" target="_blank" rel="noopener">說明</a></span>
   </footer>
@@ -522,8 +419,8 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     { id: 'trials', name: '臨床試驗登錄', ids: ['ctgov', 'ictrp'] }
   ];
 
-  var ACCESS_LABEL = { free: '免費', partial: '摘要免費・全文需訂閱', inst: '🔒 需機構權限' };
-  var CHIP_ACCESS = { free: '免費', partial: '摘要免費', inst: '🔒 需權限' };
+  var ACCESS_LABEL = { free: '免費', partial: '摘要免費・全文需訂閱', inst: '需機構權限' };
+  var CHIP_ACCESS = { free: '免費', partial: '摘要免費', inst: '需權限' };
   var STATUS_LABEL = { sure: '確定', guess: '推測', home: '首頁' };
   var CI_DATE = '2026-10-08';
   var CI_LABEL = { ok: 'OK', login: '需登入', blocked: '被擋' };
@@ -787,6 +684,14 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
   function query() { return qInput.value.trim(); }
   function proxyPrefix() { return $('proxy').value.trim(); }
 
+  // 頁面上方 <svg> 裡的圖示
+  function icon(id) {
+    var NS = 'http://www.w3.org/2000/svg';
+    var svg = doc.createElementNS(NS, 'svg'); svg.setAttribute('class', 'ico'); svg.setAttribute('aria-hidden', 'true');
+    var use = doc.createElementNS(NS, 'use'); use.setAttribute('href', '#' + id); svg.appendChild(use);
+    return svg;
+  }
+
   // 資料庫按鈕
   var groupEls = {};
   GROUPS.forEach(function (g) {
@@ -801,13 +706,16 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
       a.className = 'db'; a.dataset.id = s.id; a.target = '_blank'; a.rel = 'noopener';
       var b = doc.createElement('b'); b.textContent = s.name;
       var m = doc.createElement('span'); m.className = 'm';
-      var acc = doc.createElement('span'); acc.textContent = CHIP_ACCESS[s.access];
-      if (s.access === 'inst') acc.className = 'lock';
+      var acc = doc.createElement('span'); acc.className = 'acc ' + s.access;
+      if (s.access === 'inst') {
+        acc.appendChild(icon('i-lock'));
+        var lk = doc.createElement('span'); lk.className = 'lock'; lk.textContent = CHIP_ACCESS.inst; acc.appendChild(lk);
+      } else acc.textContent = CHIP_ACCESS[s.access];
       m.appendChild(acc);
       if (s.meta) m.appendChild(doc.createTextNode('・' + s.meta));
       a.append(b, m);
       if (s.status !== 'sure') {
-        var cp = doc.createElement('span'); cp.className = 'cp'; cp.textContent = '⧉'; cp.setAttribute('aria-hidden', 'true');
+        var cp = doc.createElement('span'); cp.className = 'cp'; cp.appendChild(icon('i-copy')); cp.setAttribute('aria-hidden', 'true');
         a.appendChild(cp);
       }
       a.title = s.status === 'home' ? '開啟首頁並複製檢索詞' : s.status === 'guess' ? '開啟搜尋（網址為推測），同時複製檢索詞' : '在新分頁搜尋';
@@ -835,7 +743,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
       a.href = buildUrl(s, q, pre).url;
       var on = needsProxy(s) && !!wrapProxyActive(pre);
       a.classList.toggle('proxied', on);
-      if (needsProxy(s)) a.querySelector('.lock').textContent = on ? '🔒 經 EZproxy' : CHIP_ACCESS.inst;
+      if (needsProxy(s)) a.querySelector('.lock').textContent = on ? '經 EZproxy' : CHIP_ACCESS.inst;
     });
   }
   function wrapProxyActive(pre) { return pre && /^https?:\/\//i.test(pre); }
@@ -1108,7 +1016,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     var td1 = doc.createElement('td'); td1.textContent = s.name;
     var td2 = doc.createElement('td'); var st = doc.createElement('span'); st.className = 'st ' + s.status; st.textContent = STATUS_LABEL[s.status]; td2.appendChild(st);
     if (CI_LABEL[s.ci]) { var ci = doc.createElement('span'); ci.className = 'ci ' + s.ci; ci.textContent = 'CI 實測：' + CI_LABEL[s.ci]; td2.appendChild(ci); }
-    var td3 = doc.createElement('td'); td3.textContent = CHIP_ACCESS[s.access].replace('🔒 ', '');
+    var td3 = doc.createElement('td'); td3.textContent = CHIP_ACCESS[s.access];
     var td4 = doc.createElement('td'); var c = doc.createElement('code');
     c.textContent = s.status === 'home' || !s.search ? s.home : s.search + (s.suffix ? '（＋' + s.suffix.trim() + '）' : '');
     td4.appendChild(c);

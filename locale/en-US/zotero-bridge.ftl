@@ -42,6 +42,12 @@ zotero-bridge-menu-ai-batch-cancel =
     .label = Cancel AI Batch
 zotero-bridge-menu-dashboard =
     .label = Update Research Dashboard
+zotero-bridge-menu-progress-report =
+    .label = Generate Progress Report (for Advisor)
+zotero-bridge-menu-concepts-update =
+    .label = Update Concept Notes
+zotero-bridge-menu-concepts-ai =
+    .label = AI Synthesis for a Concept Note…
 zotero-bridge-screen-menu =
     .label = Zotero Bridge: Screening (Systematic/Scoping Review)
 zotero-bridge-screen-ta-include =
@@ -100,3 +106,77 @@ zotero-bridge-appraisal-summary =
     .label = Zotero Bridge: Export appraisal summary
 zotero-bridge-appraisal-tools-summary =
     .label = Export appraisal summary (current collection)
+
+## Settings → 功能: presets and feature switches (content/features.js, preferences.js)
+zotero-bridge-features-heading = Features
+zotero-bridge-features-intro = Pick a starting point, then adjust one by one. Switches take effect immediately; when a feature is off, its settings below fold away too.
+zotero-bridge-preset-group =
+    .aria-label = Mode
+zotero-bridge-preset-guided = Guided (for graduate students)
+zotero-bridge-preset-guided-desc = Finding literature and writing stay with you: automatic new-literature checks, citation chasing and AI-written drafts start off; organizing, appraisal and search links keep helping.
+zotero-bridge-preset-advanced = Advanced
+zotero-bridge-preset-advanced-desc = Everything on, including AI drafts, the Batch API and automatic literature checks.
+zotero-bridge-preset-custom = Custom
+zotero-bridge-preset-custom-desc = The switches match neither mode exactly.
+zotero-bridge-preset-current =
+    { $preset ->
+        [guided] Current: Guided
+        [advanced] Current: Advanced
+       *[custom] Current: Custom (the switches match neither mode exactly)
+    }
+zotero-bridge-preset-applied =
+    { $preset ->
+        [guided] Switched to Guided.
+       *[advanced] Switched to Advanced.
+    }
+zotero-bridge-preset-undo = Undo
+zotero-bridge-feature-group-organize = Organize and sync
+zotero-bridge-feature-group-search = Find literature
+zotero-bridge-feature-group-appraise = Screening and appraisal
+zotero-bridge-feature-group-ai = AI assistance and writing
+zotero-bridge-feature-tag-ai = AI · paid
+zotero-bridge-feature-tag-network = Online
+zotero-bridge-feature-requires =
+    { $req ->
+        [sync] Turn on “Sync to Obsidian / Notion” first.
+        [aiNotes] Turn on “AI literature notes” first.
+       *[concepts] Turn on “Concept cards” first.
+    }
+zotero-bridge-feature-sync = Sync to Obsidian / Notion
+zotero-bridge-feature-sync-desc = Puts bibliographic data, highlights, your notes and appraisals into your own note space; the core of this plugin. Connects to Notion when Notion is set up.
+zotero-bridge-feature-status = Reading status
+zotero-bridge-feature-status-desc = To read, reading, read, cited: kept the same in Zotero, Notion and Obsidian.
+zotero-bridge-feature-apa-zh = Chinese APA
+zotero-bridge-feature-apa-zh-desc = Chinese-language items in Chinese APA 7: full names, 「等」, full-width parentheses. Zotero items are never changed.
+zotero-bridge-feature-annotation-images = Image annotations
+zotero-bridge-feature-annotation-images-desc = Screenshots of the figures and tables you marked in the PDF go into the note: attachments in Obsidian, uploaded images in Notion.
+zotero-bridge-feature-bibliography = Bibliography file
+zotero-bridge-feature-bibliography-desc = Exports references.json (optionally BibTeX) for citing with Pandoc or Obsidian plugins while you write.
+zotero-bridge-feature-dashboard = Research dashboard
+zotero-bridge-feature-dashboard-desc = Reading progress, the to-read list and data gaps in Obsidian. Reads only the vault; works offline.
+zotero-bridge-feature-concepts = Concept cards
+zotero-bridge-feature-concepts-desc = Turns the [[concepts]] in your notes into cards and an index, so you can see which papers talk about the same thing. No AI.
+zotero-bridge-feature-search-links = Medical database search links
+zotero-bridge-feature-search-links-desc = Takes the title, MeSH terms and PICO to PubMed, CINAHL, Cochrane, Airiti and more. The search strategy is still yours.
+zotero-bridge-feature-pubmed-watch = PubMed new-literature watch
+zotero-bridge-feature-pubmed-watch-desc = Runs your saved PubMed searches on a schedule and imports new papers into Zotero.
+zotero-bridge-feature-citation-chase = Citation chasing
+zotero-bridge-feature-citation-chase-desc = Uses OpenAlex to list the references of included studies and the papers citing them, as candidates for you to tick.
+zotero-bridge-feature-screening = Screening and PRISMA
+zotero-bridge-feature-screening-desc = Title/abstract and full-text decisions as Zotero tags, a PRISMA 2020 flow diagram and an evidence table. You make the decisions.
+zotero-bridge-feature-appraisal-form = Appraisal form
+zotero-bridge-feature-appraisal-form-desc = Appraise item by item with CASP or JBI next to the item, saved in Zotero and synced to your notes. Off only hides the form; saved appraisals still sync.
+zotero-bridge-feature-ai-notes = AI literature notes
+zotero-bridge-feature-ai-notes-desc = While syncing, an AI drafts a study note (design, sample, PICO, a first appraisal); quotes are checked against the source. Bring your own API key.
+zotero-bridge-feature-ai-batch = Batch API
+zotero-bridge-feature-ai-batch-desc = Many AI notes at once go through the Claude Batch API: about half price, but it can take up to 24 hours.
+zotero-bridge-feature-synthesis = Comparison table
+zotero-bridge-feature-synthesis-desc = Pick several papers and let an AI build a comparison table, themes and research gaps.
+zotero-bridge-feature-review-draft = Literature review draft
+zotero-bridge-feature-review-draft-desc = Let an AI draft a literature review chapter from the papers you pick.
+zotero-bridge-feature-ebhc-report = Evidence report draft
+zotero-bridge-feature-ebhc-report-desc = Let an AI draft an evidence-based health care report in the Taiwan Nurses Association EBHC format.
+zotero-bridge-feature-progress-report = Progress report
+zotero-bridge-feature-progress-report-desc = What you read, how far screening got and what is next, for your advisor; an AI summary is optional.
+zotero-bridge-feature-concepts-ai = AI synthesis for concept cards
+zotero-bridge-feature-concepts-ai-desc = Let an AI draft a synthesis for one concept card, with a checklist of numbers to verify.

@@ -1225,6 +1225,12 @@
 		};
 	}
 
+	/** Menu entries that hide while the feature is off (features.js gateMenus; as is without it: Node tests). */
+	function gated(id, menus) {
+		let f = scope.ZB && scope.ZB.features;
+		return f ? f.gateMenus(id, menus) : menus;
+	}
+
 	/** Item, collection and Tools menu entries; returns the menu IDs to unregister. */
 	function registerMenus({ pluginID, icon }) {
 		let decide = change => (ev, context) => {
@@ -1251,7 +1257,7 @@
 			menuID: "zotero-bridge-screening-item",
 			pluginID,
 			target: "main/library/item",
-			menus: [{
+			menus: gated("screening", [{
 				menuType: "submenu",
 				l10nID: "zotero-bridge-screen-menu",
 				icon,
@@ -1267,13 +1273,13 @@
 					item("zotero-bridge-screen-duplicate", { duplicate: true }),
 					item("zotero-bridge-screen-clear", { clear: true }),
 				],
-			}],
+			}]),
 		}));
 		ids.push(Zotero.MenuManager.registerMenu({
 			menuID: "zotero-bridge-screening-collection",
 			pluginID,
 			target: "main/library/collection",
-			menus: [{
+			menus: gated("screening", [{
 				menuType: "submenu",
 				l10nID: "zotero-bridge-screen-collection-menu",
 				icon,
@@ -1290,13 +1296,13 @@
 						onCommand: (ev, context) => report(selectedCollections(context)).catch(e => Zotero.logError(e)),
 					},
 				],
-			}],
+			}]),
 		}));
 		ids.push(Zotero.MenuManager.registerMenu({
 			menuID: "zotero-bridge-screening-tools",
 			pluginID,
 			target: "main/menubar/tools",
-			menus: [
+			menus: gated("screening", [
 				{
 					menuType: "menuitem",
 					l10nID: "zotero-bridge-screen-tools-dedup",
@@ -1307,7 +1313,7 @@
 					l10nID: "zotero-bridge-screen-tools-prisma",
 					onCommand: () => report([activeCollection()].filter(Boolean)).catch(e => Zotero.logError(e)),
 				},
-			],
+			]),
 		}));
 		return ids.filter(Boolean);
 	}

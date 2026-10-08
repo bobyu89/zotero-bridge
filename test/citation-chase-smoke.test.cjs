@@ -208,6 +208,8 @@ async function setup(opts = {}) {
 			"extensions.zotero-bridge.obsidian.vaultPath": vault,
 			"extensions.zotero-bridge.obsidian.folder": "Zotero",
 			"extensions.zotero-bridge.citationChase.email": "nurse@example.com",
+			// Off in the 研究生引導 preset (features.js); on here, also for a profile without a vault
+			"extensions.zotero-bridge.feature.citationChase": true,
 		}, opts.prefs),
 	});
 	await vm.runInContext(`startup({ id: "zotero-bridge@bobyu89.github.io", version: "0.0.0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);

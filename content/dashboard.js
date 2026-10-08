@@ -495,7 +495,8 @@
 
 	/**
 	 * The managed region's content.
-	 * meta: { now: Date, reviews, drafts, usage: usageReport(), baseLink: "Zotero/研究儀表板.base" | "" }
+	 * meta: { now: Date, reviews, drafts, usage: usageReport(), baseLink: "Zotero/研究儀表板.base" | "", latestReport: { date, link } | null,
+	 *   concepts: the 「🧠 熱門概念」 section (concepts.js) | "" }
 	 */
 	function buildDashboardSection(stats, meta = {}) {
 		let info = [
@@ -503,12 +504,15 @@
 				+ "重新整理：Zotero 工具 → 更新研究儀表板（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。",
 		];
 		if (meta.baseLink) info.push(`> Bases 檢視：[[${meta.baseLink}|${BASE_NAME}]]（證據等級表、掃描檔待 OCR、待讀（依分類））`);
+		if (meta.latestReport) info.push(`> 最新進度報告（給指導教授）：[[${meta.latestReport.link}|${meta.latestReport.date}]]`);
 		return [
 			info.join("\n"),
 			progressSection(stats),
 			evidenceSection(stats),
 			todoSection(stats),
 			projectsSection(meta.reviews || [], meta.drafts || []),
+			// 「🧠 熱門概念」 (concepts.js), when given
+			...(meta.concepts ? [meta.concepts] : []),
 			usageSection(meta.usage),
 			newSection(stats),
 		].join("\n\n");
@@ -718,7 +722,11 @@
 		catch (e) {
 			Zotero.logError(e);
 		}
-		let section = buildDashboardSection(stats, { now, reviews, drafts, usage: report, baseLink });
+		// 進度報告 (progress-report.js): link to the newest one
+		let latestReport = scope.ZB && scope.ZB.progressReport ? await scope.ZB.progressReport.latestReport(settings) : null;
+		// Top concept cards (concepts.js; their frontmatter only, never throws)
+		let concepts = scope.ZB && scope.ZB.concepts ? await scope.ZB.concepts.dashboardSection(settings) : "";
+		let section = buildDashboardSection(stats, { now, reviews, drafts, usage: report, baseLink, latestReport, concepts });
 		let path = PathUtils.join(dir, NOTE_NAME + ".md");
 		let existing = (await IOUtils.exists(path)) ? await IOUtils.readUTF8(path) : null;
 		let text = buildDashboardNote(existing, section, { updated: now.toISOString() });
@@ -729,7 +737,7 @@
 	/** After a manual sync run (main.js): rebuild when 「同步後更新研究儀表板」 is on. Never throws. */
 	async function afterSync(settings) {
 		try {
-			if (pref("dashboard.autoUpdate") === false || !settings || !settings.vaultPath) return null;
+			if (!featureOn("dashboard") || pref("dashboard.autoUpdate") === false || !settings || !settings.vaultPath) return null;
 			return await update(settings);
 		}
 		catch (e) {
@@ -770,19 +778,31 @@
 		});
 	}
 
+	// Feature switches (features.js): checked live; always on when this file runs without them (Node tests)
+	function featureOn(id) {
+		let f = scope.ZB && scope.ZB.features;
+		return !f || f.isEnabled(id);
+	}
+
+	/** Menu entries that hide while the feature is off (features.js gateMenus). */
+	function gated(id, menus) {
+		let f = scope.ZB && scope.ZB.features;
+		return f ? f.gateMenus(id, menus) : menus;
+	}
+
 	/** Tools menu entry; returns the menu IDs to unregister. */
 	function registerMenus({ pluginID }) {
 		return [Zotero.MenuManager.registerMenu({
 			menuID: "zotero-bridge-dashboard-tools",
 			pluginID,
 			target: "main/menubar/tools",
-			menus: [{
+			menus: gated("dashboard", [{
 				menuType: "menuitem",
 				l10nID: "zotero-bridge-menu-dashboard",
 				onCommand: () => {
 					runFromMenu().catch(e => Zotero.logError(e));
 				},
-			}],
+			}]),
 		})].filter(Boolean);
 	}
 

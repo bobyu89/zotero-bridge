@@ -5,6 +5,15 @@ pref("extensions.zotero-bridge.obsidian.filenameFormat", "citekey");
 pref("extensions.zotero-bridge.obsidian.createBase", true);
 // Rebuild <folder>/研究儀表板.md after each manual sync (content/dashboard.js)
 pref("extensions.zotero-bridge.dashboard.autoUpdate", true);
+// Concept hub notes (content/concepts.js): rebuild <folder>/<concepts.folder>/*.md after each manual sync;
+// measures (and outcomes) from the structured data as concepts; alias groups, one per line: 跌倒 = Accidental Falls = falls;
+// a custom prompt for 「為概念卡片產生 AI 綜整」 (empty = built-in)
+pref("extensions.zotero-bridge.concepts.autoUpdate", true);
+pref("extensions.zotero-bridge.concepts.folder", "概念");
+pref("extensions.zotero-bridge.concepts.measures", true);
+pref("extensions.zotero-bridge.concepts.outcomes", false);
+pref("extensions.zotero-bridge.concepts.aliases", "");
+pref("extensions.zotero-bridge.concepts.aiPrompt", "");
 pref("extensions.zotero-bridge.includeNotes", true);
 pref("extensions.zotero-bridge.images.export", true);
 pref("extensions.zotero-bridge.images.sendToAI", false);
@@ -89,3 +98,22 @@ pref("extensions.zotero-bridge.searchLinks.paneLinks", true);
 pref("extensions.zotero-bridge.searchLinks.noteCallout", true);
 pref("extensions.zotero-bridge.searchLinks.picoComparison", false);
 pref("extensions.zotero-bridge.searchLinks.meshHelper", true);
+// Feature switches (content/features.js), defaults = the 研究生引導 (guided) preset. Features that had
+// an enable pref before use it instead: llm.enabled, llm.batchAPI, status.enabled, apaZh.enabled,
+// images.export. features.version: the one-time migration that turns everything on for profiles that
+// used the plugin before the switches existed (0 = not run yet)
+pref("extensions.zotero-bridge.features.version", 0);
+pref("extensions.zotero-bridge.feature.sync", true);
+pref("extensions.zotero-bridge.feature.bibliography", true);
+pref("extensions.zotero-bridge.feature.dashboard", true);
+pref("extensions.zotero-bridge.feature.concepts", true);
+pref("extensions.zotero-bridge.feature.searchLinks", true);
+pref("extensions.zotero-bridge.feature.pubmedWatch", false);
+pref("extensions.zotero-bridge.feature.citationChase", false);
+pref("extensions.zotero-bridge.feature.screening", true);
+pref("extensions.zotero-bridge.feature.appraisalForm", true);
+pref("extensions.zotero-bridge.feature.synthesis", false);
+pref("extensions.zotero-bridge.feature.reviewDraft", false);
+pref("extensions.zotero-bridge.feature.ebhcReport", false);
+pref("extensions.zotero-bridge.feature.progressReport", false);
+pref("extensions.zotero-bridge.feature.conceptsAI", false);

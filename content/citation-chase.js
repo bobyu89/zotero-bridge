@@ -650,9 +650,16 @@
 		return settings;
 	}
 
+	/** 「引文追蹤」 off (the 研究生引導 preset): say so instead of contacting OpenAlex. */
+	function featureOff() {
+		scope.ZB.main.notifyFeatureOff("citationChase");
+		return null;
+	}
+
 	/** Citation searching from the included studies (全文納入) of a review collection. */
 	async function chaseCollection(collection) {
 		let ZB = scope.ZB;
+		if (!featureOn("citationChase")) return featureOff();
 		let cfg = screening.config();
 		let items = ZB.adapter.itemsInCollection(collection, true);
 		let seeds = items.filter(i => screening.readState(i.getTags().map(t => t.tag), cfg).ft === "include");
@@ -667,6 +674,7 @@
 	/** Citation searching from selected items; the note belongs to the selected collection, if any. */
 	async function chaseItems(items, collection) {
 		let ZB = scope.ZB;
+		if (!featureOn("citationChase")) return featureOff();
 		let seeds = ZB.adapter.toRegularItems(items);
 		if (!seeds.length) {
 			ZB.main.notify("Zotero Bridge：引文追蹤", "請先選取文獻。");
@@ -767,6 +775,7 @@
 	/** Import the checked candidates of the note into the review collection, tagged 來源/引文追蹤. */
 	async function importChecked(collection) {
 		let ZB = scope.ZB;
+		if (!featureOn("citationChase")) return featureOff();
 		let headline = "Zotero Bridge：匯入引文追蹤";
 		if (busy) {
 			ZB.main.notify(headline, "引文追蹤正在進行中，請等它完成。");
@@ -873,6 +882,18 @@
 		};
 	}
 
+	// Feature switches (features.js): checked live; always on when this file runs without them (Node tests)
+	function featureOn(id) {
+		let f = scope.ZB && scope.ZB.features;
+		return !f || f.isEnabled(id);
+	}
+
+	/** Menu entries that hide while the feature is off (features.js gateMenus). */
+	function gated(id, menus) {
+		let f = scope.ZB && scope.ZB.features;
+		return f ? f.gateMenus(id, menus) : menus;
+	}
+
 	/** Item, collection and Tools menu entries; returns the menu IDs to unregister. */
 	function registerMenus({ pluginID, icon }) {
 		let log = e => Zotero.logError(e);
@@ -882,20 +903,20 @@
 			menuID: "zotero-bridge-chase-item",
 			pluginID,
 			target: "main/library/item",
-			menus: [{
+			menus: gated("citationChase", [{
 				menuType: "menuitem",
 				l10nID: "zotero-bridge-chase-items",
 				icon,
 				onCommand: (ev, context) => {
 					chaseItems(context.items || [], activeCollection()).catch(log);
 				},
-			}],
+			}]),
 		}));
 		ids.push(Zotero.MenuManager.registerMenu({
 			menuID: "zotero-bridge-chase-collection",
 			pluginID,
 			target: "main/library/collection",
-			menus: [{
+			menus: gated("citationChase", [{
 				menuType: "submenu",
 				l10nID: "zotero-bridge-chase-collection-menu",
 				icon,
@@ -916,13 +937,13 @@
 						},
 					},
 				],
-			}],
+			}]),
 		}));
 		ids.push(Zotero.MenuManager.registerMenu({
 			menuID: "zotero-bridge-chase-tools",
 			pluginID,
 			target: "main/menubar/tools",
-			menus: [
+			menus: gated("citationChase", [
 				{
 					menuType: "menuitem",
 					l10nID: "zotero-bridge-chase-tools-included",
@@ -938,7 +959,7 @@
 						importChecked(activeCollection()).catch(log);
 					},
 				},
-			],
+			]),
 		}));
 		return ids.filter(Boolean);
 	}

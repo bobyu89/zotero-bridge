@@ -690,6 +690,11 @@
 	 * imported or failed, and never any AI), { only: [watch IDs] }.
 	 */
 	function runAll(opts = {}) {
+		// 「PubMed 新文獻追蹤」 off (the 研究生引導 preset): no request goes to NCBI
+		if (!featureOn("pubmedWatch")) {
+			if (!opts.auto) scope.ZB.main.notifyFeatureOff("pubmedWatch");
+			return Promise.resolve(null);
+		}
 		if (checking) {
 			if (!opts.auto) scope.ZB.main.notify("Zotero Bridge：PubMed 追蹤", "正在檢查新文獻，請稍候。");
 			return checking;
@@ -789,14 +794,14 @@
 
 	// ---------- automatic checks ----------
 
-	// A timer exists only while automatic checks are on; the pref observer starts and stops it
+	// A timer exists only while automatic checks and the feature are on; pref observers start and stop it
 	let timer = null;
 	let stopped = true;
 	let prefObservers = [];
 
 	function schedule(ms) {
 		if (timer) clearTimeout(timer);
-		timer = !stopped && config().autoCheck ? setTimeout(tick, ms) : null;
+		timer = !stopped && config().autoCheck && featureOn("pubmedWatch") ? setTimeout(tick, ms) : null;
 	}
 
 	/** Watches whose last check is older than the interval (or that were never checked). */
@@ -813,7 +818,7 @@
 	async function tick() {
 		timer = null;
 		try {
-			if (config().autoCheck && !checking) {
+			if (config().autoCheck && featureOn("pubmedWatch") && !checking) {
 				let due = dueWatches(runtime.now());
 				if (due.length) await runAll({ auto: true, only: due });
 			}
@@ -830,6 +835,8 @@
 		schedule(STARTUP_DELAY_MS);
 		if (Zotero.Prefs.registerObserver) {
 			prefObservers.push(Zotero.Prefs.registerObserver(PREF + "pubmedWatch.autoCheck", () => schedule(STARTUP_DELAY_MS), true));
+			// The feature switch (features.js), so turning it on or off needs no restart
+			prefObservers.push(Zotero.Prefs.registerObserver(PREF + "feature.pubmedWatch", () => schedule(STARTUP_DELAY_MS), true));
 		}
 	}
 
@@ -968,16 +975,28 @@
 
 	// ---------- menu ----------
 
+	// Feature switches (features.js): checked live; always on when this file runs without them (Node tests)
+	function featureOn(id) {
+		let f = scope.ZB && scope.ZB.features;
+		return !f || f.isEnabled(id);
+	}
+
+	/** Menu entries that hide while the feature is off (features.js gateMenus). */
+	function gated(id, menus) {
+		let f = scope.ZB && scope.ZB.features;
+		return f ? f.gateMenus(id, menus) : menus;
+	}
+
 	function registerMenus({ pluginID }) {
 		let id = Zotero.MenuManager.registerMenu({
 			menuID: "zotero-bridge-pubmed-watch-tools",
 			pluginID,
 			target: "main/menubar/tools",
-			menus: [{
+			menus: gated("pubmedWatch", [{
 				menuType: "menuitem",
 				l10nID: "zotero-bridge-menu-pubmed-watch",
 				onCommand: () => runAll().catch(e => Zotero.logError(e)),
-			}],
+			}]),
 		});
 		return [id].filter(Boolean);
 	}

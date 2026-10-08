@@ -223,19 +223,218 @@
 		}
 	}
 
+	// ---------- 功能: presets and feature switches (features.js) ----------
+
+	const ZB_PREF = "extensions.zotero-bridge.";
+	// The rendered controls: { inputs, rows, reqs: Map feature ID → element, radios: Map preset → input, current, undo }
+	let featureUI = null;
+	// After choosing a preset: { applied: preset name, before: switch values } until the next manual change
+	let undoState = null;
+	// While a preset or an undo writes the switches: their observers wait for the last one
+	let applying = false;
+
+	function featureAPI() {
+		let bridge = Zotero.ZoteroBridge;
+		return bridge && bridge.features;
+	}
+
+	function setHidden(node, hidden) {
+		// An attribute, not the property: XUL and HTML elements both honour it
+		if (hidden) node.setAttribute("hidden", "true");
+		else node.removeAttribute("hidden");
+	}
+
+	/**
+	 * A Fluent message (zotero-bridge.ftl) on a leaf element, with the zh-TW text as the fallback until
+	 * Fluent translates it. Unchanged id and args leave the element alone, so Fluent's text stays.
+	 */
+	function setL10n(node, id, fallback, args) {
+		let json = args ? JSON.stringify(args) : null;
+		if (node.getAttribute("data-l10n-id") === id && node.getAttribute("data-l10n-args") === json) return;
+		node.textContent = fallback;
+		node.setAttribute("data-l10n-id", id);
+		if (json) node.setAttribute("data-l10n-args", json);
+		else node.removeAttribute("data-l10n-args");
+	}
+
+	function l10nEl(tag, attrs, id, fallback) {
+		let node = el(tag, attrs);
+		setL10n(node, id, fallback);
+		return node;
+	}
+
+	/** Sections marked data-zb-feature="<IDs>" show while any of those features is on. */
+	function applyDisclosure() {
+		let F = featureAPI();
+		if (!F) return;
+		let root = document.getElementById("zotero-bridge-prefs") || document;
+		for (let node of root.querySelectorAll("[data-zb-feature]")) {
+			let ids = node.getAttribute("data-zb-feature").split(/\s+/).filter(Boolean);
+			setHidden(node, !ids.some((id) => {
+				try {
+					return F.isEnabled(id);
+				}
+				catch (e) {
+					return true;
+				}
+			}));
+		}
+	}
+
+	const PRESET_STATUS = {
+		guided: "目前：研究生引導",
+		advanced: "目前：進階",
+		custom: "目前：自訂（開關跟兩種模式都不完全一樣）",
+	};
+
+	function renderFeatures() {
+		let container = document.getElementById("zb-features");
+		let F = featureAPI();
+		if (!container || !F) return false;
+		container.replaceChildren();
+		let ui = { inputs: new Map(), rows: new Map(), reqs: new Map(), radios: new Map() };
+
+		let presets = el("div", { class: "zb-presets", role: "radiogroup" });
+		setL10n(presets, "zotero-bridge-preset-group", "");
+		presets.setAttribute("aria-label", "模式");
+		for (let name of ["guided", "advanced"]) {
+			let p = F.PRESETS[name];
+			let radio = el("input", { type: "radio", name: "zb-preset", value: name, id: `zb-preset-${name}`, "aria-describedby": `zb-preset-${name}-desc` });
+			radio.addEventListener("change", () => {
+				if (radio.checked) choosePreset(name);
+			});
+			let text = el("span", { class: "zb-preset-text" });
+			text.append(
+				l10nEl("span", { class: "zb-preset-name" }, p.l10n, p.label),
+				l10nEl("span", { class: "zb-preset-desc", id: `zb-preset-${name}-desc` }, `${p.l10n}-desc`, p.desc),
+			);
+			let label = el("label", { class: "zb-preset", for: `zb-preset-${name}` });
+			label.append(radio, text);
+			presets.append(label);
+			ui.radios.set(name, radio);
+		}
+		let status = el("p", { class: "zb-preset-status" });
+		// Announced when a preset is applied or the switches turn it into 自訂
+		ui.current = el("span", { role: "status" });
+		ui.undo = l10nEl("button", { type: "button", class: "zb-undo" }, "zotero-bridge-preset-undo", "復原");
+		ui.undo.addEventListener("click", undoPreset);
+		status.append(ui.current, ui.undo);
+		container.append(presets, status);
+
+		for (let group of F.GROUPS) {
+			let section = el("section", { class: "zb-feature-group", "aria-labelledby": `zb-feature-group-${group.id}` });
+			section.append(l10nEl("h3", { id: `zb-feature-group-${group.id}` }, group.l10n, group.label));
+			for (let f of F.FEATURES.filter(x => x.group === group.id)) {
+				let id = `zb-feature-${f.id}`;
+				let input = el("input", { type: "checkbox", id, "aria-describedby": `${id}-desc ${id}-req` });
+				input.addEventListener("change", () => {
+					// A manual change ends the chance to undo the preset
+					undoState = null;
+					F.setEnabled(f.id, input.checked);
+					// The pref observer redraws too; this covers a pane without observers
+					updateFeatures();
+				});
+				let head = el("div", { class: "zb-feature-head" });
+				head.append(l10nEl("label", { class: "zb-feature-name", for: id }, f.l10n.name, f.label));
+				if (f.usesAI) head.append(l10nEl("span", { class: "zb-tag zb-tag-ai" }, "zotero-bridge-feature-tag-ai", "AI・要付費"));
+				if (f.usesNetwork) head.append(l10nEl("span", { class: "zb-tag zb-tag-network" }, "zotero-bridge-feature-tag-network", "連網"));
+				let req = el("p", { class: "zb-feature-req", id: `${id}-req` });
+				setHidden(req, true);
+				let body = el("div", { class: "zb-feature-body" });
+				body.append(head, l10nEl("p", { class: "zb-feature-desc", id: `${id}-desc` }, f.l10n.desc, f.desc), req);
+				let row = el("div", { class: "zb-feature", "data-feature": f.id });
+				row.append(input, body);
+				section.append(row);
+				ui.inputs.set(f.id, input);
+				ui.rows.set(f.id, row);
+				ui.reqs.set(f.id, req);
+			}
+			container.append(section);
+		}
+		featureUI = ui;
+		updateFeatures();
+		return true;
+	}
+
+	/** Switch states, the preset indicator and the disclosed sections, from the prefs. */
+	function updateFeatures() {
+		let F = featureAPI();
+		if (!F || applying) return;
+		if (featureUI) {
+			for (let f of F.FEATURES) {
+				let input = featureUI.inputs.get(f.id);
+				let blockedBy = f.requires.find(r => !F.isEnabled(r));
+				input.checked = F.rawValue(f.id);
+				input.disabled = !!blockedBy;
+				featureUI.rows.get(f.id).classList.toggle("is-blocked", !!blockedBy);
+				let req = featureUI.reqs.get(f.id);
+				setHidden(req, !blockedBy);
+				if (blockedBy) setL10n(req, "zotero-bridge-feature-requires", `要先打開「${F.get(blockedBy).label}」才會生效。`, { req: blockedBy });
+			}
+			let preset = F.currentPreset();
+			for (let [name, radio] of featureUI.radios) radio.checked = name === preset;
+			let justApplied = undoState && undoState.applied === preset;
+			if (!justApplied) undoState = null;
+			if (justApplied) {
+				setL10n(featureUI.current, "zotero-bridge-preset-applied", `已切換到「${F.PRESETS[preset].label}」。`, { preset });
+			}
+			else {
+				setL10n(featureUI.current, "zotero-bridge-preset-current", PRESET_STATUS[preset], { preset });
+			}
+			setHidden(featureUI.undo, !justApplied);
+		}
+		applyDisclosure();
+	}
+
+	function choosePreset(name) {
+		let F = featureAPI();
+		if (!F) return;
+		applying = true;
+		try {
+			undoState = { applied: name, before: F.applyPreset(name) };
+		}
+		finally {
+			applying = false;
+		}
+		updateFeatures();
+	}
+
+	function undoPreset() {
+		let F = featureAPI();
+		if (!F || !undoState) return;
+		let before = undoState.before;
+		undoState = null;
+		applying = true;
+		try {
+			F.restore(before);
+		}
+		finally {
+			applying = false;
+		}
+		updateFeatures();
+		// The undo button is hidden now: keep keyboard focus in the preset group
+		let target = featureUI && ([...featureUI.radios.values()].find(r => r.checked) || featureUI.radios.get("guided"));
+		if (target) target.focus();
+	}
+
 	window.ZoteroBridgePrefs = {
 		init() {
+			let hasFeatures = renderFeatures();
 			renderRules();
 			renderWatches();
 			renderSearchSources();
 			updateProviderBoxes();
 			renderUsage();
 			loadSecrets();
+			if (!hasFeatures) applyDisclosure();
 			if (!observers) {
+				let F = featureAPI();
 				observers = [
 					Zotero.Prefs.registerObserver(PROVIDER_PREF, updateProviderBoxes, true),
 					...USAGE_PREFS.map(p => Zotero.Prefs.registerObserver(p, renderUsage, true)),
 					...SEARCH_PREFS.map(p => Zotero.Prefs.registerObserver(p, renderSearchSources, true)),
+					// The switches can change elsewhere too (another settings window, a preset): one observer each
+					...(hasFeatures && F ? F.prefKeys().map(k => Zotero.Prefs.registerObserver(ZB_PREF + k, updateFeatures, true)) : []),
 				];
 				// Zotero sends "unload" to the pane's root element, then nukes this script's sandbox: a
 				// listener on the window would be dead by the time the window's own unload event fires

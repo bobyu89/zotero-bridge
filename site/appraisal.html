@@ -3,253 +3,144 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>文獻評讀表</title>
+<title>文獻評讀表｜Zotero Bridge</title>
 <meta name="description" content="不用 Zotero 也能填 CASP、JBI 文獻評讀表：逐題勾選與評析根據、多篇論文燈號總覽、雙人評讀 Cohen's κ，複製成 Markdown／Word 表格或下載 CSV。">
+<meta name="theme-color" content="#16233F">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="zb.css">
 <style>
-/* 與安裝精靈、文獻快速搜尋共用色彩與字體；版面：左邊評讀表（論文資料、逐題評讀、判定與輸出），右邊論文清單；下方整寬的燈號總覽 */
-:root {
-  --bg: #F3F4F7;
-  --surface: #FFFFFF;
-  --ink: #1B1D22;
-  --muted: #5B6270;
-  --line: #DCDFE6;
-  --accent: #B3243A;      /* Zotero 紅 */
-  --accent-ink: #FFFFFF;
-  --accent-soft: #F7E4E7;
-  --ok: #1E7449;
-  --ok-soft: #E1F1E8;
-  --warn: #7E5300;
-  --warn-soft: #FFF2D1;
-  --bad: #A8251C;
-  --bad-soft: #FCE6E3;
-  --chip: #ECEEF2;
-  --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
-  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #111317; --surface: #1A1D23; --ink: #E8EAEE; --muted: #9AA1AD; --line: #2B3038;
-    --accent: #EF6A7D; --accent-ink: #1A0B0E; --accent-soft: #3A1D23;
-    --ok: #5DC690; --ok-soft: #142D20; --warn: #E9B54E; --warn-soft: #30270F; --bad: #FF8F80; --bad-soft: #3A1815; --chip: #252931;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #111317; --surface: #1A1D23; --ink: #E8EAEE; --muted: #9AA1AD; --line: #2B3038;
-  --accent: #EF6A7D; --accent-ink: #1A0B0E; --accent-soft: #3A1D23;
-  --ok: #5DC690; --ok-soft: #142D20; --warn: #E9B54E; --warn-soft: #30270F; --bad: #FF8F80; --bad-soft: #3A1815; --chip: #252931;
-  color-scheme: dark;
-}
-
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-html, body { margin: 0; }
-body {
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--font-body);
-  font-size: 16px;
-  line-height: 1.75;
-  padding-inline: 16px;
-  padding-block: 24px 64px;
-}
-a { color: var(--accent); text-underline-offset: 3px; }
-a:focus-visible, button:focus-visible, select:focus-visible, summary:focus-visible, input:focus-visible, textarea:focus-visible {
-  outline: 2px solid var(--accent); outline-offset: 2px;
-}
-
-.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 24px; }
-
-header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
-header.top h1 {
-  font-family: var(--font-display); font-weight: 900; font-size: clamp(28px, 5vw, 40px);
-  line-height: 1.2; margin: 0; text-wrap: balance; letter-spacing: 0.02em;
-}
-header.top h1 span { color: var(--accent); }
-header.top p { margin: 4px 0 0; color: var(--muted); max-width: 56ch; }
-.meta { font-size: 13px; color: var(--muted); text-align: right; display: grid; gap: 2px; }
-
-.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
-.main, .side { display: grid; gap: 24px; min-width: 0; }
+/* 版面：左邊評讀表（論文資料、逐題評讀、判定與輸出），右邊論文清單；下方整寬的燈號總覽 */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+.main, .side { display: grid; gap: 20px; min-width: 0; }
 .side { position: sticky; top: 16px; }
 
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: clamp(18px, 4vw, 32px); min-width: 0; display: grid; gap: 18px; }
-.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0; }
-.card h2 { font-family: var(--font-display); font-size: clamp(22px, 3.2vw, 26px); line-height: 1.3; margin: 0; text-wrap: balance; }
-.card h3 { font-size: 15px; margin: 0; }
-.card p { margin: 0; }
-.head { display: grid; gap: 4px; }
-.lead { color: var(--muted); font-size: 15px; max-width: 70ch; }
-.small { font-size: 13px; color: var(--muted); }
-code, .mono { font-family: var(--font-mono); font-size: 0.88em; background: var(--chip); padding: 1px 6px; border-radius: 5px; overflow-wrap: anywhere; }
-
-/* 表單元件 */
-input[type=text], input[type=date], input[type=number], textarea, select {
-  font: inherit; font-size: 16px; color: var(--ink); background: var(--surface);
-  border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 12px; min-width: 0; width: 100%;
-}
-textarea { resize: vertical; line-height: 1.55; min-height: 64px; }
-textarea.grow { min-height: 0; overflow: hidden; resize: none; }
-input::placeholder, textarea::placeholder { color: var(--muted); opacity: .75; }
-input:focus, textarea:focus, select:focus { border-color: var(--accent); outline: none; }
-label.lbl, .lbl { font-size: 14px; font-weight: 700; display: block; margin-bottom: 4px; }
-input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); margin: 0; flex: none; }
-.check { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
-
-.btn {
-  font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; border-radius: 9px; padding: 8px 16px;
-  border: 1.5px solid var(--accent); background: var(--accent); color: var(--accent-ink); text-decoration: none;
-  display: inline-flex; gap: 6px; align-items: center; justify-content: center; white-space: nowrap;
-}
-.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
-.btn.ghost:hover { border-color: var(--muted); }
-.btn.small { font-size: 13px; padding: 4px 10px; font-weight: 500; border-radius: 7px; }
-.btn:disabled { opacity: .4; cursor: not-allowed; }
-.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.linkbtn { font: inherit; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-align: left; }
+.check { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; min-height: 32px; }
 
 /* 論文資料 */
 .fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px 14px; }
 .fields .full { grid-column: 1 / -1; }
-.toolbox { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; font-size: 14px; }
-.toolbox .tname { font-weight: 700; }
-.toolbox .tname .fam { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .08em; background: var(--chip); color: var(--muted); border-radius: 5px; padding: 1px 6px; margin-right: 6px; vertical-align: 2px; }
+textarea.grow { min-height: 0; overflow: hidden; resize: none; }
+.toolbox { border-radius: var(--r-m); padding: 12px 14px; display: grid; gap: 4px; font-size: 14px; background: var(--panel); }
+.toolbox .tname { font-weight: 600; }
+.toolbox .tname .fam { font-size: 11px; font-weight: 700; letter-spacing: .08em; background: var(--mast); color: var(--mast-ink); border-radius: 4px; padding: 1px 6px; margin-right: 8px; vertical-align: 2px; }
+.toolbox .check { font-weight: 500; }
 
-/* 提示框 */
-.note { border-radius: 10px; padding: 10px 14px; display: grid; gap: 6px; font-size: 14px; }
-.note.tip { background: var(--ok-soft); }
-.note.tip strong { color: var(--ok); }
-.note.warn { background: var(--warn-soft); }
-.note.warn strong { color: var(--warn); }
-.note.info { background: var(--chip); }
-
-/* 進度 */
-.prog { display: grid; gap: 6px; }
-.prog .bar { height: 6px; background: var(--chip); border-radius: 99px; overflow: hidden; display: flex; }
-.prog .bar i { display: block; height: 100%; transition: width .3s ease; }
-.prog .bar i.yes { background: var(--ok); } .prog .bar i.no { background: var(--bad); }
-.prog .bar i.unclear { background: var(--warn); } .prog .bar i.na { background: var(--muted); }
-.prog .line { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); align-items: baseline; }
-.prog .line b { color: var(--ink); font-size: 14px; }
+/* 進度（捲動時黏在評讀卡上方） */
+.prog { display: grid; gap: 6px; position: sticky; top: 0; z-index: 2; background: var(--surface); margin: -6px -4px 0; padding: 8px 4px; }
+.prog .bar { height: 8px; background: var(--panel); border-radius: 99px; overflow: hidden; display: flex; }
+.prog .bar i { display: block; height: 100%; transition: width .3s cubic-bezier(.16, 1, .3, 1); }
+.prog .bar i.yes { background: var(--yes); } .prog .bar i.no { background: var(--no); }
+.prog .bar i.unclear { background: var(--unclear); } .prog .bar i.na { background: var(--na); }
+.prog .line { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 13px; color: var(--ink-2); align-items: baseline; }
+.prog .line b { color: var(--ink); font-size: 14px; font-weight: 600; }
 
 /* 逐題 */
-ol.items { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-li.sec { font-size: 13px; font-weight: 700; color: var(--accent); padding: 6px 2px 0; }
-li.item { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 10px; min-width: 0; }
-li.item.disagree { border-color: var(--warn); box-shadow: inset 4px 0 0 var(--warn); background: var(--warn-soft); }
-.ihead { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: start; }
-.num { width: 28px; height: 28px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-family: var(--font-mono); font-size: 14px; }
-.itext .t { font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
-.itext .en { font-size: 12px; color: var(--muted); line-height: 1.4; margin-top: 2px; overflow-wrap: anywhere; }
-.hintbtn { font: inherit; font-size: 12px; color: var(--muted); background: var(--chip); border: 0; border-radius: 99px; padding: 2px 10px; cursor: pointer; white-space: nowrap; }
-.hintbtn[aria-expanded="true"] { color: var(--accent); background: var(--accent-soft); }
-.hint { font-size: 13px; background: var(--chip); border-radius: 8px; padding: 8px 12px; color: var(--ink); white-space: pre-line; }
+ol.items { list-style: none; margin: 0; padding: 0; display: grid; }
+li.sec { font-size: 14px; font-weight: 700; color: var(--ink); padding: 18px 0 6px; border-bottom: 2px solid var(--ink); letter-spacing: .02em; }
+li.sec:first-child { padding-top: 4px; }
+li.item { border-bottom: 1px solid var(--line); padding: 16px 0; display: grid; gap: 10px; min-width: 0; }
+li.item:last-child { border-bottom: 0; }
+li.item.disagree { background: var(--unclear-soft); border: 1px solid var(--unclear); border-radius: var(--r-m); padding: 14px 12px; margin: 6px -12px; }
+.ihead { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; align-items: start; }
+.num { width: 28px; height: 28px; border-radius: 50%; background: var(--panel); color: var(--ink); display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+.itext .t { font-weight: 500; line-height: 1.55; overflow-wrap: anywhere; }
+.itext .en { font-size: 12px; color: var(--ink-2); line-height: 1.45; margin-top: 3px; overflow-wrap: anywhere; }
+.hintbtn { font: inherit; font-size: 12px; font-weight: 600; color: var(--pen); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 99px; padding: 3px 12px; min-height: 30px; cursor: pointer; white-space: nowrap; }
+.hintbtn:hover { border-color: var(--pen); }
+.hintbtn[aria-expanded="true"] { background: var(--pen-soft); border-color: var(--pen); }
+.hint { font-size: 13px; background: var(--panel); border-radius: 8px; padding: 8px 12px; color: var(--ink); white-space: pre-line; line-height: 1.65; }
+li.openq > .hint { background: transparent; padding: 0; color: var(--ink-2); }
 
 .ans { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px 10px; align-items: center; }
 .dual .ans { grid-template-columns: 24px minmax(0, 1fr); }
-.who { display: none; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.who { display: none; font-size: 12px; font-weight: 700; color: var(--ink-2); }
 .dual .who { display: block; }
-.seg { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 0; border: 1.5px solid var(--line); border-radius: 10px; overflow: hidden; max-width: 460px; }
-.seg button { font: inherit; font-size: 14px; padding: 6px 4px; background: var(--surface); color: var(--ink); border: 0; border-left: 1px solid var(--line); cursor: pointer; min-height: 38px; line-height: 1.3; }
+.seg { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); border: 1px solid var(--line-strong); border-radius: var(--r-m); overflow: hidden; max-width: 480px; background: var(--surface); }
+.seg button { font: inherit; font-size: 14px; padding: 6px 4px; background: transparent; color: var(--ink); border: 0; border-left: 1px solid var(--line); cursor: pointer; min-height: 40px; line-height: 1.3; transition: background-color .15s ease, color .15s ease; }
 .seg button:first-child { border-left: 0; }
-.seg button:hover { background: var(--chip); }
+.seg button:hover { background: var(--panel); }
+.seg button:focus-visible { outline: 2px solid var(--pen); outline-offset: -2px; border-radius: 0; }
 .seg button[aria-pressed="true"] { font-weight: 700; }
-.seg button[aria-pressed="true"].yes { background: var(--ok-soft); color: var(--ok); box-shadow: inset 0 -3px 0 var(--ok); }
-.seg button[aria-pressed="true"].no { background: var(--bad-soft); color: var(--bad); box-shadow: inset 0 -3px 0 var(--bad); }
-.seg button[aria-pressed="true"].unclear { background: var(--warn-soft); color: var(--warn); box-shadow: inset 0 -3px 0 var(--warn); }
-.seg button[aria-pressed="true"].na { background: var(--chip); color: var(--ink); box-shadow: inset 0 -3px 0 var(--muted); }
-.ans.b .seg { max-width: 460px; }
-.ans.b .seg button { min-height: 32px; font-size: 13px; padding: 3px 4px; }
-.distag { grid-column: 2; font-size: 12px; font-weight: 700; color: var(--warn); }
+.seg button[aria-pressed="true"].yes { background: var(--yes); color: var(--surface); }
+.seg button[aria-pressed="true"].no { background: var(--no); color: var(--surface); }
+.seg button[aria-pressed="true"].unclear { background: var(--unclear); color: var(--surface); }
+.seg button[aria-pressed="true"].na { background: var(--na); color: var(--surface); }
+.seg button[aria-pressed="true"]:not(.yes):not(.no):not(.unclear):not(.na) { background: var(--pen); color: var(--pen-ink); }
+.ans.b .seg button { min-height: 34px; font-size: 13px; padding: 3px 4px; }
+.distag { grid-column: 2; font-size: 12px; font-weight: 700; color: var(--unclear); }
 .item textarea { font-size: 15px; min-height: 60px; max-height: 60vh; }
 .item textarea.grow { overflow-y: auto; }
-.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (pointer: coarse) { .seg button { min-height: 44px; } .ans.b .seg button { min-height: 40px; } }
 
 /* 判定 */
-.seg.verdict { max-width: 420px; --n: 3; }
+.verdict-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; }
+.seg.verdict { max-width: 420px; flex: 1 1 260px; --n: 3; }
+#verdictSeal { font-size: 20px; }
 
 /* κ */
-.kbox { border-radius: 10px; padding: 10px 14px; background: var(--chip); display: grid; gap: 4px; font-size: 14px; }
-.kbox .kv { font-family: var(--font-mono); font-size: 18px; }
-details.more { border: 1px solid var(--line); border-radius: 10px; }
-details.more summary { cursor: pointer; padding: 8px 12px; font-weight: 500; font-size: 13px; list-style: none; display: flex; gap: 8px; align-items: center; }
-details.more summary::-webkit-details-marker { display: none; }
-details.more summary::before { content: "＋"; color: var(--accent); font-weight: 700; }
-details.more[open] summary::before { content: "－"; }
-details.more .body { padding: 0 12px 12px; display: grid; gap: 8px; font-size: 13px; }
-.formula { font-family: var(--font-mono); font-size: 13px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; }
+.kbox { border-radius: var(--r-m); padding: 12px 14px; background: var(--panel); display: grid; gap: 6px; font-size: 14px; }
+.kbox .kv { font-family: var(--font-mono); font-size: 18px; font-weight: 600; margin-right: 4px; }
+.kbox details.more { background: var(--surface); }
+.formula { font-family: var(--font-mono); font-size: 13px; background: var(--panel); border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; }
 
 /* 論文清單 */
 ul.papers { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-ul.papers li { border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; display: grid; gap: 4px; min-width: 0; }
-ul.papers li.cur { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
-ul.papers .open { font: inherit; text-align: left; background: none; border: 0; padding: 0; color: var(--ink); cursor: pointer; display: grid; gap: 1px; min-width: 0; }
-ul.papers .nm { font-weight: 700; font-size: 14px; overflow-wrap: anywhere; line-height: 1.4; }
-ul.papers .sub { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; line-height: 1.4; }
+ul.papers li { border: 1px solid var(--line); border-radius: var(--r-m); padding: 9px 11px; display: grid; gap: 6px; min-width: 0; background: var(--surface); }
+ul.papers li.cur { border-color: var(--pen); background: var(--pen-soft); box-shadow: inset 0 0 0 1px var(--pen); }
+ul.papers .open { font: inherit; text-align: left; background: none; border: 0; padding: 0; color: var(--ink); cursor: pointer; display: grid; gap: 1px; min-width: 0; border-radius: 4px; }
+ul.papers .open:hover .nm { color: var(--pen); text-decoration: underline; text-underline-offset: 3px; }
+ul.papers .nm { font-weight: 600; font-size: 14px; overflow-wrap: anywhere; line-height: 1.4; }
+ul.papers .sub { font-size: 12px; color: var(--ink-2); overflow-wrap: anywhere; line-height: 1.45; }
 ul.papers .mini { display: flex; gap: 2px; flex-wrap: wrap; }
-ul.papers .mini i { width: 10px; height: 10px; border-radius: 3px; background: var(--chip); border: 1px solid var(--line); }
-ul.papers .mini i.yes { background: var(--ok); border-color: var(--ok); } ul.papers .mini i.no { background: var(--bad); border-color: var(--bad); }
-ul.papers .mini i.unclear { background: var(--warn); border-color: var(--warn); } ul.papers .mini i.na { background: var(--muted); border-color: var(--muted); }
-ul.papers .foot { display: flex; gap: 6px 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+ul.papers .mini i { width: 10px; height: 10px; border-radius: 2px; background: var(--surface); border: 1px solid var(--line-strong); }
+ul.papers .mini i.yes { background: var(--yes); border-color: var(--yes); } ul.papers .mini i.no { background: var(--no); border-color: var(--no); }
+ul.papers .mini i.unclear { background: var(--unclear); border-color: var(--unclear); } ul.papers .mini i.na { background: var(--na); border-color: var(--na); }
+ul.papers .foot { display: flex; gap: 6px 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; padding: 0; max-width: none; margin: 0; }
 ul.papers .acts { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* 燈號總覽 */
-.tgroup { display: grid; gap: 8px; }
-.tgroup h3 { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.tgroup { display: grid; gap: 10px; }
+#traffic { gap: 22px; }
+.tgroup h3 { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; font-size: 15px; }
 .tgroup h3 .small { font-weight: 400; }
-.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
-table { border-collapse: collapse; width: 100%; font-size: 13px; }
-th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-th { background: var(--chip); font-weight: 700; white-space: nowrap; }
-tr:last-child td { border-bottom: 0; }
-table.tl th.q, table.tl td.q { text-align: center; padding-inline: 3px; min-width: 32px; }
+table.tl { font-size: 13px; }
+table.tl th, table.tl td { padding: 6px 8px; vertical-align: middle; }
+table.tl th.q, table.tl td.q { text-align: center; padding-inline: 3px; min-width: 34px; }
 table.tl td.paper, table.tl th:first-child { position: sticky; left: 0; z-index: 1; }
 table.tl td.paper { min-width: 120px; max-width: 240px; background: var(--surface); }
+table.tl tr.cur td { background: var(--pen-soft); }
 table.tl tr.cur td.paper .linkbtn { font-weight: 700; }
 table.tl td.paper .linkbtn { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
-table.tl tr.cur td.paper { box-shadow: inset 3px 0 0 var(--accent); }
-.dot { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-size: 13px; font-weight: 700; line-height: 1; border: 1.5px solid var(--line); color: var(--muted); }
-.dot.yes { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
-.dot.no { background: var(--bad-soft); color: var(--bad); border-color: var(--bad); }
-.dot.unclear { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
-.dot.na { background: var(--chip); color: var(--muted); border-color: var(--muted); }
-.dot.off { box-shadow: 0 0 0 2px var(--warn); }
-.vtag { font-size: 12px; font-weight: 700; border-radius: 4px; padding: 0 6px; white-space: nowrap; background: var(--chip); color: var(--muted); }
-.vtag.yes { background: var(--ok-soft); color: var(--ok); } .vtag.no { background: var(--bad-soft); color: var(--bad); } .vtag.unclear { background: var(--warn-soft); color: var(--warn); }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); align-items: center; }
+.dot { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-size: 13px; font-weight: 700; line-height: 1; border: 1.5px solid var(--line-strong); color: var(--ink-2); background: var(--surface); }
+.dot.yes { background: var(--yes); color: var(--surface); border-color: var(--yes); }
+.dot.no { background: var(--no); color: var(--surface); border-color: var(--no); }
+.dot.unclear { background: var(--unclear); color: var(--surface); border-color: var(--unclear); }
+.dot.na { background: var(--na-soft); color: var(--na); border-color: var(--na); }
+.dot.off { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--unclear); }
+.vtag { font-size: 12px; font-weight: 700; border-radius: 4px; padding: 0 6px; white-space: nowrap; border: 1.5px solid currentColor; color: var(--ink-2); }
+.vtag.yes { color: var(--yes); } .vtag.no { color: var(--no); } .vtag.unclear { color: var(--unclear); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--ink-2); align-items: center; }
 .legend .dot { width: 20px; height: 20px; font-size: 11px; margin-right: 4px; vertical-align: middle; }
 ol.qkey { margin: 0; padding-left: 2.2em; display: grid; gap: 2px; }
-.empty-list { font-size: 13px; color: var(--muted); }
-
-#toast {
-  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); transform: translate(-50%, 16px);
-  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; max-width: calc(100vw - 32px);
-  opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease; box-shadow: 0 6px 24px rgba(0,0,0,.18); z-index: 10;
-}
-#toast.show { opacity: 1; transform: translate(-50%, 0); }
-
-footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
+.empty-list { font-size: 13px; color: var(--ink-2); }
 
 #printArea { display: none; }
 
 @media (max-width: 900px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
   .side { position: static; order: -1; }
-  ul.papers { max-height: 320px; overflow-y: auto; padding: 2px; margin: -2px; }
-  .meta { text-align: left; }
+  ul.papers { max-height: 260px; overflow-y: auto; padding: 2px; margin: -2px; }
 }
 @media (max-width: 560px) {
   .fields { grid-template-columns: minmax(0, 1fr); }
-  .ihead { grid-template-columns: 26px minmax(0, 1fr); }
+  .ihead { grid-template-columns: 28px minmax(0, 1fr); }
   .ihead .hintbtn { grid-column: 2; justify-self: start; }
-  .num { width: 26px; height: 26px; font-size: 13px; }
-  li.item { padding: 10px 12px; }
+  .num { width: 26px; height: 26px; font-size: 12px; }
+  li.item.disagree { margin-inline: -8px; padding-inline: 8px; }
+  .pagehead h1 { font-size: 26px; }
 }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 
 /* 列印：只印 #printArea（評讀表，或全部論文＋燈號總覽） */
 @media print {
@@ -271,30 +162,37 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
 </style>
 </head>
 <body>
-<div class="wrap" id="app">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-device" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M2 20h20"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+</svg>
+<a class="skip" href="#items">跳到逐題評讀</a>
 
-  <header class="top">
-    <div>
-      <h1>文獻 <span>評讀表</span></h1>
-      <p>不用 Zotero 也能填 CASP、JBI 評讀表：逐題勾選並寫下評析根據，多篇論文一起看燈號，複製成 Word／Markdown 表格交作業或寫實證報告。</p>
-    </div>
-    <div class="meta">
-      <a href="./">← Zotero Bridge 安裝精靈</a>
+<header class="mast">
+  <div class="mast-in">
+    <span class="home"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 11h1.5V8.6A5.6 5.6 0 0 1 8 4.5a5.6 5.6 0 0 1 5.5 4.1V11H15v1.5H1zm3 0h1.5V9.2a2.6 2.6 0 0 1 5 0V11H12V8.8A4.1 4.1 0 0 0 8 6a4.1 4.1 0 0 0-4 2.8z"/></svg><a href="./">← Zotero Bridge 安裝精靈</a></span>
+    <nav aria-label="網站">
       <a href="search.html">🔎 醫學文獻快速搜尋</a>
-      <span>評讀資料只存在這台裝置的瀏覽器</span>
-    </div>
-  </header>
+      <span class="here" aria-current="page">文獻評讀表</span>
+    </nav>
+  </div>
+</header>
 
+<div class="wrap" id="app">
+  <div class="pagehead">
+    <h1>文獻評讀表</h1>
+    <span class="local"><svg class="ico" aria-hidden="true"><use href="#i-device"/></svg>評讀資料只存在這台裝置</span>
+    <p>不用 Zotero 也能填 CASP、JBI 評讀表：每一題由你判斷並寫下根據，多篇論文一起看燈號，複製成 Word／Markdown 表格交作業或寫實證報告。</p>
+  </div>
+
+  <main class="shell">
   <div class="note warn" id="noCatalog" hidden><p><strong>載入不到評讀工具清單（appraisal-tools.js）。</strong>請重新整理頁面；若仍然失敗，請到 <a href="https://github.com/bobyu89/zotero-bridge/issues" target="_blank" rel="noopener">GitHub Issues</a> 回報。</p></div>
 
   <div class="layout" id="layout">
     <div class="main">
       <!-- 1 論文資料 -->
       <section class="card" id="infoCard" aria-labelledby="h-info">
-        <div class="head">
-          <p class="eyebrow">Article</p>
-          <h2 id="h-info">論文資料與評讀工具</h2>
-        </div>
+        <h2 id="h-info">論文資料與評讀工具</h2>
         <div class="fields">
           <div><label class="lbl" for="f-author">第一作者</label><input type="text" id="f-author" placeholder="例：Chen et al.、陳等人" autocomplete="off"></div>
           <div><label class="lbl" for="f-year">年份</label><input type="text" id="f-year" inputmode="numeric" maxlength="12" placeholder="2024" autocomplete="off"></div>
@@ -318,9 +216,8 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
       <!-- 2 逐題評讀 -->
       <section class="card" id="itemsCard" aria-labelledby="h-items">
         <div class="head">
-          <p class="eyebrow">Checklist</p>
           <h2 id="h-items">逐題評讀</h2>
-          <p class="lead">每題選一個結果，並在「評析根據」引用原文的設計或數字（例如：電腦亂數分派、信封密封；流失率 8%，採 ITT 分析）。再按一次同一個按鈕可取消。</p>
+          <p class="lead">先自己讀全文再作答。每題選一個結果，並在「評析根據」引用原文的設計或數字（例如：電腦亂數分派、信封密封；流失率 8%，採 ITT 分析）。再按一次同一個按鈕可取消。</p>
         </div>
         <div class="prog" id="prog" aria-live="polite">
           <div class="bar" id="progBar"></div>
@@ -332,13 +229,13 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
 
       <!-- 3 判定與輸出 -->
       <section class="card" id="outCard" aria-labelledby="h-out">
-        <div class="head">
-          <p class="eyebrow">Verdict &amp; export</p>
-          <h2 id="h-out">整體判定與輸出</h2>
-        </div>
+        <h2 id="h-out">整體判定與輸出</h2>
         <div>
           <span class="lbl" id="l-verdict">整體判定</span>
-          <div class="seg verdict" id="verdict" role="group" aria-labelledby="l-verdict"></div>
+          <div class="verdict-row">
+            <div class="seg verdict" id="verdict" role="group" aria-labelledby="l-verdict"></div>
+            <span class="seal" id="verdictSeal" aria-hidden="true" hidden></span>
+          </div>
         </div>
         <div class="fields">
           <div><label class="lbl" for="f-reviewer">評讀者</label><input type="text" id="f-reviewer" placeholder="你的名字" autocomplete="name"></div>
@@ -362,12 +259,9 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     <div class="side">
       <!-- 論文清單 -->
       <section class="card" id="listCard" aria-labelledby="h-list">
-        <div class="head">
-          <p class="eyebrow">Papers</p>
-          <h2 id="h-list">我的評讀</h2>
-        </div>
+        <h2 id="h-list">我的評讀</h2>
         <div class="note warn" id="storeWarn" hidden><p><strong>這個瀏覽器不能儲存資料</strong>（例如無痕視窗或封鎖網站資料）。關閉分頁後評讀會消失，請用「匯出 JSON」保存。</p></div>
-        <button class="btn" type="button" id="newBtn">＋ 新增一篇</button>
+        <button class="btn" type="button" id="newBtn"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg>新增一篇</button>
         <ul class="papers" id="paperList"></ul>
         <div class="row">
           <button class="btn small ghost" type="button" id="exportBtn">匯出 JSON</button>
@@ -382,7 +276,6 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
   <!-- 4 燈號總覽 -->
   <section class="card" id="sumCard" aria-labelledby="h-sum">
     <div class="head">
-      <p class="eyebrow">Summary</p>
       <h2 id="h-sum">燈號總覽</h2>
       <p class="lead">所有論文依評讀工具分組，一列一篇、一欄一題；點論文名稱可開啟該篇。</p>
     </div>
@@ -394,8 +287,9 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
       <button class="btn small ghost" type="button" id="printAllBtn">列印全部</button>
     </div>
   </section>
+  </main>
 
-  <footer>
+  <footer class="foot">
     <span>本頁不會把評讀內容送到任何伺服器。CASP checklists © CASP UK，JBI critical appraisal tools © JBI；各工具的授權寫在工具名稱下方，請依授權使用。</span>
     <span>Zotero Bridge · <a href="https://github.com/bobyu89/zotero-bridge#評讀表網頁" target="_blank" rel="noopener">說明</a></span>
   </footer>
@@ -978,7 +872,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
       var rb = doc.createElement('div'); rb.className = 'ans b';
       var wb = doc.createElement('span'); wb.className = 'who'; wb.textContent = 'B';
       var sb = segButtons('B', it.id); sb.setAttribute('aria-label', '評讀者 B：第 ' + (i + 1) + ' 題');
-      var dt = doc.createElement('span'); dt.className = 'distag'; dt.textContent = '⚠ 兩位評讀者不一致，請討論後決定'; dt.hidden = true;
+      var dt = doc.createElement('span'); dt.className = 'distag'; dt.textContent = '兩位評讀者不一致，討論後再決定'; dt.hidden = true;
       rb.append(wb, sb, dt);
       li.append(ra, rb, lab, ta);
       ol.appendChild(li);
@@ -1015,6 +909,8 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
       if (tag) tag.hidden = !d; // open items have no answer rows
     });
     doc.querySelectorAll('#verdict button').forEach(function (b) { b.setAttribute('aria-pressed', String(cur.verdict === b.dataset.verdict)); });
+    var vseal = $('verdictSeal');
+    if (vseal) { vseal.hidden = !cur.verdict; vseal.textContent = cur.verdict || ''; }
 
     // 進度
     var bar = $('progBar'), line = $('progLine');
@@ -1268,6 +1164,9 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     if (!b) return;
     cur.verdict = cur.verdict === b.dataset.verdict ? '' : b.dataset.verdict;
     after();
+    // 選定判定時蓋章（取消時不動畫）
+    var vseal = $('verdictSeal');
+    if (vseal && cur.verdict) { vseal.classList.remove('press'); void vseal.offsetWidth; vseal.classList.add('press'); }
   });
 
   // 清單

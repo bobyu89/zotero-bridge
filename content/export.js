@@ -439,7 +439,7 @@
 	 * Silent; several syncs in a row collapse into one refresh.
 	 */
 	function afterSync(settings) {
-		if (!pref("export.autoUpdate") || !settings || !settings.vaultPath) return Promise.resolve();
+		if (!featureOn("bibliography") || !pref("export.autoUpdate") || !settings || !settings.vaultPath) return Promise.resolve();
 		if (refreshQueued) return queue;
 		refreshQueued = true;
 		return enqueue(async () => {
@@ -458,6 +458,18 @@
 		return (context.collectionTreeRows || []).filter(r => r.isCollection && r.isCollection()).map(r => r.ref);
 	}
 
+	// Feature switches (features.js): checked live; always on when this file runs without them (Node tests)
+	function featureOn(id) {
+		let f = scope.ZB && scope.ZB.features;
+		return !f || f.isEnabled(id);
+	}
+
+	/** Menu entries that hide while the feature is off (features.js gateMenus). */
+	function gated(id, menus) {
+		let f = scope.ZB && scope.ZB.features;
+		return f ? f.gateMenus(id, menus) : menus;
+	}
+
 	/** Register the Tools-menu and collection-menu entries; returns the menu IDs to unregister. */
 	function registerMenus({ pluginID, icon }) {
 		let ids = [];
@@ -465,19 +477,19 @@
 			menuID: "zotero-bridge-export-tools",
 			pluginID,
 			target: "main/menubar/tools",
-			menus: [{
+			menus: gated("bibliography", [{
 				menuType: "menuitem",
 				l10nID: "zotero-bridge-menu-export-library",
 				onCommand: () => {
 					exportLibrary().catch(e => Zotero.logError(e));
 				},
-			}],
+			}]),
 		}));
 		ids.push(Zotero.MenuManager.registerMenu({
 			menuID: "zotero-bridge-export-collection",
 			pluginID,
 			target: "main/library/collection",
-			menus: [{
+			menus: gated("bibliography", [{
 				menuType: "menuitem",
 				l10nID: "zotero-bridge-menu-export-collection",
 				icon,
@@ -487,7 +499,7 @@
 				onCommand: (ev, context) => {
 					exportCollections(selectedCollections(context)).catch(e => Zotero.logError(e));
 				},
-			}],
+			}]),
 		}));
 		return ids.filter(Boolean);
 	}

@@ -718,6 +718,11 @@ end
 	 */
 	async function run(items, scope, context) {
 		let ZB = root.ZB;
+		// 「文獻探討草稿」 off (the 研究生引導 preset): no AI call
+		if (ZB.features && !ZB.features.isEnabled("reviewDraft")) {
+			ZB.main.notifyFeatureOff("reviewDraft");
+			return;
+		}
 		items = ZB.adapter.toRegularItems(items);
 		if (items.length < 2) {
 			notify("文獻探討草稿至少需要 2 篇文獻。");
