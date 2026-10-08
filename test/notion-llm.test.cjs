@@ -40,7 +40,11 @@ test("buildProperties only writes properties that exist with the right type", ()
 		title: "T", volume: "12", issue: "3", pages: "45-67", publisher: "Wiley", url: "https://x.y",
 		abstract: "a".repeat(2500), date: "2024-03-01", dateAdded: "2024-05-01T08:00:00Z",
 		study: llm.normalizeStudyData({ study_design: "RCT", sample_size: 120, measures: ["Morse Fall Scale"] }),
+		status: "已讀",
 	});
+	assert.deepEqual(all.Status, { select: { name: "已讀" } });
+	// Without a status (not merged in this sync) the column is left alone
+	assert.equal(notion.buildProperties(full, { title: "T" }).Status, undefined);
 	assert.equal(all.Volume.rich_text[0].text.content, "12");
 	assert.equal(all.Pages.rich_text[0].text.content, "45-67");
 	assert.equal(all.Publisher.rich_text[0].text.content, "Wiley");

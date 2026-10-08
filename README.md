@@ -28,6 +28,7 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 - **跨文獻比較表**：選多篇文獻或整個分類 → AI 讀各篇的 AI 筆記（沒有的改用摘要與劃線），產生文獻比較表、主題整理、方法學品質、研究缺口。引文由 Zotero 書目轉換（不讓 AI 自己寫參考文獻），Obsidian 版會連回各篇文獻筆記，並附 APA 7 參考文獻。同時存成 Notion 頁面（含真正的表格）、Obsidian 筆記和 Zotero 獨立筆記。
 - **Zotero 內直接看 AI 筆記**：條目右側面板新增「AI 文獻筆記」區塊，顯示摘要與重點，並有「同步」「重新產生」按鈕。
 - **批次同步可中途停止、之後接續**：同步很多篇時可以從工具選單停止；Zotero 關閉或當掉也不會從頭來過，失敗的文獻可以一鍵重試。
+- **閱讀狀態三邊同步**：在 Zotero（標籤）、Notion（`Status` 欄位）或 Obsidian（看板拖曳）任一邊改閱讀狀態，下次同步時另外兩邊會跟著改（見[閱讀狀態同步](#閱讀狀態同步)）。
 - **自動同步（選用）**：條目、劃線或筆記變更後，自動同步到兩邊。自動同步不會呼叫 AI。
   - 條目移到 Zotero 垃圾桶或刪除時：Notion 頁面移到 Notion 的垃圾桶；Obsidian 筆記**不會刪除**，只把 `status` 改成「已刪除」，並在自動同步區塊最上方加一段提示。從 Zotero 垃圾桶還原後再同步，筆記會恢復原本的閱讀狀態（Notion 會建立新頁面，舊頁面留在 Notion 垃圾桶）。
 - **參考文獻檔（Pandoc）**：把文獻庫匯出成 vault 裡的 `Zotero/references.json`（CSL JSON），條目 id 就是筆記的 `citekey`。在 Obsidian 用 `[@citekey]` 寫論文，再用 Pandoc 產生 APA 7 的 Word 檔（見[下方說明](#在-obsidian-寫論文並用-pandoc-產生-apa-word)）。
@@ -55,13 +56,13 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
    | 類別 | 欄位 |
    |---|---|
    | 書目資料 | 標題（沿用資料庫原本的標題欄）、`Authors`、`Year`、`Date`、`Publication`、`Volume`、`Issue`、`Pages`、`Publisher`、`Item Type`、`DOI`、`URL`、`Abstract` |
-   | 整理用 | `Tags`、`Collections`、`Library`、`Citation Key`、`APA`、`Summary`（AI 一句話摘要） |
+   | 整理用 | `Status`（閱讀狀態，單選：待讀／閱讀中／已讀／已引用／已刪除）、`Tags`、`Collections`、`Library`、`Citation Key`、`APA`、`Summary`（AI 一句話摘要） |
    | 研讀欄位（AI） | `Study Design`（選項：RCT、quasi-experimental、cohort、case-control、cross-sectional、qualitative、mixed methods、systematic review、meta-analysis、scoping review、guideline、other）、`Sample Size`（數字）、`Evidence Level`（Oxford CEBM 2011，1–5）、`JBI Level`、`Appraisal Tool`、`Appraisal`（納入／排除／需更多資訊）、`Population`、`Intervention`、`Comparison`、`Outcomes`、`Setting`、`Measures`（多選：測量工具）、`Country` |
    | 連結與同步 | `Zotero`、`Obsidian`、`Zotero Key`、`Date Added`、`Last Synced` |
 
-   > 請不要改這些欄位的名稱，插件是靠名稱寫入的；改名後會再建立一個新的同名欄位。你可以自由新增自己的欄位（例如「閱讀狀態」、「評分」），插件不會動它們。
+   > 請不要改這些欄位的名稱，插件是靠名稱寫入的；改名後會再建立一個新的同名欄位。你可以自由新增自己的欄位（例如「評分」），插件不會動它們。
    >
-   > 已經在用的資料庫：再按一次「測試連線並補齊資料庫欄位」，就會加上新的研讀欄位。AI 筆記沒有結構化資料（例如舊的筆記）時，研讀欄位維持原值不會被清空。
+   > 已經在用的資料庫：再按一次「測試連線並補齊資料庫欄位」，就會加上新的研讀欄位與 `Status` 欄位。AI 筆記沒有結構化資料（例如舊的筆記）時，研讀欄位維持原值不會被清空。
 
 ### 2. Obsidian
 
@@ -133,7 +134,26 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 
 ### 在 Zotero 裡看 AI 筆記
 
-選取一篇文獻，右側面板的「AI 文獻筆記」區塊會顯示一句話摘要與各段重點；收合時標題列會顯示摘要。還沒有 AI 筆記時，可以直接按「產生 AI 筆記並同步」。
+選取一篇文獻，右側面板的「AI 文獻筆記」區塊會顯示一句話摘要與各段重點；收合時標題列會顯示摘要。還沒有 AI 筆記時，可以直接按「產生 AI 筆記並同步」。區塊最上方的「閱讀狀態」選單可以直接改這篇的閱讀狀態。
+
+### 閱讀狀態同步
+
+閱讀狀態（待讀／閱讀中／已讀／已引用）在三個地方都看得到，哪邊方便就在哪邊改：
+
+| 地方 | 存在哪裡 | 怎麼改 |
+|---|---|---|
+| Zotero | 標籤 `狀態/已讀 ✅`（每篇只留一個） | 右側面板「AI 文獻筆記」區塊的「閱讀狀態」選單，或直接改標籤 |
+| Notion | `Status` 欄位（單選） | 在資料庫改 Status |
+| Obsidian | frontmatter 的 `status` | 在「閱讀進度」看板拖曳卡片，或直接改 `status` |
+
+- **什麼時候同步**：每次一般同步（手動、批次、自動同步）都會比對三邊。自動同步只在 Zotero 有變更時觸發，所以在 Notion／Obsidian 改的狀態會在下一次同步時帶回；想一次更新全部，用 **工具 → 同步閱讀狀態**：只比對、更新已同步過的文獻的閱讀狀態（不呼叫 AI、不改筆記其他內容、不新增 Notion 頁面）。
+- **以哪邊為準**：插件會記住上次三邊一致的狀態（Obsidian 筆記的 `status_synced`；沒有設定 Obsidian 時記在 Zotero 設定裡）。只有一邊改過時，以那一邊為準；同一篇在不同地方改成不同狀態時，依 **Obsidian > Zotero > Notion** 採用，並在進度視窗顯示「⚠️ 閱讀狀態衝突」。自動同步是在 Zotero 一有變更就執行，所以自動同步時改以 Zotero 優先（並跳出提示）。沒辦法用修改時間判斷誰比較新：Notion 頁面、筆記檔案和 Zotero 條目的修改時間在改任何內容時都會更新，不只是改狀態。
+- **舊版同步過的文獻**：第一次同步時以 Obsidian 筆記原本的 `status` 為準（例如你在看板拖到「已讀」的不會被改回「待讀」），再補上 Zotero 標籤和 Notion 的 Status。
+- **只同步到 Obsidian／只同步到 Notion** 時，沒有選的那邊不會更新，下次一般同步再補上。
+- **已刪除**：移到 Zotero 垃圾桶的文獻不會被狀態同步恢復；Obsidian 的「已刪除」狀態只由插件設定，在其他地方改成「已刪除」不會同步出去。
+- **Zotero 標籤**：前綴可以在 設定 → 閱讀狀態 修改（改了之後舊標籤不會自動改名）。標籤含 emoji 時（預設：閱讀中 📖、已讀 ✅、已引用 📝；待讀不加），Zotero 會把 emoji 顯示在條目清單的標題旁，一眼就看得出讀到哪。也可以在左下角標籤選擇器對狀態標籤按右鍵 → **指定顏色**，之後選取文獻按數字鍵就能加上該狀態；同時有兩個狀態標籤時，插件同步時會留下新加的那個。
+- **Notion 為什麼用「單選」而不是 Notion 的「狀態」欄位類型**：Notion API 無法把選項放進「待處理／進行中／完成」分組，頁面也不能填入還不存在的狀態選項；單選則可以接受任何值（例如你在 Obsidian 自訂的狀態）。資料庫原本就有名為 `Status` 的「狀態」類型欄位時，插件不會動它，進度視窗會提示你改名後再按「測試連線並補齊資料庫欄位」。
+- 不想同步閱讀狀態：設定 → 閱讀狀態，取消勾選即可（Zotero 不會再加標籤）。
 
 選「同步到兩邊」但只設定了其中一邊時，沒設定的那邊會自動略過。某一步失敗（例如 AI 逾時）時，其他步驟照常完成，錯誤會顯示在進度視窗與 `說明 → 除錯輸出記錄`。
 
@@ -142,7 +162,7 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 - **彩色劃線**：Zotero 的劃線顏色會轉成 Obsidian 1.14 的彩色 highlight，例如 `==🟡Falls decreased by 30%==`。Zotero 的洋紅色對應紫色，灰色對應主題預設色（Obsidian 只有六種顏色）。同步到 Notion 時也會轉成對應的背景色。
 - **Bases 文獻總表**（`Zotero 文獻庫.base`，核心外掛 Bases，不需要 Dataview）：
   - 「文獻總表」：表格，列出標題、作者、年份、期刊、研究設計、樣本數、證據等級、閱讀狀態、分類
-  - 「閱讀進度」：1.14 新增的看板（kanban），依 `status` 分成 待讀／閱讀中／已讀／已引用。把卡片拖到別欄就會改筆記的 `status`，重新同步也不會被覆寫
+  - 「閱讀進度」：1.14 新增的看板（kanban），依 `status` 分成 待讀／閱讀中／已讀／已引用。把卡片拖到別欄就會改筆記的 `status`，下次同步時 Zotero 標籤與 Notion 的 Status 也會跟著改（見[閱讀狀態同步](#閱讀狀態同步)）
 - **Graph view**：AI 筆記裡的 `[[Fall prevention]]` 等關鍵概念會把相關文獻自動串起來
 
 ## 在 Obsidian 寫論文並用 Pandoc 產生 APA Word
@@ -250,6 +270,7 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi
 | `content/secrets.js` | API key／Notion token 存取（Gecko 密碼管理員） |
 | `content/usage.js` | AI 用量月報、價格表與費用估算 |
 | `content/notion.js` | Notion API（2025-09-03，data sources） |
+| `content/status.js` | 閱讀狀態在 Zotero 標籤、Notion Status、Obsidian `status` 之間的合併與同步 |
 | `content/core.js` | Obsidian 筆記組裝、frontmatter 合併、分流規則 |
 | `content/markdown.js` | Markdown ⇄ Notion blocks ⇄ HTML |
 | `content/synthesis.js` | 跨文獻比較表：提示詞、引文轉換、APA 參考文獻 |

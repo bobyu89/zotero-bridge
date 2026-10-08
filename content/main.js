@@ -74,6 +74,21 @@
 		}
 	}
 
+	/**
+	 * Save a change of our own (a reading-status tag) without auto-sync reacting to it. Zotero notifies
+	 * observers before saveTx() resolves, so only that save is skipped, not the user's next edit.
+	 */
+	async function saveQuietly(item) {
+		let had = selfModified.has(item.id);
+		selfModified.add(item.id);
+		try {
+			await item.saveTx();
+		}
+		finally {
+			if (!had) selfModified.delete(item.id);
+		}
+	}
+
 	// ---------- AI usage ledger ----------
 
 	function readPrices() {
@@ -224,6 +239,8 @@
 				index: ctx.obsidianIndex, rename: action.targets.has("obsidian"),
 			});
 		}
+		// Reading status merged across Zotero, Notion and Obsidian before anything is written (status.js)
+		let status = await ZB.status.prepare(item, data, { settings, action, route, obsidian, ctx, messages });
 
 		let notionUrl = null;
 		if (action.targets.has("notion")) {
@@ -231,7 +248,7 @@
 			try {
 				if (!route.notionDatabase) throw new Error(`沒有對應的資料庫（規則：${route.ruleName || "預設"}）`);
 				notionUrl = await syncNotion(ctx.notion(settings.notionToken), route.notionDatabase, data, {
-					ai, notesMarkdown, obsidianURI: obsidian && obsidian.uri, messages,
+					ai, notesMarkdown, obsidianURI: obsidian && obsidian.uri, messages, status,
 				}, ctx);
 			}
 			catch (e) {
@@ -242,7 +259,7 @@
 		if (action.targets.has("obsidian")) {
 			ctx.status("寫入 Obsidian…");
 			try {
-				await writeObsidian(obsidian, data, { ai, notesMarkdown, notionUrl });
+				await writeObsidian(obsidian, data, { ai, notesMarkdown, notionUrl, status });
 				if (ctx.obsidianIndex) ctx.obsidianIndex.add(`${data.libraryPath}/${data.key}`, obsidian.path, obsidian.relParts);
 			}
 			catch (e) {
@@ -424,6 +441,7 @@
 			notionUrl,
 			now: nowISO(),
 		});
+		text = ZB.status.applyPlanToNote(text, opts.status);
 		if (text !== existing) {
 			await IOUtils.writeUTF8(obsidian.path, text);
 		}
@@ -483,9 +501,13 @@
 			summary: opts.ai ? ZB.markdown.plainText(ZB.llm.extractSummary(opts.ai.md)) : "",
 			study,
 			apa: data.apa,
+			status: ZB.status.notionValue(opts.status),
 			lastSynced: nowISO(),
 		});
-		let page = await client.findPageByZoteroKey(dsId, zoteroKey);
+		// The page status.js already looked up while merging the reading status
+		let page = opts.status && opts.status.notionPage !== undefined
+			? opts.status.notionPage
+			: await client.findPageByZoteroKey(dsId, zoteroKey);
 		if (page) {
 			page = await client.request("PATCH", `pages/${page.id}`, { properties });
 		}
@@ -495,6 +517,7 @@
 				properties,
 			});
 		}
+		ZB.status.notionWritten(opts.status);
 		let md = ZB.core.buildManagedSection(data, {
 			aiMarkdown: opts.ai && opts.ai.md,
 			notesMarkdown: opts.notesMarkdown,
@@ -758,6 +781,13 @@
 			Zotero.logError(e);
 			return "";
 		}
+	}
+
+	/** Run `fn` after any sync in progress, like run() (status.js uses it for the status-only pass). */
+	function enqueue(fn) {
+		let p = running.then(fn);
+		running = p.catch(() => {});
+		return p;
 	}
 
 	function notify(headline, text) {
@@ -1150,6 +1180,11 @@
 				},
 				{
 					menuType: "menuitem",
+					l10nID: "zotero-bridge-menu-status",
+					onCommand: () => ZB.status.runPass().catch(e => Zotero.logError(e)),
+				},
+				{
+					menuType: "menuitem",
 					l10nID: "zotero-bridge-menu-stop",
 					onShowing: (ev, context) => context.setVisible(!!currentBatch && !currentBatch.cancelled),
 					onCommand: () => cancelBatch(),
@@ -1184,6 +1219,7 @@
 
 	function renderPane({ doc, body, item, setSectionSummary }) {
 		body.replaceChildren();
+		ZB.status.renderPaneRow(doc, body, item);
 		let el = (tag, text, style) => {
 			let e = doc.createElement(tag);
 			if (text !== undefined) e.textContent = text;
@@ -1368,5 +1404,7 @@
 		ZB.bibliography.shutdown();
 	}
 
-	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime };
+	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime,
+		// for status.js
+		enqueue, notify, buildObsidianIndex, saveQuietly };
 })(this);

@@ -131,6 +131,17 @@
 	</groupbox>
 
 	<groupbox>
+		<label><html:h2>閱讀狀態</html:h2></label>
+		<checkbox label="在 Zotero、Notion、Obsidian 之間同步閱讀狀態（待讀／閱讀中／已讀／已引用）" preference="extensions.zotero-bridge.status.enabled"/>
+		<hbox align="center">
+			<label value="Zotero 標籤前綴："/>
+			<html:input type="text" preference="extensions.zotero-bridge.status.tagPrefix" placeholder="狀態/"/>
+		</hbox>
+		<checkbox label="標籤加上 emoji（例如「狀態/已讀 ✅」），Zotero 會把它顯示在條目清單的標題旁" preference="extensions.zotero-bridge.status.tagEmoji"/>
+		<description class="zb-hint">Zotero 用標籤（每篇只留一個）、Notion 用 Status 欄位、Obsidian 用 frontmatter 的 status。每次同步時，哪一邊改過就以那一邊為準；同時在不同地方改成不同狀態時，依 Obsidian &gt; Zotero &gt; Notion 採用並在進度視窗提示（自動同步時 Zotero 優先）。Notion／Obsidian 的修改會在下一次同步時帶回，或用 工具 → 同步閱讀狀態 一次更新全部。</description>
+	</groupbox>
+
+	<groupbox>
 		<label><html:h2>自動同步</html:h2></label>
 		<checkbox label="Zotero 條目、註記或筆記變更時自動同步到 Notion 與 Obsidian（不會自動呼叫 AI，沿用既有 AI 筆記）" preference="extensions.zotero-bridge.autoSync"/>
 	</groupbox>
