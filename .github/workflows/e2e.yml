@@ -1,0 +1,89 @@
+name: e2e
+
+# Runs the built plugin inside a real Zotero 10 (Linux, under Xvfb) with the test harness in
+# test/e2e/harness. See test/e2e/run.sh and README「真實 Zotero 測試（e2e）」.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  zotero:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Paths
+        run: |
+          echo "ZOTERO_HOME=$HOME/zotero-dist" >> "$GITHUB_ENV"
+          echo "WORK=$RUNNER_TEMP/zb-e2e" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Find the current Zotero release for Linux
+        id: zotero
+        run: |
+          set -euo pipefail
+          DL="https://www.zotero.org/download/client/dl?channel=release&platform=linux-x86_64"
+          URL=$(curl -fsSIL -o /dev/null -w '%{url_effective}' "$DL" || true)
+          case "$URL" in
+            *download.zotero.org*) ;;
+            *) URL=$(curl -fsSL -r 0-0 -o /dev/null -w '%{url_effective}' "$DL") ;;
+          esac
+          VERSION=$(printf '%s' "$URL" | sed -nE 's#.*/Zotero-([0-9][^_/]*)_linux-x86_64.*#\1#p')
+          echo "Download URL: $URL"
+          echo "Zotero version: $VERSION"
+          test -n "$VERSION" || { echo "::error::could not read the Zotero version from $URL"; exit 1; }
+          case "$VERSION" in
+            10.*) ;;
+            *) echo "::error::the current Zotero release is $VERSION, but the plugin targets Zotero 10 (manifest strict_min/max_version)"; exit 1 ;;
+          esac
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Zotero ${{ steps.zotero.outputs.version }}
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/zotero-dist
+          key: zotero-linux-x86_64-${{ steps.zotero.outputs.version }}
+
+      - name: Download Zotero ${{ steps.zotero.outputs.version }}
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p "$ZOTERO_HOME"
+          curl -fsSL --retry 3 -o /tmp/zotero.tar "${{ steps.zotero.outputs.url }}"
+          tar -xf /tmp/zotero.tar -C "$ZOTERO_HOME"
+          ls "$ZOTERO_HOME"
+
+      - name: Install Xvfb, keyring and Zotero's libraries
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb dbus dbus-x11 gnome-keyring libdbus-glib-1-2 libgtk-3-0t64 libasound2t64 libxtst6 libx11-xcb1 zip
+
+      - run: npm ci
+      - name: Build the plugin
+        run: npm run build
+
+      - name: Run Zotero Bridge inside Zotero ${{ steps.zotero.outputs.version }}
+        env:
+          ZB_E2E_KEYRING: "1"
+        run: |
+          ZOTERO_DIR=$(dirname "$(find "$ZOTERO_HOME" -maxdepth 2 -name zotero -type f | head -n 1)")
+          bash test/e2e/run.sh "$ZOTERO_DIR" "$WORK"
+
+      - name: Upload results and the Zotero debug log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zotero-e2e-${{ steps.zotero.outputs.version }}
+          path: |
+            ${{ env.WORK }}/results.json
+            ${{ env.WORK }}/zotero.log
+            ${{ env.WORK }}/baseline.json
+            ${{ env.WORK }}/zotero-baseline.log
+            ${{ env.WORK }}/vault/
+          if-no-files-found: warn

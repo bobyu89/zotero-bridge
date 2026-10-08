@@ -220,9 +220,14 @@
 					Zotero.Prefs.registerObserver(PROVIDER_PREF, updateProviderBoxes, true),
 					...USAGE_PREFS.map(p => Zotero.Prefs.registerObserver(p, renderUsage, true)),
 				];
-				window.addEventListener("unload", () => {
+				// Zotero sends "unload" to the pane's root element, then nukes this script's sandbox: a
+				// listener on the window would be dead by the time the window's own unload event fires
+				// (leaving the pref observers registered and unsaved keys unsaved)
+				let root = document.getElementById("zotero-bridge-prefs") || window;
+				root.addEventListener("unload", () => {
 					flushSecrets();
 					observers.forEach(o => Zotero.Prefs.unregisterObserver(o));
+					observers = null;
 				}, { once: true });
 			}
 		},

@@ -548,4 +548,23 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi
 | `research-brain/` | Claude Code／Codex 研究大腦設定檔 |
 | `site/index.html` | 安裝精靈網頁（GitHub Pages） |
 
+### 真實 Zotero 測試（e2e）
+
+`npm test` 用的是模擬的 Zotero；`.github/workflows/e2e.yml` 則在 GitHub Actions 上把建置好的 `.xpi` 裝進**真正的 Zotero 10**（Linux 版、當下最新的正式版，下載後快取；目前是 10.0.6）跑一次。每次 push、PR 都會自動執行；要手動跑：GitHub → Actions → **e2e** → **Run workflow**。
+
+做法：`test/e2e/run.sh` 建立全新的 Zotero 設定檔，把插件和測試用的小插件（`test/e2e/harness/`）放進 `<profile>/extensions/`，在 Xvfb 下啟動 Zotero（另開一個已解鎖的 gnome-keyring，讓作業系統鑰匙圈可用）。Zotero 會啟動兩次：先**不裝插件**記下 Zotero 本身在主控台的錯誤（`baseline.json`），再裝插件執行檢查；測試插件在 Zotero 裡依序檢查以下項目，把結果寫進 `results.json` 後關閉 Zotero。結果表格會出現在該次 Actions 的摘要；失敗時另外上傳 `results.json`、Zotero 除錯記錄 `zotero.log` 和測試用的 vault。
+
+- 插件已安裝並啟用，`Zotero.ZoteroBridge` 與所有模組都載入；啟動時主控台沒有插件的錯誤，也沒有「不裝插件時不會出現」的錯誤
+- 右鍵／工具選單（MenuManager）、設定頁、條目窗格區塊都有註冊；所有 Fluent 字串在 en-US 與 zh-TW 都找得到，選單實際產生後有文字
+- API key／token 經由真正的密碼管理員存取，並確認有用作業系統鑰匙圈加密；舊版設定的搬移
+- 在真的文獻庫建立條目（含中文作者、子筆記、標籤、分類）與 PDF 附件（有文字層的 PDF 與純圖片的「掃描檔」），由 Zotero 的 PDF worker 判斷全文狀態 `ok`／`none`／`no_pdf`
+- 同步到 Obsidian（不呼叫 AI）：筆記、frontmatter（`zotero_key`、`status`、`full_text`、`citekey`）、`.base` 檔、中文 APA 與 Zotero citeproc 產生的英文 APA
+- 閱讀狀態寫回 Zotero 標籤；參考文獻檔 `references.json`（Zotero 的 `itemToCSLJSON`）與 `references.bib`（Zotero 的 BibTeX translator）
+- 篩選決定寫到條目標籤，產生 PRISMA 筆記與證據表 CSV
+- 自動同步（Zotero.Notifier）；AI 筆記（只把插件內的 `fetch` 換成假的 Claude 回應，不連網）
+- 條目窗格區塊實際顯示 AI 筆記；設定頁能開啟、內容與設定值、已存的 token 都正確顯示，關閉後剛輸入的 key 有存下、不留下失效的監聽
+- 停用再啟用插件：選單、區塊、FTL 都會清掉再註冊回來
+
+不會連到 Notion 或任何 AI 服務。Zotero 10.0.6 每註冊一次外掛的語系檔就會在主控台記一筆 `uncaught exception: undefined`（不裝插件時一樣會發生，由 baseline 驗證），這一筆不算插件的錯誤。
+
 發布新版本：修改 `manifest.json` 的 `version` → `npm run build` → 推送到 `main`，GitHub Actions 會自動建立 Release，Zotero 會自動更新。
