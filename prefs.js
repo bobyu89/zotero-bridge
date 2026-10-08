@@ -3,6 +3,8 @@ pref("extensions.zotero-bridge.obsidian.vaultName", "");
 pref("extensions.zotero-bridge.obsidian.folder", "Zotero");
 pref("extensions.zotero-bridge.obsidian.filenameFormat", "citekey");
 pref("extensions.zotero-bridge.obsidian.createBase", true);
+// Rebuild <folder>/研究儀表板.md after each manual sync (content/dashboard.js)
+pref("extensions.zotero-bridge.dashboard.autoUpdate", true);
 pref("extensions.zotero-bridge.includeNotes", true);
 pref("extensions.zotero-bridge.images.export", true);
 pref("extensions.zotero-bridge.images.sendToAI", false);
