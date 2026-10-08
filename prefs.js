@@ -20,3 +20,5 @@ pref("extensions.zotero-bridge.autoSync", false);
 // API keys and the Notion token are kept in the login manager (content/secrets.js), not here
 pref("extensions.zotero-bridge.usage.ledger", "{}");
 pref("extensions.zotero-bridge.usage.prices", "");
+pref("extensions.zotero-bridge.export.autoUpdate", false);
+pref("extensions.zotero-bridge.export.bibtex", false);

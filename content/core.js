@@ -204,7 +204,7 @@
 			item_type: data.itemType || "",
 			doi: data.doi || "",
 			url: data.url || "",
-			citekey: data.citationKey || "",
+			citekey: data.citationKey || data.generatedCitekey || "",
 			zotero: zoteroSelectURI(data),
 			zotero_key: `${data.libraryPath}/${data.key}`,
 			library: data.libraryName || "",

@@ -50,6 +50,7 @@ function makeEnv({ prefs, fetch, logins = [], confirm = () => true }) {
 	let descriptions = [];
 	let errors = [];
 	let panes = [];
+	let translations = [];
 
 	class MockItem {
 		constructor(type, fields = {}) {
@@ -64,7 +65,9 @@ function makeEnv({ prefs, fetch, logins = [], confirm = () => true }) {
 			this.children = [];
 			this.annotations = [];
 			this.noteHTML = "";
-			this.dateAdded = "2024-05-01 08:00:00";
+			this.dateAdded = fields.dateAdded || "2024-05-01 08:00:00";
+			this.dateModified = this.dateAdded;
+			this.version = 0;
 			items.set(this.id, this);
 		}
 		get parentItem() { return this.parentID ? items.get(this.parentID) : undefined; }
@@ -118,9 +121,44 @@ function makeEnv({ prefs, fetch, logins = [], confirm = () => true }) {
 		Items: {
 			get: ids => (Array.isArray(ids) ? ids.map(id => items.get(id)) : items.get(ids)),
 			exists: id => items.has(id),
+			// Top-level items not in the trash (annotations aren't modelled here)
+			getAll: async (libraryID, onlyTopLevel) => [...items.values()]
+				.filter(i => i.libraryID === libraryID && !i.deleted && (!onlyTopLevel || !i.parentID)),
 		},
 		Item: function (type) { return new MockItem(type); },
-		Libraries: { get: () => ({ libraryType: "user", name: "My Library" }) },
+		Libraries: {
+			get: () => ({ libraryType: "user", name: "My Library" }),
+			getAll: () => [{ libraryID: 1, libraryType: "user", name: "My Library" }],
+		},
+		Utilities: {
+			Item: {
+				// Stand-in for Zotero's CSL conversion: the id is the item URI, as in Zotero
+				itemToCSLJSON: item => ({
+					id: `http://zotero.org/users/1/items/${item.key}`,
+					type: "article-journal",
+					title: item.fields.title,
+					author: (item.fields.creators || []).map(c => ({ family: c.lastName, given: c.firstName })),
+					issued: { "date-parts": [[Number(item.fields.year)]] },
+					page: item.fields.pages,
+					URL: "https://example.org/" + item.key,
+				}),
+			},
+		},
+		Translate: {
+			Export: class {
+				constructor() { this.handlers = {}; translations.push(this); }
+				setItems(list) { this.items = list; }
+				setTranslator(id) { this.translatorID = id; }
+				setDisplayOptions(o) { this.displayOptions = o; }
+				setHandler(type, fn) { this.handlers[type] = fn; }
+				async translate() {
+					// Like Zotero's ItemGetter: ascending item ID, one entry per regular item
+					this.items.sort((a, b) => a.id - b.id);
+					this.string = "\n" + this.items.map(i => `@article{${i.key.toLowerCase()}_bibtex,\n\ttitle = {${i.fields.title}},\n}`).join("\n\n") + "\n";
+					this.handlers.done(this, true);
+				}
+			},
+		},
 		Groups: { getGroupIDFromLibraryID: () => null },
 		Collections: {
 			get: (ids) => {
@@ -187,7 +225,7 @@ function makeEnv({ prefs, fetch, logins = [], confirm = () => true }) {
 		},
 	});
 	vm.runInContext(fs.readFileSync(path.join(ROOT, "bootstrap.js"), "utf8"), context, { filename: "bootstrap.js" });
-	return { context, Zotero, MockItem, addChild, menus, progressLines, descriptions, items, prefStore, errors, panes, loginManager };
+	return { context, Zotero, MockItem, addChild, menus, progressLines, descriptions, items, prefStore, errors, panes, loginManager, translations };
 }
 
 function notionMock(log) {
@@ -253,7 +291,7 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 		},
 	});
 	await vm.runInContext(`startup({ id: "zotero-bridge@bobyu89.github.io", version: "0.1.0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
-	assert.deepEqual(env.menus.map(m => m.target), ["main/library/item", "main/library/collection", "main/menubar/tools"]);
+	assert.deepEqual(env.menus.map(m => m.target), ["main/library/item", "main/library/collection", "main/menubar/tools", "main/menubar/tools", "main/library/collection"]);
 	assert.equal(env.panes[0].paneID, "zotero-bridge-ai-note");
 
 	let { MockItem, addChild } = env;
@@ -640,4 +678,92 @@ test("settings pane loads and saves secrets through the login manager, never pre
 	assert.equal(await env.context.ZB.secrets.get("notionToken"), "");
 	assert.ok(!env.loginManager.logins.some(l => l.username === "notionToken"));
 	window.dispatchEvent(new window.Event("unload"));
+});
+
+test("bibliography export: Tools menu writes references.json whose ids match the notes' citekeys", async () => {
+	let vault = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-vault-"));
+	let env = makeEnv({
+		fetch: async () => { throw new Error("no network expected"); },
+		prefs: {
+			"extensions.zotero-bridge.obsidian.vaultPath": vault,
+			"extensions.zotero-bridge.obsidian.folder": "Zotero",
+			"extensions.zotero-bridge.obsidian.filenameFormat": "citekey",
+			"extensions.zotero-bridge.routing.rules": "[]",
+			"extensions.zotero-bridge.llm.enabled": false,
+		},
+	});
+	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
+	let { MockItem } = env;
+	let lee = [{ firstName: "Ann", lastName: "Lee", creatorType: "author" }];
+	let keyed = new MockItem("journalArticle", { title: "Fall prevention RCT", year: "2024", citationKey: "chen2024", pages: "1-9", creators: [{ lastName: "Chen", creatorType: "author" }] });
+	let older = new MockItem("journalArticle", { title: "Effects of exercise", year: "2021", creators: lee, dateAdded: "2023-01-01 00:00:00" });
+	let newer = new MockItem("journalArticle", { title: "The effects of sleep", year: "2021", creators: lee, dateAdded: "2024-01-01 00:00:00" });
+	let trashed = new MockItem("journalArticle", { title: "Deleted", year: "2020", creators: lee });
+	trashed.deleted = true;
+	let standalone = new MockItem("note");
+	standalone.noteHTML = "<p>standalone</p>";
+
+	// Sync the newer keyless item first: its note gets the key the export will use
+	await env.context.ZB.main.run([newer], { targets: ["obsidian"], ai: "none" });
+	let note = fs.readFileSync(path.join(vault, "Zotero", "Lee 2021 - The effects of sleep.md"), "utf8");
+	assert.match(note, /^citekey: "lee2021effectsa"$/m);
+	// An item with a Zotero Citation Key keeps it everywhere
+	await env.context.ZB.main.run([keyed], { targets: ["obsidian"], ai: "none" });
+	assert.match(fs.readFileSync(path.join(vault, "Zotero", "chen2024.md"), "utf8"), /^citekey: "chen2024"$/m);
+
+	// Tools → 匯出參考文獻到 Obsidian
+	let toolsEntry = env.menus.find(m => m.menuID === "zotero-bridge-export-tools").menus[0];
+	assert.equal(toolsEntry.l10nID, "zotero-bridge-menu-export-library");
+	toolsEntry.onCommand({}, {});
+	await env.context.ZB.bibliography.whenIdle();
+	assert.deepEqual(env.errors, []);
+	let file = path.join(vault, "Zotero", "references.json");
+	let refs = JSON.parse(fs.readFileSync(file, "utf8"));
+	assert.deepEqual(refs.map(r => r.id), ["chen2024", "lee2021effects", "lee2021effectsa"]);
+	assert.equal(refs.find(r => r.id === "lee2021effectsa").title, "The effects of sleep");
+	assert.equal(refs[0].URL, undefined, "journal article with pages: URL dropped as in Zotero's APA output");
+	assert.equal(refs[1].URL, "https://example.org/" + older.key);
+	assert.match(env.descriptions.at(-1), /已匯出 3 筆參考文獻到 Zotero\/references\.json/);
+	assert.equal(env.translations.length, 0, "no .bib unless enabled");
+	// Generated keys are remembered in the vault so they never move to another item
+	let store = JSON.parse(fs.readFileSync(path.join(vault, "Zotero", ".zotero-bridge-citekeys.json"), "utf8"));
+	assert.deepEqual(store, { keys: { [`library/${older.key}`]: "lee2021effects", [`library/${newer.key}`]: "lee2021effectsa" }, retired: [] });
+
+	// Unchanged library → file not rewritten
+	let mtime = fs.statSync(file).mtimeMs;
+	await new Promise(r => setTimeout(r, 20));
+	toolsEntry.onCommand({}, {});
+	await env.context.ZB.bibliography.whenIdle();
+	assert.equal(fs.statSync(file).mtimeMs, mtime);
+
+	// Collection menu: same keys as the main file, only that collection's items
+	let collEntry = env.menus.find(m => m.menuID === "zotero-bridge-export-collection").menus[0];
+	let collection = { id: 7, name: "碩論", libraryID: 1, getChildItems: () => [newer] };
+	let context = { collectionTreeRows: [{ isCollection: () => true, ref: collection }] };
+	let visible;
+	collEntry.onShowing({}, Object.assign({ setVisible: v => { visible = v; } }, context));
+	assert.equal(visible, true);
+	collEntry.onCommand({}, context);
+	await env.context.ZB.bibliography.whenIdle();
+	let coll = JSON.parse(fs.readFileSync(path.join(vault, "Zotero", "references-碩論.json"), "utf8"));
+	assert.deepEqual(coll.map(r => r.id), ["lee2021effectsa"]);
+
+	// 「同步時自動更新參考文獻檔」 + BibTeX: a sync refreshes both files
+	env.prefStore["extensions.zotero-bridge.export.autoUpdate"] = true;
+	env.prefStore["extensions.zotero-bridge.export.bibtex"] = true;
+	let added = new MockItem("book", { title: "Nursing theory", year: "2019", creators: [{ lastName: "Wang", creatorType: "author" }] });
+	await env.context.ZB.main.run([added], { targets: ["obsidian"], ai: "none" });
+	refs = JSON.parse(fs.readFileSync(file, "utf8"));
+	assert.deepEqual(refs.map(r => r.id), ["chen2024", "lee2021effects", "lee2021effectsa", "wang2019nursing"]);
+	let translation = env.translations.at(-1);
+	assert.equal(translation.translatorID, "9cb70025-a888-4a29-a210-93ec52da40d4");
+	assert.equal(translation.displayOptions.exportNotes, false);
+	let bibText = fs.readFileSync(path.join(vault, "Zotero", "references.bib"), "utf8");
+	assert.deepEqual([...bibText.matchAll(/^@article\{([^,]+),/gm)].map(m => m[1]),
+		["chen2024", "lee2021effects", "lee2021effectsa", "wang2019nursing"]);
+	assert.match(bibText, /@article\{lee2021effectsa,\n\ttitle = \{The effects of sleep\}/);
+	assert.deepEqual(env.errors, []);
+	assert.ok(!fs.readdirSync(path.join(vault, "Zotero")).some(f => f.endsWith(".tmp")));
+
+	await vm.runInContext("shutdown()", env.context);
 });

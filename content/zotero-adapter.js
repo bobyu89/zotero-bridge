@@ -119,6 +119,15 @@
 			aiNote: null,
 			fullText: null,
 		};
+		if (!data.citationKey && ZB.bibliography) {
+			// The key the bibliography export (export.js) uses, shown as the note's `citekey`
+			try {
+				data.generatedCitekey = await ZB.bibliography.citekeyFor(item);
+			}
+			catch (e) {
+				Zotero.logError(e);
+			}
+		}
 
 		let fullTexts = [];
 		for (let att of Zotero.Items.get(item.getAttachments())) {
@@ -203,7 +212,7 @@
 	}
 
 	ZB.adapter = {
-		AI_NOTE_TAG, libraryInfo, collectionPath, toRegularItems, extractItemData,
+		AI_NOTE_TAG, libraryInfo, collectionPath, toRegularItems, extractItemData, citationKey,
 		saveAINote, getAINote, isAINote, itemsInCollection, listLibraries,
 	};
 })(this);

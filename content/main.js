@@ -432,6 +432,8 @@
 		else if (failures.length) {
 			notify("Zotero Bridge 自動同步失敗", failures.slice(0, 3).join("\n"));
 		}
+		// 「同步時自動更新參考文獻檔」 (export.js); never throws
+		if (ok) await ZB.bibliography.afterSync(settings);
 	}
 
 	/** Rough cost for the confirm dialog, from the ledger's average tokens per call ("" when unknown). */
@@ -740,6 +742,8 @@
 			}],
 		});
 		menuIDs = [itemMenu, collectionMenu, toolsMenu].filter(Boolean);
+		// Bibliography export (export.js): Tools menu + collection context menu
+		menuIDs.push(...ZB.bibliography.registerMenus({ pluginID, icon }));
 	}
 
 	// ---------- item pane: AI note section ----------
@@ -865,6 +869,7 @@
 		if (notifierID) Zotero.Notifier.unregisterObserver(notifierID);
 		notifierID = null;
 		if (autoSyncTimer) clearTimeout(autoSyncTimer);
+		ZB.bibliography.shutdown();
 	}
 
 	ZB.main = { init, shutdown, run, runSynthesis, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime };

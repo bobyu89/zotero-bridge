@@ -20,3 +20,7 @@ zotero-bridge-pane-header =
     .label = AI 文獻筆記
 zotero-bridge-pane-sidenav =
     .tooltiptext = AI 文獻筆記
+zotero-bridge-menu-export-library =
+    .label = 匯出參考文獻到 Obsidian
+zotero-bridge-menu-export-collection =
+    .label = Zotero Bridge：匯出此分類的參考文獻
