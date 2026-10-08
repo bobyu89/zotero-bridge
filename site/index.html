@@ -3,197 +3,196 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Zotero Bridge 安裝精靈</title>
-<meta name="description" content="一步一步安裝 Zotero Bridge：AI 文獻筆記，同步到 Notion 與 Obsidian。">
+<title>Zotero Bridge｜整理、追蹤、評讀文獻的 Zotero 外掛</title>
+<meta name="description" content="Zotero Bridge 是 Zotero 10 的外掛：把文獻、劃線與評讀整理進你的 Obsidian 或 Notion，記下讀到哪、評到哪。找文獻和寫作留給你。附一步一步的安裝精靈。">
+<meta name="theme-color" content="#16233F">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="zb.css">
 <style>
-/* Layout: 左側步驟軌（像 Zotero 的收藏夾側欄）＋右側單步內容卡；手機改為上方進度列 */
-:root {
-  --bg: #F3F4F7;
-  --surface: #FFFFFF;
-  --ink: #1B1D22;
-  --muted: #5B6270;
-  --line: #DCDFE6;
-  --accent: #B3243A;      /* Zotero 紅 */
-  --accent-ink: #FFFFFF;
-  --accent-soft: #F7E4E7;
-  --ok: #1E7449;
-  --ok-soft: #E1F1E8;
-  --warn: #7E5300;
-  --warn-soft: #FFF2D1;
-  --chip: #ECEEF2;
-  --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
-  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #111317; --surface: #1A1D23; --ink: #E8EAEE; --muted: #9AA1AD; --line: #2B3038;
-    --accent: #EF6A7D; --accent-ink: #1A0B0E; --accent-soft: #3A1D23;
-    --ok: #5DC690; --ok-soft: #142D20; --warn: #E9B54E; --warn-soft: #30270F; --chip: #252931;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #111317; --surface: #1A1D23; --ink: #E8EAEE; --muted: #9AA1AD; --line: #2B3038;
-  --accent: #EF6A7D; --accent-ink: #1A0B0E; --accent-soft: #3A1D23;
-  --ok: #5DC690; --ok-soft: #142D20; --warn: #E9B54E; --warn-soft: #30270F; --chip: #252931;
-  color-scheme: dark;
+/* 首頁：上半是「交班單」（說明產品分工），接著功能組合、兩個網頁工具、驗證紀錄，最後是安裝精靈 */
+.top { max-width: 1120px; margin: 0 auto; padding: 24px var(--gutter) 0; display: grid; gap: 40px; }
+
+/* ---------- 交班單 ---------- */
+.sheet { background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-l); box-shadow: var(--shadow); overflow: hidden; position: relative; }
+.sheet-bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 16px; padding: 8px 20px; background: var(--panel); border-bottom: 1px solid var(--line-strong); font-size: 13px; color: var(--ink-2); }
+.sheet-bar b { color: var(--ink); font-weight: 600; letter-spacing: .04em; }
+.sheet-head { padding: 28px 20px 24px; display: grid; gap: 14px; border-bottom: 1px solid var(--line-strong); }
+.sheet-head h1 { font-family: var(--font-hand); font-weight: 700; font-size: clamp(28px, 7.4vw, 60px); line-height: 1.18; letter-spacing: .02em; margin: 0; }
+.sheet-head h1 .keep { color: var(--pen); }
+.sheet-head .lede { font-size: 17px; line-height: 1.75; max-width: 40em; color: var(--ink); }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr); }
+.col { padding: 18px 20px 22px; display: grid; gap: 12px; align-content: start; }
+.col + .col { border-top: 1px solid var(--line-strong); }
+.col h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: .06em; color: var(--ink-2); display: flex; align-items: center; gap: 8px; }
+.col ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.col li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; align-items: start; }
+.col li .ico { width: 18px; height: 18px; margin-top: 4px; }
+.col.tool li .ico { color: var(--pen); }
+.col.mine li { font-family: var(--font-hand); font-size: 19px; line-height: 1.55; }
+.col.mine li .ico { color: var(--ink-2); margin-top: 5px; }
+.col.mine { position: relative; padding-bottom: 76px; }
+.col.mine .seal { position: absolute; right: 22px; bottom: 20px; font-size: 17px; }
+.col.mine .seal small { font-size: 12px; letter-spacing: .08em; font-weight: 400; }
+.sheet-foot { padding: 16px 20px 18px; border-top: 1px solid var(--line-strong); background: var(--panel); display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+.sheet-foot .btn { min-height: 46px; padding-inline: 20px; font-size: 16px; }
+.sheet-foot .spec { font-size: 13px; color: var(--ink-2); flex: 1 1 260px; }
+@media (min-width: 760px) {
+  .sheet-head { padding: 40px 36px 32px; }
+  .sheet-bar, .sheet-foot { padding-inline: 36px; }
+  .cols { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+  .col { padding: 22px 36px 26px; }
+  .col + .col { border-top: 0; border-left: 1px solid var(--line-strong); }
+  .col.mine li { font-size: 21px; }
 }
 
-* { box-sizing: border-box; }
-[hidden] { display: none !important; }
-html, body { margin: 0; }
-body {
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--font-body);
-  font-size: 16px;
-  line-height: 1.75;
-  padding-inline: 16px;
-  padding-block: 24px 64px;
-}
-a { color: var(--accent); text-underline-offset: 3px; }
-a:focus-visible, button:focus-visible, input:focus-visible + .box, summary:focus-visible, .rail button:focus-visible {
-  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px;
+/* ---------- 一般段落 ---------- */
+.sec { display: grid; gap: 16px; }
+.sec > h2 { font-family: var(--font-hand); font-weight: 700; font-size: clamp(26px, 4.4vw, 34px); line-height: 1.3; margin: 0; letter-spacing: .02em; }
+.sec > p { max-width: 62ch; color: var(--ink-2); }
+
+/* 功能開關表 */
+.switches { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); overflow: hidden; }
+.switches table { font-size: 15px; }
+.switches th, .switches td { padding: 12px 14px; vertical-align: middle; }
+.switches thead th { font-size: 13px; }
+.switches th.st, .switches td.st { text-align: center; width: 92px; white-space: nowrap; }
+.switches th .def { display: block; font-weight: 400; font-size: 12px; color: var(--ink-2); }
+.switches th .what { display: block; font-size: 13px; color: var(--ink-2); line-height: 1.55; margin-top: 2px; }
+.switches th .tags { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 6px; vertical-align: 1px; }
+.tagx { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: var(--panel); color: var(--ink-2); white-space: nowrap; }
+.tagx.cost { background: var(--unclear-soft); color: var(--unclear); }
+.tagx.net { background: var(--pen-soft); color: var(--pen); }
+.switches tbody th { white-space: normal; background: var(--surface); font-size: 15px; font-weight: 600; text-align: left; }
+.switches tr.rest th, .switches tr.rest td { background: var(--panel); }
+.sw { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.sw i { width: 30px; height: 18px; border-radius: 99px; background: var(--line-strong); position: relative; flex: none; }
+.sw i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.sw.on { color: var(--pen); }
+.sw.on i { background: var(--pen); }
+.sw.on i::after { left: 14px; }
+.switches .cap { padding: 12px 14px; font-size: 13px; color: var(--ink-2); border-top: 1px solid var(--line); line-height: 1.65; }
+@media (max-width: 560px) {
+  .switches th, .switches td { padding: 10px 10px; }
+  .switches th.st, .switches td.st { width: 64px; }
+  .sw b { display: none; }
+  .switches th .tags { display: flex; margin: 4px 0 0; }
 }
 
-.wrap { max-width: 1060px; margin: 0 auto; display: grid; gap: 24px; }
+/* 兩個網頁工具 */
+.tools { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); }
+.tools li + li { border-top: 1px solid var(--line); }
+.tools a { display: grid; grid-template-columns: 40px minmax(0, 1fr) 20px; gap: 14px; align-items: center; padding: 16px 18px; color: var(--ink); text-decoration: none; border-radius: var(--r-l); }
+.tools a:hover .t { color: var(--pen); text-decoration: underline; text-underline-offset: 3px; }
+.tools .badge { width: 40px; height: 40px; border-radius: 10px; background: var(--pen-soft); color: var(--pen); display: grid; place-items: center; }
+.tools .badge .ico { width: 22px; height: 22px; }
+.tools .t { font-weight: 700; font-size: 17px; display: block; }
+.tools .d { font-size: 14px; color: var(--ink-2); display: block; line-height: 1.6; }
+.tools .go { color: var(--ink-2); width: 20px; height: 20px; }
 
-header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
-header.top h1 {
-  font-family: var(--font-display); font-weight: 900; font-size: clamp(28px, 5vw, 40px);
-  line-height: 1.2; margin: 0; text-wrap: balance; letter-spacing: 0.02em;
-}
-header.top h1 span { color: var(--accent); }
-header.top p { margin: 4px 0 0; color: var(--muted); max-width: 46ch; }
-.meta { font-size: 13px; color: var(--muted); font-family: var(--font-mono); text-align: right; }
-.meta .navlink { font-family: var(--font-body); font-size: 14px; font-weight: 500; }
+.proof { display: grid; gap: 8px; font-size: 14px; color: var(--ink-2); max-width: 70ch; }
+.proof b { color: var(--ink); }
 
+/* ---------- 安裝精靈 ---------- */
+#install { scroll-margin-top: 12px; }
+.wiz { max-width: 1120px; margin: 0 auto; padding: 48px var(--gutter) 24px; display: grid; gap: 18px; }
+.wiz-head { display: grid; gap: 6px; }
+.wiz-head h2 { font-family: var(--font-hand); font-weight: 700; font-size: clamp(26px, 4.4vw, 34px); line-height: 1.3; margin: 0; }
+.wiz-head p { color: var(--ink-2); max-width: 62ch; }
 .layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 24px; align-items: start; }
 
-/* 步驟軌 */
-.rail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); display: grid; gap: 14px; }
-.progress { height: 6px; background: var(--chip); border-radius: 99px; overflow: hidden; }
-.progress i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s ease; }
-.progress-label { font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
-.rail ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.rail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); display: grid; gap: 12px; background: var(--panel); border-radius: var(--r-l); padding: 16px 12px; }
+.progress { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 0 6px; }
+.progress i { display: block; height: 100%; width: 0; background: var(--pen); transition: width .35s cubic-bezier(.16, 1, .3, 1); }
+.progress-label { font-size: 13px; color: var(--ink-2); display: flex; justify-content: space-between; padding: 0 6px; }
+.rail ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; position: relative; }
+.rail ol::before { content: ""; position: absolute; left: 25px; top: 18px; bottom: 18px; width: 2px; background: var(--line); }
 .rail button {
-  all: unset; cursor: pointer; display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: center;
-  padding: 7px 10px; border-radius: 8px; width: 100%; box-sizing: border-box; font-size: 15px; color: var(--muted);
+  all: unset; cursor: pointer; display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: center; position: relative;
+  padding: 7px 8px 7px 12px; border-radius: 8px; width: 100%; box-sizing: border-box; font-size: 15px; line-height: 1.4; color: var(--ink-2);
 }
-.rail button:hover { background: var(--chip); color: var(--ink); }
-.rail button[aria-current="step"] { background: var(--surface); color: var(--ink); font-weight: 700; box-shadow: 0 0 0 1px var(--line); }
+.rail button:hover { color: var(--ink); background: color-mix(in srgb, var(--surface) 55%, transparent); }
+.rail button:focus-visible { outline: 2px solid var(--pen); outline-offset: 1px; }
+.rail button[aria-current="step"] { background: var(--surface); color: var(--ink); font-weight: 700; box-shadow: var(--shadow); }
 .rail .n {
-  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
-  font-family: var(--font-mono); font-size: 13px; border: 1.5px solid var(--line); background: var(--surface);
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; position: relative; z-index: 1;
+  font-size: 13px; font-weight: 600; border: 2px solid var(--line-strong); background: var(--panel); color: var(--ink-2);
 }
-.rail button[aria-current="step"] .n { border-color: var(--accent); color: var(--accent); }
-.rail button.done .n { background: var(--ok); border-color: var(--ok); color: var(--surface); }
-.rail .reset { all: unset; cursor: pointer; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; justify-self: start; }
+.rail button[aria-current="step"] .n { border-color: var(--pen); color: var(--pen); background: var(--surface); }
+.rail button.done .n { background: var(--pen); border-color: var(--pen); color: var(--pen-ink); }
+.rail .reset { all: unset; cursor: pointer; font-size: 13px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; justify-self: start; margin: 2px 6px 0; }
+.rail .reset:hover { color: var(--ink); }
+.rail .reset:focus-visible { outline: 2px solid var(--pen); outline-offset: 2px; }
 
-/* 步驟卡 */
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: clamp(20px, 4vw, 36px); min-width: 0; }
-.step { display: grid; gap: 20px; }
-.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0; }
-.step h2 { font-family: var(--font-display); font-size: clamp(24px, 3.6vw, 30px); line-height: 1.3; margin: 0; text-wrap: balance; }
-.lead { margin: 0; font-size: 17px; max-width: 62ch; }
-.step h3 { font-size: 16px; margin: 0; }
-.step p { margin: 0; max-width: 65ch; }
+.stage { position: relative; }
+.stage .seal.step-seal { position: absolute; top: 18px; right: 18px; font-size: 16px; z-index: 2; }
+.step { display: grid; gap: 18px; }
+.step h2 { font-size: 24px; line-height: 1.35; margin: 0; padding-right: 96px; }
+.step h2:focus { outline: none; }
+.lead { font-size: 16px; max-width: 62ch; }
+.step h3 { font-size: 16px; margin: 6px 0 0; }
+.step p { max-width: 65ch; }
 
 ol.how { margin: 0; padding: 0; list-style: none; counter-reset: how; display: grid; gap: 14px; }
-ol.how > li { counter-increment: how; display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; }
+ol.how > li { counter-increment: how; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; }
 ol.how > li::before {
-  content: counter(how); font-family: var(--font-mono); font-size: 13px; width: 26px; height: 26px; margin-top: 2px;
-  border-radius: 6px; background: var(--chip); display: grid; place-items: center; color: var(--muted);
+  content: counter(how); font-size: 13px; font-weight: 700; width: 26px; height: 26px; margin-top: 1px;
+  border-radius: 50%; background: var(--pen-soft); color: var(--pen); display: grid; place-items: center;
 }
 ol.how ul { margin: 6px 0 0; padding-left: 1.2em; }
-ol.how ul li { margin: 2px 0; }
+ol.how ul li { margin: 3px 0; }
 
 /* 選單路徑：像真的點選單一樣 */
 .menu { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; vertical-align: baseline; }
-.menu kbd {
-  font-family: var(--font-body); font-size: 14px; font-weight: 500; padding: 1px 8px; border-radius: 6px;
-  background: var(--chip); border: 1px solid var(--line); border-bottom-width: 2px; white-space: nowrap;
+kbd {
+  font-family: var(--font-ui); font-size: 14px; font-weight: 500; padding: 0 7px; border-radius: 6px;
+  background: var(--surface); border: 1px solid var(--line-strong); border-bottom-width: 2px; white-space: nowrap; color: var(--ink);
 }
-.menu .gt { color: var(--muted); font-size: 13px; }
-.zh { color: var(--muted); font-size: 14px; }
-code, .file { font-family: var(--font-mono); font-size: 0.88em; background: var(--chip); padding: 1px 6px; border-radius: 5px; overflow-wrap: anywhere; }
+.menu .gt { color: var(--ink-2); font-size: 13px; }
+.zh { color: var(--ink-2); font-size: 14px; }
 
 /* 分歧選擇 */
 .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
 .choice { position: relative; }
 .choice input { position: absolute; opacity: 0; pointer-events: none; }
 .choice label {
-  display: grid; gap: 2px; padding: 14px 16px; border: 1.5px solid var(--line); border-radius: 10px; cursor: pointer; height: 100%;
+  display: grid; gap: 2px; align-content: start; padding: 13px 16px; border: 1px solid var(--line-strong); border-radius: var(--r-m);
+  cursor: pointer; height: 100%; background: var(--surface); transition: border-color .15s ease, background-color .15s ease;
 }
+.choice label:hover { border-color: var(--pen); }
 .choice label b { font-size: 16px; }
-.choice label span { font-size: 14px; color: var(--muted); line-height: 1.5; }
-.choice input:checked + label { border-color: var(--accent); background: var(--accent-soft); }
-.choice input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
-.tag { justify-self: start; font-size: 12px; font-weight: 700; color: var(--accent); }
-
-/* 提示框 */
-.note { border-radius: 10px; padding: 14px 16px; display: grid; gap: 6px; }
-.note.tip { background: var(--ok-soft); }
-.note.tip strong { color: var(--ok); }
-.note.warn { background: var(--warn-soft); }
-.note.warn strong { color: var(--warn); }
-.note.info { background: var(--chip); }
-.note p { margin: 0; }
+.choice label span { font-size: 14px; color: var(--ink-2); line-height: 1.55; }
+.choice input:checked + label { border-color: var(--pen); background: var(--pen-soft); box-shadow: inset 0 0 0 1px var(--pen); }
+.choice input:focus-visible + label { outline: 2px solid var(--pen); outline-offset: 2px; }
+.tag { justify-self: start; font-size: 12px; font-weight: 700; color: var(--pen); }
 
 /* 打勾確認 */
-.check { border-top: 1px dashed var(--line); padding-top: 18px; display: grid; gap: 10px; }
-.check h3 { font-size: 14px; color: var(--muted); font-weight: 500; }
-.check label { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; cursor: pointer; align-items: start; }
-.check input { position: absolute; opacity: 0; }
+.check { border-top: 1px dashed var(--line-strong); padding-top: 18px; display: grid; gap: 12px; }
+.check h3 { font-size: 14px; color: var(--ink-2); font-weight: 600; margin: 0; }
+.check label { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; cursor: pointer; align-items: start; position: relative; }
+.check input { position: absolute; opacity: 0; width: 22px; height: 22px; margin: 3px 0 0; }
 .check .box {
-  width: 22px; height: 22px; border-radius: 6px; border: 1.5px solid var(--muted); margin-top: 3px;
-  display: grid; place-items: center; background: var(--surface);
+  width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--line-strong); margin-top: 3px;
+  display: grid; place-items: center; background: var(--surface); transition: background-color .15s ease, border-color .15s ease;
 }
-.check input:checked + .box { background: var(--ok); border-color: var(--ok); }
-.check input:checked + .box::after { content: ""; width: 10px; height: 6px; border-left: 2px solid var(--surface); border-bottom: 2px solid var(--surface); transform: rotate(-45deg) translate(1px, -1px); }
-.check input:checked ~ span { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
-
-.check label.auto { cursor: pointer; }
-.check label.auto input:not(:checked) + .box { border-style: dashed; }
-.auto-tag { font-style: normal; font-size: 12px; color: var(--muted); background: var(--chip); padding: 1px 6px; border-radius: 4px; margin-left: 4px; white-space: nowrap; }
-.check input:checked ~ span .auto-tag { text-decoration: none; }
-.choices.nudge label { animation: nudge .9s ease; }
-@keyframes nudge { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 30%, 70% { box-shadow: 0 0 0 3px var(--accent); } }
-.hint.alert { color: var(--accent); font-weight: 700; }
+.check label:hover .box { border-color: var(--pen); }
+.check input:focus-visible + .box { outline: 2px solid var(--pen); outline-offset: 2px; }
+.check input:checked + .box { background: var(--pen); border-color: var(--pen); }
+.check input:checked + .box::after { content: ""; width: 10px; height: 6px; border-left: 2px solid var(--pen-ink); border-bottom: 2px solid var(--pen-ink); transform: rotate(-45deg) translate(1px, -1px); }
+.check input:checked ~ span { color: var(--ink-2); }
 
 /* 疑難排解 */
-details.trouble { border: 1px solid var(--line); border-radius: 10px; }
-details.trouble summary { cursor: pointer; padding: 12px 16px; font-weight: 500; list-style: none; display: flex; gap: 8px; align-items: center; }
-details.trouble summary::-webkit-details-marker { display: none; }
-details.trouble summary::before { content: "＋"; color: var(--accent); font-weight: 700; }
-details.trouble[open] summary::before { content: "－"; }
-details.trouble .body { padding: 0 16px 16px; display: grid; gap: 12px; }
 details.trouble dl { margin: 0; display: grid; gap: 12px; }
 details.trouble dt { font-weight: 700; }
-details.trouble dd { margin: 2px 0 0; color: var(--ink); }
+details.trouble dd { margin: 2px 0 0; }
 
-.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
-table { border-collapse: collapse; width: 100%; font-size: 14px; }
-th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-th { background: var(--chip); font-weight: 700; }
-tr:last-child td { border-bottom: 0; }
-td:first-child { font-family: var(--font-mono); font-size: 13px; }
+.step td:first-child { font-weight: 600; }
+.step th, .step td { white-space: nowrap; }
+.step .table-wrap td:last-child { white-space: normal; min-width: 14em; }
 
-.linkrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.btn {
-  font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; border-radius: 9px; padding: 10px 18px;
-  border: 1.5px solid var(--accent); background: var(--accent); color: var(--accent-ink); text-decoration: none; display: inline-flex; gap: 6px; align-items: center;
-}
-.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
-.btn.small { font-size: 13px; padding: 4px 10px; font-weight: 500; }
-.btn:disabled { opacity: .4; cursor: not-allowed; }
-
-nav.pager { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 20px; margin-top: 8px; }
-nav.pager .hint { font-size: 13px; color: var(--muted); align-self: center; }
+nav.pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 18px; margin-top: 4px; }
+nav.pager .hint { font-size: 13px; color: var(--ink-2); }
 
 /* 依選擇顯示／隱藏：只做隱藏，不覆寫元素原本的 display */
 #app:not([data-os="win"]) .only-win,
@@ -206,54 +205,165 @@ nav.pager .hint { font-size: 13px; color: var(--muted); align-self: center; }
 #app:not([data-ai="none"]) .only-noai { display: none !important; }
 .stack { display: grid; gap: 14px; }
 
-.done-hero { text-align: left; display: grid; gap: 8px; }
-.done-hero .big { font-family: var(--font-display); font-size: clamp(30px, 6vw, 44px); color: var(--ok); line-height: 1.2; }
+.done-hero { display: grid; gap: 12px; justify-items: start; }
+.done-hero .big { font-family: var(--font-hand); font-weight: 700; font-size: clamp(28px, 5vw, 38px); line-height: 1.25; }
+.done-hero .seal { font-size: 18px; margin: 4px 0 4px 4px; }
 
-footer { font-size: 13px; color: var(--muted); }
-
-@media (max-width: 820px) {
-  .layout { grid-template-columns: minmax(0, 1fr); }
-  .rail { position: static; }
-  .rail ol { grid-auto-flow: column; grid-auto-columns: 34px; overflow-x: auto; padding-bottom: 4px; }
-  .rail button { grid-template-columns: 28px; padding: 3px; justify-items: center; }
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .rail { position: static; padding: 12px 10px; gap: 10px; }
+  .rail ol { grid-auto-flow: column; grid-auto-columns: minmax(36px, 1fr); overflow-x: auto; padding: 2px; }
+  .rail ol::before { left: 20px; right: 20px; top: 21px; bottom: auto; width: auto; height: 2px; }
+  .rail button { grid-template-columns: 28px; padding: 6px; justify-items: center; justify-content: center; }
   .rail button .t { display: none; }
   .rail button[aria-current="step"] { box-shadow: none; background: transparent; }
-  .meta { text-align: left; }
+  .rail button[aria-current="step"] .n { box-shadow: 0 0 0 4px var(--pen-soft); }
+  nav.pager {
+    position: sticky; bottom: 0; z-index: 3; background: var(--surface);
+    margin: 4px -20px -20px; padding: 12px 20px calc(env(safe-area-inset-bottom, 0px) + 12px);
+    border-radius: 0 0 var(--r-l) var(--r-l); box-shadow: 0 -6px 16px -12px rgba(0, 0, 0, .35);
+  }
+  nav.pager .hint { order: -1; flex-basis: 100%; }
+  nav.pager .btn { flex: 1 1 0; }
 }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+@media (max-width: 420px) {
+  .step h2 { font-size: 21px; padding-right: 0; }
+  .stage .seal.step-seal { position: static; justify-self: end; margin: -6px 4px -4px 0; order: -1; }
+  .stage { display: grid; }
+}
 </style>
 </head>
 <body>
-<div class="wrap" id="app" data-os="win" data-dest="both" data-ai="anthropic">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7.5"/><path d="m20.5 20.5-4.2-4.2"/></symbol>
+  <symbol id="i-sheet" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></symbol>
+</svg>
+<a class="skip" href="#install">跳到安裝步驟</a>
 
-  <header class="top">
-    <div>
-      <h1>Zotero Bridge <span>安裝精靈</span></h1>
-      <p>讓 AI 幫你把文獻整理成結構化筆記，同步到 Notion 與 Obsidian。跟著一步一步做，每一步打勾確認後再往下。</p>
+<header class="mast">
+  <div class="mast-in">
+    <span class="brand"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 11h1.5V8.6A5.6 5.6 0 0 1 8 4.5a5.6 5.6 0 0 1 5.5 4.1V11H15v1.5H1zm3 0h1.5V9.2a2.6 2.6 0 0 1 5 0V11H12V8.8A4.1 4.1 0 0 0 8 6a4.1 4.1 0 0 0-4 2.8z"/></svg>Zotero Bridge</span>
+    <nav aria-label="網站">
+      <a href="#install">安裝精靈</a>
+      <a href="search.html">🔎 醫學文獻快速搜尋</a>
+      <a href="appraisal.html">📋 文獻評讀表</a>
+      <a href="https://github.com/bobyu89/zotero-bridge#readme" target="_blank" rel="noopener">說明（GitHub）</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<div class="top">
+
+  <!-- 交班單：這個工具接手什麼、留給你什麼 -->
+  <article class="sheet" aria-labelledby="h-hero">
+    <div class="sheet-bar"><b>交班單</b><span>Zotero 10 外掛 · 筆記到 Obsidian／Notion</span></div>
+    <div class="sheet-head">
+      <h1 id="h-hero">雜事交班給它，<br><span class="keep">找文獻和寫作留給你。</span></h1>
+      <p class="lede">Zotero Bridge 把你在 Zotero 收的文獻、劃線和評讀，整理進你自己的 Obsidian 或 Notion，順手記下讀到哪、評到哪。要讀哪幾篇、每一題怎麼評、論文怎麼寫，還是你決定。</p>
     </div>
-    <div class="meta"><a class="navlink" href="search.html">🔎 醫學文獻快速搜尋</a><br><a class="navlink" href="appraisal.html">📋 文獻評讀表</a><br>適用 Zotero Bridge 最新版<br>Zotero 10 ／ Obsidian 1.14+ ／ Notion 免費版可用</div>
-  </header>
+    <div class="cols">
+      <section class="col tool" aria-labelledby="h-tool">
+        <h2 id="h-tool">交給 Zotero Bridge</h2>
+        <ul>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><span>書目、劃線、Zotero 筆記同步到 Obsidian／Notion，重新同步不蓋掉你寫的內容</span></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><span>閱讀狀態（待讀、已讀、已引用）在 Zotero、Obsidian、Notion 保持一致</span></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><span>CASP／JBI 評讀表記下你的每一題答案與根據，雙人評讀算 Cohen's κ</span></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><span>回顧篩選的 PRISMA 2020 計數與流程圖</span></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><span>APA 7 引文由 Zotero 產生，不讓 AI 編參考文獻</span></li>
+        </ul>
+      </section>
+      <section class="col mine" aria-labelledby="h-mine">
+        <h2 id="h-mine">留給你</h2>
+        <ul>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-pen"/></svg><span>決定問題、找文獻、訂納入排除</span></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-pen"/></svg><span>讀全文，自己回答每一題評讀</span></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-pen"/></svg><span>寫文獻探討、實證報告和論文</span></li>
+        </ul>
+        <span class="seal" aria-label="新使用者的預設組合：研究生引導">研究生引導<small>預設</small></span>
+      </section>
+    </div>
+    <div class="sheet-foot">
+      <a class="btn" href="#install" id="heroCta">開始安裝（約 20 分鐘）<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      <a class="btn ghost" href="https://github.com/bobyu89/zotero-bridge/releases/latest" target="_blank" rel="noopener">下載最新版 .xpi</a>
+      <p class="spec">Zotero 10（Windows／macOS）· Obsidian 1.14 以上或 Notion 免費版 · AI 功能要自備 API 金鑰，依用量付費</p>
+    </div>
+  </article>
 
+  <!-- 功能組合 -->
+  <section class="sec" aria-labelledby="h-presets">
+    <h2 id="h-presets">每個功能都能關，新使用者從「研究生引導」開始</h2>
+    <p>會替你找文獻、替你寫的功能，在「研究生引導」都先關著；想全部打開就選「進階」。改了任何一個開關，組合就會顯示「自訂」。都在 Zotero 設定 › Zotero Bridge 裡切換，隨時改得回來。</p>
+    <div class="switches">
+      <div class="table-wrap" style="border:0;border-radius:0">
+        <table>
+          <thead><tr><th scope="col">功能</th><th scope="col" class="st">研究生引導<span class="def">預設</span></th><th scope="col" class="st">進階</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">PubMed 新文獻追蹤<span class="tags"><span class="tagx net">連網</span></span><span class="what">定期把符合你檢索式的新文獻匯入 Zotero。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
+            <tr><th scope="row">引文追蹤<span class="tags"><span class="tagx net">連網</span></span><span class="what">從納入研究查它的參考文獻與引用它的文獻（OpenAlex）。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
+            <tr><th scope="row">跨文獻比較表（AI 綜整）<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">AI 讀多篇筆記，寫比較表、主題與研究缺口。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
+            <tr><th scope="row">文獻探討草稿<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">AI 依你的文獻寫第二章初稿。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
+            <tr><th scope="row">實證報告（EBHC）草稿<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">依台灣護理學會 A 類綜整文章架構寫報告草稿。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
+            <tr><th scope="row">進度報告<span class="tags"><span class="tagx">AI 摘要選用</span></span><span class="what">整理兩次會議之間的進度，給指導教授看。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
+            <tr><th scope="row">概念卡片 AI 綜整<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">AI 為一個概念綜整多篇文獻。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
+            <tr><th scope="row">批次 AI<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">一次產生大量 AI 筆記時用批次 API，約半價、最長等 24 小時。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
+            <tr class="rest"><th scope="row">其他功能<span class="what">同步、閱讀狀態、評讀表、PRISMA 篩選、資料庫搜尋連結等，兩種組合一樣。</span></th><td class="st"><span class="sw on"><i></i><b>開</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="cap">標「AI・花費」的功能要用你自己的 Claude 或 OpenAI API 金鑰，依用量付費；標「連網」的會連到外部網站。關著的功能不會在背景執行。</p>
+    </div>
+  </section>
+
+  <!-- 不用安裝的網頁工具 -->
+  <section class="sec" aria-labelledby="h-web">
+    <h2 id="h-web">還沒裝外掛，這兩頁也能先用</h2>
+    <ul class="tools">
+      <li><a href="search.html"><span class="badge"><svg class="ico" aria-hidden="true"><use href="#i-search"/></svg></span><span><span class="t">醫學文獻快速搜尋</span><span class="d">一個檢索詞開 PubMed、CINAHL、Cochrane、華藝等 19 個資料庫；PICO 組 PubMed／CINAHL 檢索式；可設學校 EZproxy。</span></span><svg class="ico go" aria-hidden="true"><use href="#i-arrow"/></svg></a></li>
+      <li><a href="appraisal.html"><span class="badge"><svg class="ico" aria-hidden="true"><use href="#i-sheet"/></svg></span><span><span class="t">文獻評讀表</span><span class="d">CASP、JBI 逐題評讀與評析根據，多篇一起看燈號，複製成 Word／Markdown 表格或下載 CSV。</span></span><svg class="ico go" aria-hidden="true"><use href="#i-arrow"/></svg></a></li>
+    </ul>
+    <p class="small">兩頁都不會把你輸入的內容送到任何伺服器，資料只存在這台裝置的瀏覽器。</p>
+  </section>
+
+  <section class="sec" aria-labelledby="h-proof">
+    <h2 id="h-proof">怎麼確認它真的能用</h2>
+    <div class="proof">
+      <p><b>每次改程式，</b>GitHub Actions 都會把外掛裝進真正的 Zotero 10，檢查選單、設定頁、同步到 Obsidian、閱讀狀態、PRISMA 篩選等（不連 Notion、不呼叫真的 AI）：<a href="https://github.com/bobyu89/zotero-bridge/actions/workflows/e2e.yml" target="_blank" rel="noopener">e2e 紀錄</a>。</p>
+      <p><b>搜尋頁的資料庫網址</b>每週一自動實際連線一次：<a href="https://github.com/bobyu89/zotero-bridge/actions/workflows/link-check.yml" target="_blank" rel="noopener">link-check 紀錄</a>。遇到問題請到 <a href="https://github.com/bobyu89/zotero-bridge/issues" target="_blank" rel="noopener">GitHub Issues</a> 回報。</p>
+    </div>
+  </section>
+</div>
+
+<!-- 安裝精靈 -->
+<section class="wiz" id="install" aria-labelledby="h-install">
+  <div class="wiz-head">
+    <h2 id="h-install">安裝精靈</h2>
+    <p>全程用滑鼠點選，大約 20 分鐘。每一步打勾確認後再往下；進度只存在這台裝置的瀏覽器。</p>
+  </div>
+<div id="app" data-os="win" data-dest="both" data-ai="anthropic">
   <div class="layout">
     <aside class="rail" aria-label="安裝步驟">
       <div class="progress" aria-hidden="true"><i id="bar"></i></div>
-      <div class="progress-label"><span>整體進度</span><span id="pct">0%</span></div>
+      <div class="progress-label"><span id="stepOf">整體進度</span><span id="pct">0%</span></div>
       <ol id="railList"></ol>
       <button class="reset" id="resetBtn" type="button">清除進度重新開始</button>
     </aside>
 
-    <main class="card" id="stage">
+    <div class="card stage" id="stage">
+      <span class="seal step-seal" id="stepSeal" hidden>已確認</span>
 
       <!-- 1 準備 -->
       <section class="step" data-title="開始前準備" hidden>
-        <p class="eyebrow">準備</p>
         <h2>先選好你的使用方式</h2>
-        <p class="lead">Zotero Bridge 是裝在 Zotero 裡的插件，全程用滑鼠點選，大約 20 分鐘完成。先告訴精靈你的環境，後面的步驟會自動調整。</p>
+        <p class="lead">Zotero Bridge 裝在 Zotero 裡。先告訴精靈你的環境，後面的步驟會跟著調整。</p>
 
         <h3>你用的是哪一種電腦？</h3>
         <div class="choices" role="radiogroup" aria-label="作業系統">
           <div class="choice"><input type="radio" name="os" id="os-win" value="win"><label for="os-win"><b>Windows</b><span>選單在視窗上方：File、Edit、Tools…</span></label></div>
-          <div class="choice"><input type="radio" name="os" id="os-mac" value="mac"><label for="os-mac"><b>Mac</b><span>選單在螢幕最上方的灰色選單列</span></label></div>
+          <div class="choice"><input type="radio" name="os" id="os-mac" value="mac"><label for="os-mac"><b>Mac</b><span>選單在螢幕最上方的選單列</span></label></div>
         </div>
 
         <h3>文獻要同步到哪裡？</h3>
@@ -265,8 +375,8 @@ footer { font-size: 13px; color: var(--muted); }
 
         <h3>AI 筆記要用哪一家？</h3>
         <div class="choices" role="radiogroup" aria-label="AI 服務商">
-          <div class="choice"><input type="radio" name="ai" id="ai-anthropic" value="anthropic"><label for="ai-anthropic"><span class="tag">推薦</span><b>Claude</b><span>Anthropic，預設模型 claude-opus-5-5</span></label></div>
-          <div class="choice"><input type="radio" name="ai" id="ai-openai" value="openai"><label for="ai-openai"><b>OpenAI</b><span>GPT／Codex，預設模型 gpt-5.5</span></label></div>
+          <div class="choice"><input type="radio" name="ai" id="ai-anthropic" value="anthropic"><label for="ai-anthropic"><span class="tag">推薦</span><b>Claude</b><span>Anthropic 的 API，自備金鑰、依用量付費</span></label></div>
+          <div class="choice"><input type="radio" name="ai" id="ai-openai" value="openai"><label for="ai-openai"><b>OpenAI</b><span>OpenAI 的 API，自備金鑰、依用量付費</span></label></div>
           <div class="choice"><input type="radio" name="ai" id="ai-none" value="none"><label for="ai-none"><b>先不用 AI</b><span>只同步書目、劃線與筆記，之後隨時可加</span></label></div>
         </div>
 
@@ -279,31 +389,30 @@ footer { font-size: 13px; color: var(--muted); }
       </section>
 
       <!-- 2 安裝 -->
-      <section class="step" data-title="安裝插件" hidden>
-        <p class="eyebrow">安裝</p>
+      <section class="step" data-title="安裝外掛" hidden>
         <h2>下載並安裝 Zotero Bridge</h2>
         <ol class="how">
           <li><span>打開 <a href="https://github.com/bobyu89/zotero-bridge/releases/latest" target="_blank" rel="noopener">最新版下載頁</a>，在 <b>Assets</b> 底下找到 <code>zotero-bridge-x.y.z.xpi</code>。
             <ul><li>用 <b>Firefox</b> 的話，請在連結上按右鍵 →「另存連結為…」，不要直接點，否則 Firefox 會把它當成自己的擴充功能來裝。</li>
             <li>其他瀏覽器直接點就會下載。</li></ul></span></li>
-          <li><span>打開 Zotero，點 <span class="menu"><kbd>Tools</kbd><span class="gt">›</span><kbd>Plugins</kbd></span> <span class="zh">（工具 › 插件）</span>。</span></li>
+          <li><span>打開 Zotero，點 <span class="menu"><kbd>Tools</kbd><span class="gt">›</span><kbd>Plugins</kbd></span> <span class="zh">（工具 › 外掛）</span>。</span></li>
           <li><span>點右上角的 <b>齒輪</b> › <kbd>Install Plugin From File…</kbd>，選剛剛下載的 <code>.xpi</code>。</span></li>
           <li><span>清單裡出現 <b>Zotero Bridge</b> 就安裝完成。之後有新版本，Zotero 會自動更新。</span></li>
         </ol>
         <div class="note info"><p>Zotero 介面如果是中文，選單位置相同，只是名稱換成中文。</p></div>
+        <div class="note tip"><p><strong>功能組合：</strong>第一次打開設定頁，組合是「研究生引導」：自動找文獻（PubMed 追蹤、引文追蹤）和 AI 寫作（綜整、草稿、進度報告、概念 AI 綜整、批次 AI）先關著，其他照常可用。需要時再逐一打開，或直接選「進階」全部打開。</p></div>
         <div class="check">
           <h3>打勾確認</h3>
-          <label><input type="checkbox" id="c2a"><span class="box"></span><span>插件清單裡看得到 <b>Zotero Bridge</b>，而且是啟用狀態。</span></label>
+          <label><input type="checkbox" id="c2a"><span class="box"></span><span>外掛清單裡看得到 <b>Zotero Bridge</b>，而且是啟用狀態。</span></label>
           <label><input type="checkbox" id="c2b"><span class="box"></span><span>打開設定頁看得到 <b>Zotero Bridge</b> 分頁：<span class="only-win"><span class="menu"><kbd>Edit</kbd><span class="gt">›</span><kbd>Settings</kbd></span></span><span class="only-mac"><span class="menu"><kbd>Zotero</kbd><span class="gt">›</span><kbd>Settings…</kbd></span></span>，左側最下面。也可以從 <span class="menu"><kbd>Tools</kbd><span class="gt">›</span><kbd>Zotero Bridge 設定…</kbd></span> 直接打開。</span></label>
         </div>
       </section>
 
       <!-- 3 AI -->
       <section class="step" data-title="AI 金鑰" hidden>
-        <p class="eyebrow">AI</p>
         <h2 class="only-ai">申請 AI 的 API 金鑰</h2>
         <h2 class="only-noai">先不用 AI：關掉 AI 筆記</h2>
-        <p class="lead only-ai">AI 會讀書目、摘要、PDF 全文和你的劃線，寫出固定格式的文獻筆記：研究設計、樣本、結果、限制、證據等級、對你研究的啟發。每篇只產生一次，之後同步會沿用。</p>
+        <p class="lead only-ai">AI 會讀書目、摘要、PDF 全文和你的劃線，寫成固定格式的文獻筆記：研究設計、樣本、結果、限制、證據等級、對你研究的啟發。每篇只產生一次，之後同步會沿用。筆記是幫你回想，不是替你讀。</p>
 
         <div class="note warn only-ai"><p><strong>注意：</strong>Claude Pro／ChatGPT Plus 這類「訂閱方案」不能用在這裡。這裡要的是 <b>API 金鑰</b>，依用量另外計費，需要先在平台儲值或綁卡。</p></div>
 
@@ -322,7 +431,7 @@ footer { font-size: 13px; color: var(--muted); }
             <li><span>到 <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a> 登入，先在 <b>Billing</b> 儲值。</span></li>
             <li><span>按 <kbd>Create new secret key</kbd>，複製 <code>sk-</code> 開頭的金鑰（只會顯示一次）。</span></li>
             <li><span>在 Zotero 設定 › Zotero Bridge 的「AI 文獻筆記」區塊：服務商選 <b>OpenAI（GPT / Codex）</b>，把金鑰貼到「OpenAI API key」。</span></li>
-            <li><span>模型保持預設 <code>gpt-5.5</code> 即可。Codex 系列是寫程式用的模型，整理文獻用一般模型效果較好。</span></li>
+            <li><span>模型保持預設即可。Codex 系列是寫程式用的模型，整理文獻用一般模型效果較好。</span></li>
           </ol>
         </div>
         <div class="note info only-ai"><p><b>全文最多送出字元數</b>預設 150,000。設成 0 就只送摘要與劃線，比較省錢；全文被截斷時，筆記會標記 <code>fulltext_truncated</code>。</p></div>
@@ -341,9 +450,8 @@ footer { font-size: 13px; color: var(--muted); }
 
       <!-- 4 Notion -->
       <section class="step only-notion" data-title="連接 Notion" data-needs="notion" hidden>
-        <p class="eyebrow">Notion</p>
         <h2>建立 Notion integration 並連上資料庫</h2>
-        <p class="lead">Integration 是 Notion 給外部程式的「通行證」。插件拿著它，才能寫進你指定的資料庫。</p>
+        <p class="lead">Integration 是 Notion 給外部程式的「通行證」。外掛拿著它，才能寫進你指定的資料庫。</p>
 
         <h3>A. 建立 integration</h3>
         <ol class="how">
@@ -355,14 +463,14 @@ footer { font-size: 13px; color: var(--muted); }
 
         <h3>B. 準備文獻資料庫</h3>
         <ol class="how">
-          <li><span>在 Notion 新增一個空白的 <b>Database（Table）</b>，例如命名「📚 Zotero 文獻資料庫」。已經有就直接用。</span></li>
-          <li><span>打開資料庫，右上角 <kbd>•••</kbd> › <kbd>Connections</kbd>，加入剛剛建立的 <b>Zotero Bridge</b> integration。<b>少了這一步，插件會沒有權限寫入。</b></span></li>
+          <li><span>在 Notion 新增一個空白的 <b>Database（Table）</b>，例如命名「Zotero 文獻資料庫」。已經有就直接用。</span></li>
+          <li><span>打開資料庫，右上角 <kbd>•••</kbd> › <kbd>Connections</kbd>，加入剛剛建立的 <b>Zotero Bridge</b> integration。<b>少了這一步，外掛會沒有權限寫入。</b></span></li>
           <li><span>右上角 <kbd>•••</kbd> › <kbd>Copy link</kbd>，把資料庫連結貼到「預設資料庫連結」。</span></li>
-          <li><span>按 <kbd>測試連線並補齊資料庫欄位</kbd>。看到 ✅ 就完成了，插件會自動建立 Authors、Year、Publication、DOI、Abstract 等書目欄位。</span></li>
+          <li><span>按 <kbd>測試連線並補齊資料庫欄位</kbd>。看到 ✅ 就完成了，外掛會自動建立 Authors、Year、Publication、DOI、Abstract 等書目欄位。</span></li>
         </ol>
-        <div class="note warn"><p><strong>欄位名稱不要改：</strong>插件是靠名稱寫入的。你可以自由新增自己的欄位（例如「閱讀狀態」「評分」），插件不會動它們。</p></div>
+        <div class="note warn"><p><strong>欄位名稱不要改：</strong>外掛是靠名稱寫入的。你可以自由新增自己的欄位（例如「閱讀狀態」「評分」），外掛不會動它們。</p></div>
 
-        <details class="trouble">
+        <details class="more trouble">
           <summary>選用：文獻比較表也要放進 Notion</summary>
           <div class="body"><p>在 Notion 建一個一般頁面（例如「文獻比較」），同樣用 <kbd>Connections</kbd> 加入 integration，再把頁面連結貼到「文獻比較表的 Notion 父頁面」。之後每份比較表都會成為它的子頁面。</p></div>
         </details>
@@ -377,15 +485,14 @@ footer { font-size: 13px; color: var(--muted); }
 
       <!-- 5 Obsidian -->
       <section class="step only-obsidian" data-title="連接 Obsidian" data-needs="obsidian" hidden>
-        <p class="eyebrow">Obsidian</p>
-        <h2>告訴插件你的 Obsidian vault 在哪裡</h2>
+        <h2>告訴外掛你的 Obsidian vault 在哪裡</h2>
         <ol class="how">
           <li><span>在 Zotero 設定 › Zotero Bridge 的「Obsidian」區塊，按 <kbd>選擇資料夾…</kbd>，選 vault 的<b>根目錄</b>（裡面有 <code>.obsidian</code> 隱藏資料夾的那一層）。</span></li>
           <li><span>「預設子資料夾」保持 <code>Zotero</code>，文獻筆記會集中放在這裡。</span></li>
           <li><span>「檔名格式」建議用 <b>Citation key</b>；沒有 citation key 的文獻會自動改用「作者 年份 - 標題」。</span></li>
           <li><span>保持勾選「建立『Zotero 文獻庫.base』總表」：第一次同步後，vault 裡會出現文獻總表與閱讀進度看板（需要 Obsidian 1.14）。</span></li>
         </ol>
-        <div class="note tip"><p><strong>重新同步不會蓋掉你的筆記：</strong>插件只會更新 <code>%% zotero-bridge:start %%</code> 到 <code>%% zotero-bridge:end %%</code> 之間的內容。你的心得請寫在最下面的「✍️ 我的筆記」。</p></div>
+        <div class="note tip"><p><strong>重新同步不會蓋掉你的筆記：</strong>外掛只會更新 <code>%% zotero-bridge:start %%</code> 到 <code>%% zotero-bridge:end %%</code> 之間的內容。你的心得請寫在最下面的「✍️ 我的筆記」。</p></div>
         <div class="check">
           <h3>打勾確認</h3>
           <label><input type="checkbox" id="c5a"><span class="box"></span><span>Vault 資料夾路徑已設定。</span></label>
@@ -395,9 +502,8 @@ footer { font-size: 13px; color: var(--muted); }
 
       <!-- 6 分流 -->
       <section class="step" data-title="分流規則（選用）" hidden>
-        <p class="eyebrow">選用</p>
         <h2>不同的文獻，放到不同的地方</h2>
-        <p class="lead">只有一個資料庫的話，這一步可以直接跳過。如果想把碩論、實驗室群組等文獻分開放，就在這裡設定規則。</p>
+        <p class="lead">只有一個資料庫的話，這一步可以直接跳過。想把碩論、實驗室群組等文獻分開放，就在這裡設定規則。</p>
         <ol class="how">
           <li><span>在設定的「分流規則」區塊按 <kbd>新增規則</kbd>。</span></li>
           <li><span>選擇<b>文獻庫</b>（個人或群組），需要的話填<b>分類路徑</b>，例如 <code>碩論/文獻回顧</code>（會包含子分類）。</span></li>
@@ -419,7 +525,6 @@ footer { font-size: 13px; color: var(--muted); }
 
       <!-- 7 試跑 -->
       <section class="step" data-title="第一次同步" hidden>
-        <p class="eyebrow">試跑</p>
         <h2>先拿一篇文獻試試看</h2>
         <p class="lead">挑一篇已經有 PDF、最好有劃線的文獻。</p>
         <ol class="how">
@@ -432,12 +537,12 @@ footer { font-size: 13px; color: var(--muted); }
           <li class="only-ai"><span>再按右鍵 › <kbd>Zotero Bridge</kbd> › <kbd>同步到 Notion + Obsidian（沒有 AI 筆記才產生）</kbd>，等 AI 寫好筆記（約半分鐘到兩分鐘）。</span></li>
           <li class="only-ai"><span>點選這篇文獻，Zotero 右側面板會出現 <b>「AI 文獻筆記」</b> 區塊，顯示一句話摘要與重點。</span></li>
         </ol>
-        <details class="trouble">
+        <details class="more trouble">
           <summary>出錯了怎麼辦？</summary>
           <div class="body">
             <dl>
               <dt>右鍵選單沒有 Zotero Bridge</dt>
-              <dd>確認 Zotero 是 10 版，且插件已啟用；重新啟動 Zotero 再試。</dd>
+              <dd>確認 Zotero 是 10 版，且外掛已啟用；重新啟動 Zotero 再試。</dd>
               <dt>Notion：401 或 unauthorized</dt>
               <dd>Token 貼錯或多了空白，請重新複製。</dd>
               <dt>Notion：404 或 object_not_found</dt>
@@ -461,9 +566,9 @@ footer { font-size: 13px; color: var(--muted); }
       <!-- 8 完成 -->
       <section class="step" data-title="完成！日常使用" hidden>
         <div class="done-hero">
-          <p class="eyebrow">完成</p>
-          <p class="big">🎉 Zotero Bridge 設定完成</p>
-          <p class="lead">從現在起，讀完一篇文獻、劃完線，按一次右鍵就能把整理好的筆記送到你的筆記系統。</p>
+          <span class="seal">設定完成</span>
+          <h2 class="big">從現在起，雜事交給它</h2>
+          <p class="lead">讀完一篇文獻、劃完線，按一次右鍵，整理好的筆記就送到你的筆記系統。要怎麼讀、怎麼寫，還是你的。</p>
         </div>
 
         <h3>右鍵選單速查</h3>
@@ -473,7 +578,7 @@ footer { font-size: 13px; color: var(--muted); }
             <tr><td>同步到 Notion + Obsidian</td><td>日常使用；沒有 AI 筆記才會產生</td></tr>
             <tr><td>重新產生 AI 筆記並同步</td><td>讀完、劃完線後想重新整理</td></tr>
             <tr><td>同步但不呼叫 AI</td><td>只更新書目、劃線與筆記，不花錢</td></tr>
-            <tr><td>產生文獻比較表（AI）</td><td>選 2 篇以上，或在分類上按右鍵，做跨文獻比較與研究缺口</td></tr>
+            <tr><td>產生文獻比較表（AI）</td><td>選 2 篇以上，或在分類上按右鍵。「研究生引導」組合預設關閉，要用請在設定打開</td></tr>
           </table>
         </div>
 
@@ -481,10 +586,10 @@ footer { font-size: 13px; color: var(--muted); }
         <ol class="how">
           <li><span><b>自動同步：</b>設定最下方勾選後，條目、劃線或筆記一變更就自動同步（不會自動呼叫 AI）。</span></li>
           <li class="only-obsidian"><span><b>閱讀進度看板：</b>打開 <code>Zotero/Zotero 文獻庫.base</code>，在「閱讀進度」看板拖曳卡片，就能更新待讀／閱讀中／已讀／已引用。</span></li>
-          <li><span><b>研究大腦：</b>用 Claude Code 或 Codex 讀你的文獻筆記，做文獻比較、研究缺口、文獻探討初稿。請看 <a href="https://github.com/bobyu89/zotero-bridge/tree/main/research-brain" target="_blank" rel="noopener">研究大腦說明</a>。</span></li>
+          <li><span><b>研究大腦（選用）：</b>用 Claude Code 或 Codex 讀你的文獻筆記，幫你比對文獻、找研究缺口。請看 <a href="https://github.com/bobyu89/zotero-bridge/tree/main/research-brain" target="_blank" rel="noopener">研究大腦說明</a>。</span></li>
         </ol>
 
-        <div class="note info"><p><b>安全提醒：</b>API 金鑰與 Notion token 以明碼存在 Zotero 設定檔中，請勿分享 Zotero 的 profile 資料夾。</p></div>
+        <div class="note info"><p><b>安全提醒：</b>API 金鑰與 Notion token 存在 Zotero 的密碼管理（登入管理員），不寫進一般設定檔；還是請不要把 Zotero 的 profile 資料夾分享給別人。</p></div>
 
         <h3>延伸閱讀</h3>
         <p class="zh">
@@ -495,14 +600,18 @@ footer { font-size: 13px; color: var(--muted); }
 
       <nav class="pager" aria-label="上一步／下一步">
         <button class="btn ghost" id="prevBtn" type="button">← 上一步</button>
-        <span class="hint" id="hint"></span>
+        <span class="hint" id="hint" aria-live="polite"></span>
         <button class="btn" id="nextBtn" type="button">下一步 →</button>
       </nav>
-    </main>
+    </div>
   </div>
-
-  <footer>Zotero Bridge 的介面依 Zotero 語言顯示中文或英文；Zotero 本身的選單以英文名稱為準。進度只存在你這台裝置的瀏覽器。</footer>
 </div>
+</section>
+</main>
+
+<footer class="foot">
+  <span>Zotero Bridge 的介面依 Zotero 語言顯示中文或英文；Zotero 本身的選單以英文名稱為準。安裝進度只存在你這台裝置的瀏覽器。</span>
+</footer>
 
 <script>
 (function () {
@@ -510,6 +619,9 @@ footer { font-size: 13px; color: var(--muted); }
   var app = document.getElementById('app');
   var allSteps = Array.prototype.slice.call(document.querySelectorAll('.step'));
   var railList = document.getElementById('railList');
+  var seal = document.getElementById('stepSeal');
+  var cta = document.getElementById('heroCta');
+  var ctaLabel = cta.firstChild;
   var state = { step: 0, os: '', dest: 'both', ai: 'anthropic', checks: {} };
 
   try { var saved = JSON.parse(localStorage.getItem(KEY) || 'null'); if (saved) state = Object.assign(state, saved); } catch (e) {}
@@ -558,6 +670,15 @@ footer { font-size: 13px; color: var(--muted); }
     });
   }
 
+  // 這一步全部打勾時蓋上「已確認」章；animate＝剛打完最後一個勾
+  function updateSeal(animate) {
+    var list = steps(), total = list.length - 1;
+    var done = state.step < total && stepDone(list[state.step]);
+    var was = !seal.hidden;
+    seal.hidden = !done;
+    if (done && !was && animate) { seal.classList.remove('press'); void seal.offsetWidth; seal.classList.add('press'); }
+  }
+
   function refresh() {
     var list = steps();
     var railBtns = railList.querySelectorAll('button');
@@ -572,6 +693,8 @@ footer { font-size: 13px; color: var(--muted); }
     var pct = Math.round(doneCount / total * 100);
     document.getElementById('bar').style.width = pct + '%';
     document.getElementById('pct').textContent = pct + '%';
+    document.getElementById('stepOf').textContent = '第 ' + (state.step + 1) + '／' + list.length + ' 步';
+    ctaLabel.textContent = state.step > 0 && state.step < total ? '繼續安裝：第 ' + (state.step + 1) + ' 步 ' + list[state.step].dataset.title : state.step === total ? '看日常使用速查' : '開始安裝（約 20 分鐘）';
 
     var prev = document.getElementById('prevBtn'), next = document.getElementById('nextBtn'), hint = document.getElementById('hint');
     prev.disabled = state.step === 0;
@@ -591,9 +714,9 @@ footer { font-size: 13px; color: var(--muted); }
     var list = steps();
     state.step = Math.max(0, Math.min(list.length - 1, i));
     allSteps.forEach(function (s) { s.hidden = s !== list[state.step]; });
-    save(); refresh();
+    save(); refresh(); updateSeal(false);
     if (focus !== false) {
-      var h = Array.prototype.find.call(list[state.step].querySelectorAll('h2, .big'), function (e) { return e.offsetParent !== null; });
+      var h = Array.prototype.find.call(list[state.step].querySelectorAll('h2'), function (e) { return e.offsetParent !== null; });
       if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
       var top = document.getElementById('stage').getBoundingClientRect().top;
       if (top < 0) window.scrollTo({ top: window.scrollY + top - 16, behavior: 'smooth' });
@@ -602,7 +725,7 @@ footer { font-size: 13px; color: var(--muted); }
 
   document.querySelectorAll('.check input[type=checkbox]').forEach(function (c) {
     if (state.checks[c.id]) c.checked = true;
-    c.addEventListener('change', function () { state.checks[c.id] = c.checked; save(); refresh(); });
+    c.addEventListener('change', function () { state.checks[c.id] = c.checked; save(); refresh(); updateSeal(true); });
   });
   document.querySelectorAll('input[type=radio]').forEach(function (r) {
     r.addEventListener('change', function () {
