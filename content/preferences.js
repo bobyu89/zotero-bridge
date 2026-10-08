@@ -262,6 +262,14 @@
 			ta.dispatchEvent(new Event("input"));
 		},
 
+		loadDefaultReasons() {
+			let bridge = Zotero.ZoteroBridge;
+			let ta = document.getElementById("zb-screening-reasons");
+			if (!bridge || !ta) return;
+			ta.value = bridge.screening.DEFAULT_REASONS.join("\n");
+			ta.dispatchEvent(new Event("input"));
+		},
+
 		loadDefaultSynthesisPrompt() {
 			let bridge = Zotero.ZoteroBridge;
 			let ta = document.getElementById("zb-synthesis-prompt");

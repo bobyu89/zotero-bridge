@@ -27,6 +27,7 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
   - Notion：只替換標題為「📚 Zotero Bridge｜…」的那個 callout 區塊，頁面上的其他內容保留。
   - 改了 Citation key 或標題：插件靠 frontmatter 的 `zotero_key` 找到原本的筆記，直接改檔名並更新，不會多出一份新筆記。你把筆記移到預設／規則資料夾底下的其他子資料夾也找得到（之後會留在那裡，不會被搬回去）。新檔名已被另一篇文獻使用時，改用 `檔名 (條目KEY)`。
 - **跨文獻比較表**：選多篇文獻或整個分類 → AI 讀各篇的 AI 筆記（沒有的改用摘要與劃線），產生文獻比較表、主題整理、方法學品質、研究缺口。引文由 Zotero 書目轉換（不讓 AI 自己寫參考文獻），Obsidian 版會連回各篇文獻筆記，並附 APA 7 參考文獻。同時存成 Notion 頁面（含真正的表格）、Obsidian 筆記和 Zotero 獨立筆記。
+- **系統性／範圍回顧篩選（PRISMA 2020）**：在 Zotero 用右鍵或右側面板標記標題摘要與全文的納入／排除（排除原因可自訂），找出可能重複的文獻，一鍵產生 PRISMA 2020 計數、Mermaid 流程圖與納入研究的證據表（Obsidian 筆記 + Excel 可開的 CSV，可選 Notion 頁面），並檢查計數是否一致（見[系統性／範圍回顧篩選](#系統性範圍回顧篩選)）。
 - **Zotero 內直接看 AI 筆記**：條目右側面板新增「AI 文獻筆記」區塊，顯示摘要與重點，並有「同步」「重新產生」按鈕。
 - **批次同步可中途停止、之後接續**：同步很多篇時可以從工具選單停止；Zotero 關閉或當掉也不會從頭來過，失敗的文獻可以一鍵重試。
 - **閱讀狀態三邊同步**：在 Zotero（標籤）、Notion（`Status` 欄位）或 Obsidian（看板拖曳）任一邊改閱讀狀態，下次同步時另外兩邊會跟著改（見[閱讀狀態同步](#閱讀狀態同步)）。
@@ -196,6 +197,47 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 
 > ⚠️ **這是草稿，不是可以直接交出去的文獻探討。** AI 可能誤解研究結果、把結論套到錯誤的文獻、遺漏重要研究或寫出過度概括的句子；查核清單只能抓到部分數字問題。每一句話、每個數字與每個引用都必須對照原文確認，並改寫成你自己的論述（也請遵守學校對 AI 使用的規定）。
 
+### 系統性／範圍回顧篩選
+
+做 systematic review 或 scoping review 時，可以直接在 Zotero 篩選，再產生 PRISMA 2020 流程圖與證據表。一個回顧專案就是一個 Zotero 分類（含子分類），把各資料庫匯出的文獻都匯入這個分類。
+
+**1. 標記資料庫來源（選用）**：匯入時替文獻加上標籤 `來源/PubMed`、`來源/CINAHL`…（可以在匯入後全選該批文獻，拖到左下角標籤選擇器的標籤上）。沒有來源標籤時，使用條目的「圖書館目錄」（Library Catalog）欄位（從 PubMed 匯入的就是「PubMed」）。
+
+**2. 找重複**：在分類上按右鍵 → **Zotero Bridge：系統性回顧篩選 → 找出可能重複的文獻並標記**。比對 DOI，再比對「標題（忽略大小寫、標點、重音）＋年份」；兩筆有不同 DOI 的不會因為標題相同而被當成重複（例如勘誤）。確認後，每組保留一筆（優先保留已篩選、有 DOI、有摘要、有附件、較早加入的），其餘加上標籤 `篩選/重複`。插件**不會合併或刪除條目**；要合併請用 Zotero 左側的「重覆的項目」（Duplicate Items）。合併後 Records identified 會跟著減少，建議 PRISMA 計數定案後再合併，或保留標記不合併。標錯了直接刪掉標籤即可。
+
+**3. 篩選**：選取一篇或多篇文獻 → 右鍵 → **Zotero Bridge：篩選（系統性／範圍回顧）**：
+
+| 選項 | 標籤 |
+|---|---|
+| 標題摘要：納入／排除／待定 | `篩選/標題摘要/納入`、`篩選/標題摘要/排除`、`篩選/標題摘要/待定` |
+| 全文：納入 | `篩選/全文/納入` |
+| 全文：排除（選擇原因） | `篩選/全文/排除` ＋ `排除原因/<原因>` |
+| 全文：無法取得全文 | `篩選/全文/無法取得`（PRISMA 的 Reports not retrieved） |
+| 標記為重複／清除篩選決定 | `篩選/重複`／移除以上所有篩選標籤 |
+
+- 以最新的決定為準：設定全文決定時會一併記為「標題摘要：納入」；改成「標題摘要：排除」時會移除全文決定與排除原因。每篇只保留一個排除原因（PRISMA 每篇只計一個主要原因）。
+- 逐篇看摘要時，右側面板「AI 文獻筆記」區塊最上方有一列「篩選：…」，顯示目前的決定，並有「納入／排除／待定」按鈕（標題摘要階段）。開始篩選後所有文獻都會顯示這一列。
+- 因為是標籤，可以用左下角標籤選擇器篩出「還沒篩的」「全文納入的」，也可以替標籤指定顏色、用數字鍵快速標記（用數字鍵加標籤時舊的決定不會自動移除，同一階段有兩個決定的文獻會列在一致性檢查中）。
+- 篩選標籤不會觸發自動同步（避免一次標幾百篇就同步幾百次）；下次同步時標籤才會帶到 Notion 與 Obsidian。
+- 排除原因在 設定 → 系統性／範圍回顧篩選 修改（一行一個；內建：族群不符、介入不符、結果指標不符、研究設計不符、非全文／研討會摘要、語言不符、重複發表）。標籤前綴也可以改；改了之後舊標籤不會自動改名。
+
+**4. 產生 PRISMA 流程圖與證據表**：在分類上按右鍵 → **Zotero Bridge：系統性回顧篩選 → 產生 PRISMA 流程圖與證據表**（或先選取分類，再用 工具 → 產生 PRISMA 流程圖與證據表（目前分類））。產出：
+
+- Obsidian：`Zotero/Reviews/<分類名稱>.md`
+  - **PRISMA 2020 計數**：Records identified（各資料庫分列）、Duplicate records removed、Records screened、Records excluded、Reports sought for retrieval、Reports not retrieved、Reports assessed for eligibility、Reports excluded（各原因分列）、Studies included in review；frontmatter 也有 `prisma_identified`、`prisma_included` 等數字
+  - **PRISMA 2020 流程圖**：Mermaid 圖（Obsidian 直接顯示），還沒篩完的會以虛線框標出
+  - **一致性檢查**：例如有全文決定但標題摘要不是納入、全文排除但沒有原因、有多個原因、重複文獻卻有篩選決定、同時有衝突的決定；每項列出文獻並可點回 Zotero
+  - **證據表**：每篇全文納入的研究一列（研究設計、樣本數、場域／國家、族群、介入／對照、結果指標、證據等級、JBI 評讀），資料來自各篇 AI 筆記的結構化資料，文獻欄連回文獻筆記。還沒有 AI 筆記的研究欄位留空並列在一致性檢查中：先對納入的文獻執行同步產生 AI 筆記，再重新產生。
+- CSV：`Zotero/Reviews/<分類名稱> 證據表.csv`（UTF-8 BOM，Excel 直接開啟不會亂碼），欄位比筆記多（作者、標題、期刊、DOI、對照、測量工具、評讀工具…），方便整理成論文的表格。
+- Notion（選用）：在設定填入「PRISMA 頁面的 Notion 父頁面」（留空時使用文獻比較表的父頁面）後，建立成該頁面的子頁面，含真正的表格與 Mermaid 流程圖。
+
+重新產生時只覆寫 `%% zotero-bridge:start %%` 到 `%% zotero-bridge:end %%` 之間與插件的 frontmatter 欄位；你寫在區塊外與「✍️ 我的筆記」的內容會保留。Notion 頁面也一樣：只替換最上方提示文字到「✍️ 我的筆記」標題之間的內容，同一個分類一直更新同一頁（頁面被刪除時會建立新頁）。
+
+注意：
+- 同一篇文獻在 Zotero 只有一組標籤，放在兩個回顧專案的分類裡會共用篩選決定；兩個回顧需要各自的決定時，請用不同的文獻庫（例如群組文獻庫）。
+- 流程圖是新的 systematic review、只檢索資料庫與登錄庫（databases and registers）的版本；有其他來源（引文追蹤、網站）時，請依 PRISMA 2020 範本自行補上右側的欄位。插件無法分辨同一研究的多篇報告，「Studies included」與「Reports of included studies」顯示相同數字，需要時請手動修改。
+- 計數是依標籤計算，請在投稿前對照一致性檢查確認。
+
 ### 在 Zotero 裡看 AI 筆記
 
 選取一篇文獻，右側面板的「AI 文獻筆記」區塊會顯示一句話摘要與各段重點；收合時標題列會顯示摘要。還沒有 AI 筆記時，可以直接按「產生 AI 筆記並同步」。區塊最上方的「閱讀狀態」選單可以直接改這篇的閱讀狀態。
@@ -302,6 +344,7 @@ pandoc 論文.md --citeproc --bibliography Zotero/references.json --csl apa.csl 
 - `/research-gaps`：研究缺口與 PICO 研究問題
 - `/lit-review-draft`：文獻探討初稿
 - `/inbox-triage`：待讀文獻與建議閱讀順序
+- `/review-prisma`：讀系統性回顧的 PRISMA 筆記，檢查篩選進度並寫 PRISMA 流程與納入研究特徵的段落
 
 安裝請看 [研究大腦說明](research-brain/README.md)。
 
@@ -340,6 +383,7 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi
 | `content/markdown.js` | Markdown ⇄ Notion blocks ⇄ HTML |
 | `content/synthesis.js` | 跨文獻比較表：提示詞、引文轉換、APA 參考文獻 |
 | `content/export.js` | 參考文獻檔匯出（CSL JSON／BibTeX）與 citekey 產生 |
+| `content/screening.js` | 系統性／範圍回顧篩選：篩選標籤、找重複、PRISMA 2020 計數與一致性檢查、Mermaid 流程圖、證據表（Obsidian／CSV／Notion） |
 | `content/annotation-images.js` | 圖片劃線與手繪註記：取得 Zotero 截圖、複製到 vault、上傳到 Notion、傳給 Claude |
 | `research-brain/` | Claude Code／Codex 研究大腦設定檔 |
 | `site/index.html` | 安裝精靈網頁（GitHub Pages） |
