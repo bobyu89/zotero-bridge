@@ -41,3 +41,25 @@
 - **文獻探討初稿**：依主題分段的論述式段落（不是逐篇摘要），段落內整合多篇文獻並加 APA 引用，最後附參考文獻列表。
 - **系統性回顧 PRISMA**：讀 `Zotero/Reviews/` 的回顧筆記 → 確認篩選完成與一致性檢查 → 寫 PRISMA 流程段落（Results 的 Study selection）與納入研究特徵摘要，數字與筆記完全一致。
 - **整理新文獻**：找出 `status: 待讀` 且還沒有 AI 文獻筆記的文獻，列出清單並建議閱讀順序。
+
+## 給 BOB 文獻搜尋連結
+BOB 要找文獻或你建議他去哪裡查時，直接給可點的搜尋連結（檢索詞要 URL 編碼：空白 `%20`、`"` `%22`、`(` `%28`、`)` `%29`、`[` `%5B`、`]` `%5D`、中文用 UTF-8）。只給連結與檢索式，**不要假裝已經查過或列出你沒看到的搜尋結果**。
+
+| 資料庫 | 網址（`{q}` = 編碼後的檢索詞） |
+|---|---|
+| PubMed | `https://pubmed.ncbi.nlm.nih.gov/?term={q}`；單篇 `https://pubmed.ncbi.nlm.nih.gov/<PMID>/`；相似文獻 `https://pubmed.ncbi.nlm.nih.gov/?linkname=pubmed_pubmed&from_uid=<PMID>` |
+| MeSH Database | `https://www.ncbi.nlm.nih.gov/mesh/?term={q}` |
+| PubMed Clinical Queries | `https://pubmed.ncbi.nlm.nih.gov/clinical/?term={q}`（未驗證） |
+| CINAHL（EBSCOhost，需學校權限） | `https://search.ebscohost.com/login.aspx?direct=true&db=rzh&bquery={q}&type=1&searchMode=And&site=ehost-live` |
+| Google Scholar | `https://scholar.google.com/scholar?hl=zh-TW&q={q}` |
+| Europe PMC | `https://europepmc.org/search?query={q}` |
+| Semantic Scholar | `https://www.semanticscholar.org/search?q={q}` |
+| ClinicalTrials.gov | `https://clinicaltrials.gov/search?term={q}` |
+| NICE | `https://www.nice.org.uk/search?q={q}` |
+| 臨床指引 PDF | `https://www.google.com/search?q={q}%20guideline%20filetype%3Apdf` |
+| 衛福部／國健署 | `https://www.google.com/search?q={q}%20site%3Amohw.gov.tw%20OR%20site%3Ahpa.gov.tw` |
+
+- 沒有公開搜尋網址的資料庫（Embase、JBI EBP Database、WHO ICTRP、華藝線上圖書館、臺灣博碩士論文知識加值系統、國家圖書館期刊文獻資訊網）：給首頁連結和要貼上的檢索詞。
+- PubMed 檢索式用 MeSH 加關鍵字：`("Accidental Falls"[Mesh] OR "fall prevention"[tiab]) AND ("Aged"[Mesh] OR "older adults"[tiab])`。MeSH 主題詞請以 MeSH Database 為準，不確定就標註「請到 MeSH Database 確認」。
+- 文獻筆記自動同步區塊裡的 `> [!search]- 🔎 延伸搜尋` 已有這篇的搜尋連結、MeSH 與 PICO 檢索式，可以直接引用給 BOB。
+- BOB 在 Zotero 也能用：條目右鍵「在醫學資料庫搜尋」、工具 → 醫學文獻快速搜尋…（英文關鍵字會建議 MeSH，可存成 PubMed 新文獻追蹤）。

@@ -198,6 +198,8 @@
 			pages: safeField(item, "pages"),
 			publisher: safeField(item, "publisher"),
 			doi: safeField(item, "DOI"),
+			// PMID: … for the search links (search-links.js)
+			extra: safeField(item, "extra"),
 			url: safeField(item, "url"),
 			language: safeField(item, "language"),
 			abstract: safeField(item, "abstractNote"),

@@ -238,6 +238,34 @@
 	</groupbox>
 
 	<groupbox>
+		<label><html:h2>醫學文獻快速搜尋</html:h2></label>
+		<description>條目右鍵「在醫學資料庫搜尋」、右側面板的搜尋連結、文獻筆記的「🔎 延伸搜尋」與 工具 → 醫學文獻快速搜尋… 使用的資料庫。沒有公開搜尋網址的資料庫（Embase、JBI、華藝、博碩士論文等）會開啟首頁並把檢索詞複製到剪貼簿。</description>
+		<checkbox label="在條目右側面板顯示搜尋連結（有 AI 筆記的 PICO 時另列 PICO 檢索連結）" preference="extensions.zotero-bridge.searchLinks.paneLinks"/>
+		<checkbox label="在 Obsidian／Notion 文獻筆記加入「🔎 延伸搜尋」（找這篇、相似文獻、MeSH、PICO 檢索式）" preference="extensions.zotero-bridge.searchLinks.noteCallout"/>
+		<checkbox label="PICO 檢索式包含對照組（C；預設只用 P AND I AND O）" preference="extensions.zotero-bridge.searchLinks.picoComparison"/>
+		<checkbox label="快速搜尋英文關鍵字時向 NCBI 查 MeSH 主題詞建議（使用 PubMed 新文獻追蹤的 Email 與 API key）" preference="extensions.zotero-bridge.searchLinks.meshHelper"/>
+		<label value="圖書館代理伺服器前綴（EZproxy；只套用在需要機構權限的資料庫，例如 CINAHL、Embase、UpToDate）："/>
+		<html:input type="text" preference="extensions.zotero-bridge.searchLinks.proxyPrefix" placeholder="例如：https://ezproxy.example.edu.tw/login?url="/>
+		<description class="zb-hint">到學校圖書館網站的「校外連線」或「遠端存取」說明找前綴（通常以 /login?url= 結尾），或從圖書館資料庫清單複製一個資料庫連結，取 https://…/login?url= 這一段。留空 = 不經代理（在校內網路通常不需要）。</description>
+		<hbox align="center">
+			<label value="不套用代理的資料庫 ID："/>
+			<html:input type="text" preference="extensions.zotero-bridge.searchLinks.proxyExclude" placeholder="例如：uptodate"/>
+		</hbox>
+		<label value="資料庫順序（ID 以逗號分隔，列在前面的優先；其餘依預設順序）："/>
+		<html:input type="text" preference="extensions.zotero-bridge.searchLinks.order" placeholder="例如：pubmed, cinahl, cochrane, airiti, scholar"/>
+		<label value="隱藏的資料庫 ID（以逗號分隔）："/>
+		<html:input type="text" preference="extensions.zotero-bridge.searchLinks.disabled" placeholder="例如：embase, uptodate"/>
+		<hbox align="center">
+			<label value="右鍵選單最多列出"/>
+			<html:input type="number" min="1" max="8" preference="extensions.zotero-bridge.searchLinks.menuCount" style="min-width: 4em; width: 4em"/>
+			<label value="個資料庫（其餘在「更多資料庫…」）"/>
+		</hbox>
+		<label value="自訂資料庫（JSON 陣列；網址中的 {q} 會換成檢索詞，沒有 {q} 的網址會開啟並複製檢索詞；用內建 ID 可以改內建資料庫的網址）："/>
+		<html:textarea rows="3" preference="extensions.zotero-bridge.searchLinks.custom" placeholder='[{ "name": "學校館藏", "url": "https://example.edu.tw/search?q={q}", "needsAccess": false }]'/>
+		<html:pre id="zb-search-sources" class="zb-status"/>
+	</groupbox>
+
+	<groupbox>
 		<label><html:h2>自動同步</html:h2></label>
 		<checkbox label="Zotero 條目、註記或筆記變更時自動同步到 Notion 與 Obsidian（不會自動呼叫 AI，沿用既有 AI 筆記）" preference="extensions.zotero-bridge.autoSync"/>
 	</groupbox>

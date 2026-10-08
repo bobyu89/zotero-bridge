@@ -208,10 +208,26 @@
 		if (bridge && bridge.pubmedWatch) bridge.pubmedWatch.renderPrefs(document);
 	}
 
+	// Medical-literature search sources: IDs and problems with the settings (search-links.js)
+	const SEARCH_PREFS = ["order", "disabled", "custom", "proxyPrefix"].map(k => `extensions.zotero-bridge.searchLinks.${k}`);
+
+	function renderSearchSources() {
+		let bridge = Zotero.ZoteroBridge;
+		let pre = document.getElementById("zb-search-sources");
+		if (!pre || !bridge || !bridge.searchLinks) return;
+		try {
+			pre.textContent = "資料庫 ID｜名稱：\n" + bridge.searchLinks.describeSources(bridge.searchLinks.readConfig()).join("\n");
+		}
+		catch (e) {
+			pre.textContent = `❌ ${e.message || e}`;
+		}
+	}
+
 	window.ZoteroBridgePrefs = {
 		init() {
 			renderRules();
 			renderWatches();
+			renderSearchSources();
 			updateProviderBoxes();
 			renderUsage();
 			loadSecrets();
@@ -219,6 +235,7 @@
 				observers = [
 					Zotero.Prefs.registerObserver(PROVIDER_PREF, updateProviderBoxes, true),
 					...USAGE_PREFS.map(p => Zotero.Prefs.registerObserver(p, renderUsage, true)),
+					...SEARCH_PREFS.map(p => Zotero.Prefs.registerObserver(p, renderSearchSources, true)),
 				];
 				// Zotero sends "unload" to the pane's root element, then nukes this script's sandbox: a
 				// listener on the window would be dead by the time the window's own unload event fires

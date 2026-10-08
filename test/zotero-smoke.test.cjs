@@ -344,7 +344,9 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	assert.deepEqual(env.menus.map(m => m.target), ["main/library/item", "main/library/collection", "main/menubar/tools", "main/menubar/tools", "main/library/collection",
 		"main/library/item", "main/library/collection", "main/menubar/tools", "main/menubar/tools", "main/menubar/tools",
 		// citation-chase.js
-		"main/library/item", "main/library/collection", "main/menubar/tools"]);
+		"main/library/item", "main/library/collection", "main/menubar/tools",
+		// search-links.js
+		"main/library/item", "main/menubar/tools"]);
 	assert.equal(env.panes[0].paneID, "zotero-bridge-ai-note");
 
 	let { MockItem, addChild } = env;
@@ -1643,7 +1645,7 @@ test("settings pane: closing it saves a pending key and unregisters its pref obs
 	await env.context.ZB.secrets.get("notionToken");
 	await new Promise(r => setTimeout(r, 0));
 	let paneObservers = () => [...registered].filter(o => !pluginObservers.has(o)).length;
-	assert.equal(paneObservers(), 3, "provider + two usage pref observers");
+	assert.equal(paneObservers(), 7, "provider + two usage + four search-source pref observers");
 
 	// Typed, and the window closed before the 600 ms save delay
 	let input = window.document.getElementById("zb-openai-key");
