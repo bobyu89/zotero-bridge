@@ -36,6 +36,17 @@
 		"Tags": { multi_select: {} },
 		"Collections": { multi_select: {} },
 		"Library": { select: {} },
+		// Reading status, kept in sync with the Zotero status tag and the note's `status` (status.js).
+		// A select, not a Notion "status" property: the API can't put status options into their
+		// To-do / In progress / Complete groups, and a page can't be given a status option that doesn't
+		// exist yet, while a select takes any value (e.g. a status the user added in Obsidian).
+		"Status": { select: { options: [
+			{ name: "待讀", color: "gray" },
+			{ name: "閱讀中", color: "blue" },
+			{ name: "已讀", color: "green" },
+			{ name: "已引用", color: "purple" },
+			{ name: "已刪除", color: "red" },
+		] } },
 		"Citation Key": { rich_text: {} },
 		"Zotero Key": { rich_text: {} },
 		"Summary": { rich_text: {} },
@@ -306,7 +317,7 @@
 	 * Build page properties, only for properties that exist in the schema with the expected type.
 	 * values: { title, authors, year, date, publication, volume, issue, pages, publisher, itemType, doi,
 	 *           url, abstract, zotero, obsidian, tags, collections, library, citationKey, zoteroKey,
-	 *           summary, apa, dateAdded, lastSynced, study, fullText }
+	 *           summary, apa, dateAdded, lastSynced, study, fullText, status }
 	 * fullText: full-text status of the PDF ("ok" | "partial" | "none" | "no_pdf", scanned.js)
 	 * study: normalised structured data from the AI note (ZB.llm.normalizeStudyData). When it is
 	 * absent the structured columns are left untouched, so a note without the JSON block doesn't
@@ -359,6 +370,8 @@
 			set("Measures", "multi_select", { multi_select: uniq(s.measures) });
 			set("Country", "select", select(s.country));
 		}
+		// Reading status merged by status.js; left as it is when this sync doesn't include it
+		if (v.status) set("Status", "select", { select: { name: optionName(v.status) } });
 		set("APA", "rich_text", { rich_text: rt(v.apa) });
 		set("Last Synced", "date", { date: v.lastSynced ? { start: v.lastSynced } : null });
 		return p;
