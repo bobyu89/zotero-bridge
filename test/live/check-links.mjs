@@ -665,7 +665,7 @@ async function runExtraLinks(report) {
 	// PubMed "find by title": which title query shapes find the paper (esearch count and whether the PMID is in it)
 	let title = info.title;
 	let variants = [
-		["plugin: \"title\"[ti]", searchLinks.findQuery(byId("pubmed"), { ...info, doi: "" }).query],
+		["plugin findQuery (title words [ti])", searchLinks.findQuery(byId("pubmed"), { ...info, doi: "" }).query],
 		["no punctuation: \"title\"[ti]", `"${title.replace(/[^\p{L}\p{N}\s-]/gu, " ").replace(/\s+/g, " ").trim()}"[ti]`],
 		["unquoted title[ti]", `${title}[ti]`],
 		["words AND [ti]", title.replace(/[^\p{L}\p{N}\s-]/gu, " ").split(/\s+/).filter(w => w.length > 2 && !/^(?:and|the|for|with|of)$/i.test(w)).map(w => `${w}[ti]`).join(" AND ")],

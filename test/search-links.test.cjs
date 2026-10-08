@@ -128,9 +128,11 @@ test("custom sources, overrides of built-ins, order and hidden sources", () => {
 	// Settings pane listing
 	let lines = sl.describeSources(cfg);
 	assert.match(lines[0], /^⚠️ 自訂資料庫第 4 筆/);
-	assert.ok(lines.includes("embase｜Embase（已隱藏，需機構權限，開首頁＋複製檢索詞）"));
+	assert.ok(lines.includes(`embase｜Embase（已隱藏，需機構權限，開首頁＋複製檢索詞，CI 實測 ${sl.CI_DATE}：需登入）`));
 	assert.ok(lines.includes("custom-1｜學校館藏（需機構權限，自訂）"));
-	assert.ok(lines.includes("cochrane｜Cochrane Library（推測格式，未驗證）"));
+	assert.ok(lines.includes(`cochrane｜Cochrane Library（實測可帶入檢索詞，CI 實測 ${sl.CI_DATE}：OK）`));
+	// A built-in with a URL from the settings drops the live-check result
+	assert.ok(lines.includes("cinahl｜CINAHL（需機構權限，依圖書館指南範例格式）"));
 	// Broken JSON keeps the built-ins
 	let broken = sl.normalizeConfig({ custom: "[{" });
 	assert.equal(broken.sources.length, sl.BUILTIN.length);
@@ -161,9 +163,16 @@ test("find this paper: PMID opens the record, DOI and title searches per databas
 	let doi = Object.fromEntries(sl.itemTargets(cfg, sl.itemInfo({ title: "T", DOI: "10.1/x" })).map(t => [t.id, t]));
 	assert.equal(doi.pubmed.url, "https://pubmed.ncbi.nlm.nih.gov/?term=10.1%2Fx%5Bdoi%5D");
 	assert.equal(doi.europepmc.query, 'DOI:"10.1/x"');
-	// Title only: PubMed title field
+	// Title only: each title word in the PubMed title field (a quoted whole title finds nothing in PubMed)
 	let title = sl.itemTargets(cfg, sl.itemInfo({ title: "Hand hygiene [compliance] in ICU" }));
-	assert.equal(title[0].url, "https://pubmed.ncbi.nlm.nih.gov/?term=%22Hand%20hygiene%20%5Bcompliance%5D%20in%20ICU%22%5Bti%5D");
+	assert.equal(title[0].query, "Hand[ti] AND hygiene[ti] AND compliance[ti] AND ICU[ti]");
+	assert.equal(title[0].url, "https://pubmed.ncbi.nlm.nih.gov/?term=Hand%5Bti%5D%20AND%20hygiene%5Bti%5D%20AND%20compliance%5Bti%5D%20AND%20ICU%5Bti%5D");
+	assert.equal(sl.titleWords("Hospital nurse staffing and patient mortality, nurse burnout, and job dissatisfaction"),
+		"Hospital[ti] AND nurse[ti] AND staffing[ti] AND patient[ti] AND mortality[ti] AND burnout[ti] AND job[ti] AND dissatisfaction[ti]");
+	assert.equal(sl.titleWords("Nurse-led fall prevention for older adults' falls: an RCT"), "Nurse-led[ti] AND fall[ti] AND prevention[ti] AND older[ti] AND adults[ti] AND falls[ti] AND RCT[ti]");
+	assert.equal(sl.titleWords("word ".repeat(3) + Array.from({ length: 20 }, (_, i) => `term${i}`).join(" ")).split(" AND ").length, 10, "capped");
+	// Nothing long enough to search: the quoted title
+	assert.equal(sl.findQuery(sl.findSource(cfg, "pubmed"), { title: "Qi", doi: "", pmid: "" }).query, '"Qi"[ti]');
 	assert.equal(sl.itemTargets(cfg, sl.itemInfo({})).length, 0);
 	// A DOI in Extra counts too
 	assert.equal(sl.itemInfo({ title: "x", extra: "DOI: 10.5/Y" }).doi, "10.5/y");

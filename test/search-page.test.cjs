@@ -57,7 +57,7 @@ test("source list is complete and consistent", () => {
 		assert.match(s.home, /^https:\/\//, s.id);
 		assert.ok(["free", "partial", "inst"].includes(s.access), s.id);
 		assert.ok(["sure", "guess", "home"].includes(s.status), s.id);
-		if (s.status !== "home") assert.match(s.search, /^https:\/\/[^{]+\{q\}$/, s.id);
+		if (s.status !== "home") assert.match(s.search, /^https:\/\/[^{}]+\{q\}[^{}]*$/, s.id);
 	}
 	for (const p of Z.PRESETS) for (const id of p.ids) assert.ok(ids.includes(id), `${p.id}:${id}`);
 	// one button per source, and the status table lists every source
@@ -82,14 +82,17 @@ test("URL builders: search URLs, homepage + copy, empty query", () => {
 	// PubMed syntax survives encoding
 	assert.equal(Z.buildUrl("pubmed", '"Accidental Falls"[Mesh] AND exercis*[tiab]').url,
 		"https://pubmed.ncbi.nlm.nih.gov/?term=%22Accidental%20Falls%22%5BMesh%5D%20AND%20exercis*%5Btiab%5D");
-	// guessed patterns open the search and also copy the query
-	deq(Z.buildUrl("trip", q), { url: `https://www.tripdatabase.com/Searchresult?criteria=${enc}`, copy: true });
-	deq(Z.buildUrl("nice", q), { url: `https://www.nice.org.uk/search?q=${enc}`, copy: true });
+	// verified by the live check (test/live/check-links.mjs): search URL, nothing to copy
+	deq(Z.buildUrl("trip", q), { url: `https://www.tripdatabase.com/Searchresult?criteria=${enc}`, copy: false });
+	deq(Z.buildUrl("nice", q), { url: `https://www.nice.org.uk/search?q=${enc}`, copy: false });
+	deq(Z.buildUrl("cdc", q), { url: `https://search.cdc.gov/search/?query=${enc}`, copy: false });
+	deq(Z.buildUrl("cochrane", q), { url: `https://www.cochranelibrary.com/search?p_p_id=scolarissearchresultsportlet_WAR_scolarissearchresults&p_p_lifecycle=0&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchType=basic&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchBy=6&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchText=${enc}`, copy: false });
+	// behind a login (can't be checked to the results page): search URL, and the query is copied too
+	deq(Z.buildUrl("cinahl", q), { url: `https://search.ebscohost.com/login.aspx?direct=true&db=rzh&bquery=${enc}&type=1&searchMode=And&site=ehost-live`, copy: true });
 	// no reliable GET search: homepage + copy
 	deq(Z.buildUrl("airiti", "跌倒"), { url: "https://www.airitilibrary.com/", copy: true });
 	deq(Z.buildUrl("ndltd", "跌倒"), { url: "https://ndltd.ncl.edu.tw/", copy: true });
 	deq(Z.buildUrl("ictrp", q), { url: "https://trialsearch.who.int/", copy: true });
-	deq(Z.buildUrl("cochrane", q), { url: "https://www.cochranelibrary.com/advanced-search", copy: true });
 	// empty query: homepage, nothing to copy
 	deq(Z.buildUrl("pubmed", "  "), { url: "https://pubmed.ncbi.nlm.nih.gov/", copy: false });
 	deq(Z.buildUrl("cinahl", ""), { url: "https://search.ebscohost.com/", copy: false });
@@ -108,6 +111,7 @@ test("EZproxy prefix is applied only to institution-only sources", () => {
 		else assert.equal(viaProxy, plain, s.id);
 	}
 	assert.equal(Z.buildUrl("uptodate", "fall risk", pre).url, "https://ezproxy.example.edu/login?url=https://www.uptodate.com/contents/search?search=fall%20risk");
+	assert.equal(Z.buildUrl("cinahl", "TI falls", pre).url, "https://ezproxy.example.edu/login?url=https://search.ebscohost.com/login.aspx?direct=true&db=rzh&bquery=TI%20falls&type=1&searchMode=And&site=ehost-live");
 	// qurl= takes an encoded URL; anything that is not http(s) is ignored
 	assert.equal(Z.wrapProxy("https://www.embase.com/", "https://p.example.edu/login?qurl="), "https://p.example.edu/login?qurl=https%3A%2F%2Fwww.embase.com%2F");
 	assert.equal(Z.wrapProxy("https://www.embase.com/", "ezproxy.example.edu"), "https://www.embase.com/");
@@ -286,4 +290,25 @@ test("works without localStorage (private mode): warns and keeps searches in mem
 test("install wizard links to the search page", () => {
 	const index = fs.readFileSync(path.join(SITE, "index.html"), "utf8");
 	assert.match(index, /<a [^>]*href="search\.html"[^>]*>🔎 醫學文獻快速搜尋<\/a>/);
+});
+
+test("shared sources use the plugin's URLs and live-check results", () => {
+	const { Z, doc } = load();
+	const sl = require("../content/search-links.js");
+	const plugin = Object.fromEntries(sl.BUILTIN.map(s => [s.id, s]));
+	const pluginID = { ctgov: "clinicaltrials", tpi: "ncl-periodicals", gguide: "guideline-pdf" };
+	for (const s of Z.SOURCES) {
+		const p = plugin[pluginID[s.id] || s.id];
+		assert.ok(p, s.id);
+		assert.ok(["ok", "login", "blocked"].includes(s.ci), s.id);
+		assert.equal(s.ci, p.ci, `${s.id}: same live-check result as the plugin`);
+		// Same search URL where both search (Google Scholar: the plugin adds hl=zh-TW; Google: different wrappers)
+		if (s.search && p.url && !["scholar", "gguide"].includes(s.id)) assert.equal(s.search, p.url, s.id);
+		assert.equal(!s.search || s.status === "home", !p.url, `${s.id}: both open a search URL, or both the homepage`);
+	}
+	assert.equal(Z.CI_DATE, sl.CI_DATE);
+	assert.equal(doc.getElementById("ciDate").textContent, sl.CI_DATE);
+	const rows = [...doc.querySelectorAll("#statusTable tbody tr")];
+	assert.match(rows.find(r => r.cells[0].textContent === "Europe PMC").cells[1].textContent, /確定CI 實測：被擋/);
+	assert.match(rows.find(r => r.cells[0].textContent === "CINAHL").cells[1].textContent, /推測CI 實測：需登入/);
 });

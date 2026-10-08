@@ -9,6 +9,7 @@ const os = require("node:os");
 const path = require("node:path");
 const vm = require("node:vm");
 const { JSDOM } = require("jsdom");
+const { CI_DATE } = require("../content/search-links.js");
 
 const ROOT = path.join(__dirname, "..");
 const ROOT_URI = "file://" + ROOT + "/";
@@ -617,11 +618,11 @@ test("settings pane lists the source IDs and problems with the search settings",
 	let lines = pre.textContent.split("\n");
 	assert.equal(lines[0], "資料庫 ID｜名稱：");
 	assert.match(lines[1], /^⚠️ 圖書館代理伺服器前綴必須是 http/);
-	assert.equal(lines[2], "pubmed｜PubMed（常見公開格式）");
-	assert.ok(lines.includes("embase｜Embase（已隱藏，需機構權限，開首頁＋複製檢索詞）"));
+	assert.equal(lines[2], `pubmed｜PubMed（實測可帶入檢索詞，CI 實測 ${CI_DATE}：OK）`);
+	assert.ok(lines.includes(`embase｜Embase（已隱藏，需機構權限，開首頁＋複製檢索詞，CI 實測 ${CI_DATE}：需登入）`));
 	assert.equal(lines.at(-1), "custom-1｜學校館藏（自訂）");
 	// Changing the custom list redraws it
 	env.prefStore["extensions.zotero-bridge.searchLinks.custom"] = "[]";
 	observed.find(o => o.name === "extensions.zotero-bridge.searchLinks.custom").fn();
-	assert.equal(pre.textContent.split("\n").at(-1), "cdc｜CDC（推測格式，未驗證）");
+	assert.equal(pre.textContent.split("\n").at(-1), `cdc｜CDC（實測可帶入檢索詞，CI 實測 ${CI_DATE}：OK）`);
 });
