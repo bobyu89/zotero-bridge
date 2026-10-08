@@ -743,7 +743,8 @@ const TESTS = [
 			let realFetch = pluginGlobal.fetch;
 			let calls = [];
 			const KEY = "sk-ant-e2e-fake-key";
-			const AI_MD = "## 摘要\n- E2E stubbed summary sentence.\n\n## 研究設計\n- Randomised trial.";
+			// Headings of the built-in note template (llm.js): the item pane summary is the 一句話摘要 section
+			const AI_MD = "## 一句話摘要\nE2E stubbed summary sentence.\n\n## 研究設計\n- Randomised trial.";
 			let stub = async (url, init) => {
 				calls.push({ url: String(url), apiKey: init && init.headers && init.headers["x-api-key"] });
 				if (!String(url).startsWith("https://api.anthropic.com/")) throw new Error(`unexpected network call to ${url}`);
