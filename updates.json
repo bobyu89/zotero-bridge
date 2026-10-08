@@ -9,7 +9,18 @@
           "applications": {
             "zotero": {
               "strict_min_version": "10.0",
-              "strict_max_version": "10.0.*"
+              "strict_max_version": "10.*"
+            }
+          }
+        },
+        {
+          "version": "0.2.0",
+          "update_link": "https://github.com/bobyu89/zotero-bridge/releases/download/v0.2.0/zotero-bridge-0.2.0.xpi",
+          "update_hash": "sha256:afe407d5b7f94dc8c4502ed786fc6c99a35a105773f7b6bcdfb7dd9577f219d8",
+          "applications": {
+            "zotero": {
+              "strict_min_version": "10.0",
+              "strict_max_version": "10.*"
             }
           }
         }
