@@ -261,6 +261,7 @@ const TESTS = [
 				citationChase: ["chaseCollection", "chaseItems", "importChecked", "registerMenus"],
 				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "registerMenus"],
 				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "registerMenus", "batchParams", "parseResults"],
+				ebhcReport: ["run", "askOptions", "processReport", "buildReportNote"],
 				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly"],
 			};
 			let missing = [];

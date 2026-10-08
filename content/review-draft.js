@@ -913,5 +913,7 @@ end
 		issueLines, relativePath, draftPaths, buildManagedRegion, buildDraftNote, buildDraftPlain,
 		parseStore, scopeEntry, updateStore, draftScope,
 		askOptions, askWithPrompts, run, runtime,
+		// for ebhc-report.js
+		ensureReferences,
 	};
 });
