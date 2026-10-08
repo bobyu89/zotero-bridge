@@ -139,6 +139,7 @@ function makeEnv({ prefs, fetch, logins = [], confirm = () => true, timers }) {
 		Items: {
 			get: ids => (Array.isArray(ids) ? ids.map(id => items.get(id)) : items.get(ids)),
 			exists: id => items.has(id),
+			getByLibraryAndKey: (libraryID, key) => [...items.values()].find(i => i.libraryID === libraryID && i.key === key) || false,
 			// Top-level items not in the trash (annotations aren't modelled here)
 			getAll: async (libraryID, onlyTopLevel) => [...items.values()]
 				.filter(i => i.libraryID === libraryID && !i.deleted && (!onlyTopLevel || !i.parentID)),
@@ -1110,4 +1111,123 @@ test("regenerating the AI note keeps the previous version as a history note that
 	assert.equal(log.filter(l => l.api === "anthropic").length, 0, "auto-sync never calls the LLM");
 	assert.ok(log.some(l => l.method === "PATCH" && l.path === "pages/page-1" && l.body.properties));
 	assert.deepEqual(env.errors, []);
+});
+
+test("a batch can be stopped from the Tools menu and resumed later; failures are kept for the retry", async () => {
+	let vault = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-vault-"));
+	let env = makeEnv({ fetch: async () => { throw new Error("no network expected"); }, prefs: basePrefs(vault, { "extensions.zotero-bridge.notion.token": "" }) });
+	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
+	let ZB = env.context.ZB;
+	let creators = [{ lastName: "Chen", creatorType: "author" }];
+	let items = ["a", "b", "c", "d"].map((k, i) => new env.MockItem("journalArticle",
+		{ title: `Paper ${k}`, year: "2024", citationKey: `key${k}`, creators, key: `KEY${k.toUpperCase()}` }));
+	let pending = () => JSON.parse(env.prefStore["extensions.zotero-bridge.batch.pending"] || "null");
+
+	// Tools menu entries, shown through onShowing like MenuManager does
+	let tools = env.menus.find(m => m.menuID === "zotero-bridge-tools").menus;
+	let entry = id => tools.find(m => m.l10nID === id);
+	let showing = (id) => {
+		let state = { visible: true, args: null };
+		entry(id).onShowing({}, { setVisible: v => { state.visible = v; }, setL10nArgs: a => { state.args = JSON.parse(a); } });
+		return state;
+	};
+	assert.equal(showing("zotero-bridge-menu-stop").visible, false);
+	assert.equal(showing("zotero-bridge-menu-resume").visible, false);
+
+	// Stop while the second item is being written
+	let seen = [];
+	let push = env.progressLines.push.bind(env.progressLines);
+	env.progressLines.push = (line) => {
+		seen.push(line.text);
+		if (line.text === "Paper b") {
+			assert.equal(showing("zotero-bridge-menu-stop").visible, true);
+			assert.deepEqual(pending().remaining, ["1/KEYA", "1/KEYB", "1/KEYC", "1/KEYD"].slice(1), "progress saved per item");
+			entry("zotero-bridge-menu-stop").onCommand();
+		}
+		return push(line);
+	};
+	await ZB.main.run(items, { targets: ["obsidian"], ai: "none" });
+	assert.deepEqual(seen, ["Paper a", "Paper b", "正在停止…（處理中的這篇完成後停止）"]);
+	assert.deepEqual(fs.readdirSync(path.join(vault, "Zotero")).sort(), ["keya.md", "keyb.md"]);
+	let stopLine = env.progressLines.find(l => l.text === "已停止");
+	assert.ok(stopLine && stopLine.progress === 100);
+	assert.ok(env.descriptions.includes("完成 2 筆，未處理 2 筆"), env.descriptions.join("\n"));
+	assert.equal(env.descriptions.at(-1), "要接續：工具 → 繼續未完成的 Zotero Bridge 同步（2 筆）");
+	let saved = pending();
+	assert.deepEqual(saved.remaining, ["1/KEYC", "1/KEYD"]);
+	assert.deepEqual(saved.failed, []);
+	assert.deepEqual(saved.action, { targets: ["obsidian"], ai: "none" });
+	assert.equal(saved.running, false);
+	assert.equal(showing("zotero-bridge-menu-stop").visible, false);
+	assert.deepEqual(showing("zotero-bridge-menu-resume"), { visible: true, args: { count: 2 } });
+	assert.equal(showing("zotero-bridge-menu-discard").visible, true);
+
+	// Resume: one item now fails, so it stays for a retry; a deleted item is skipped
+	env.progressLines.push = push;
+	let extract = ZB.adapter.extractItemData;
+	ZB.adapter.extractItemData = async (item, ...rest) => {
+		if (item.key === "KEYC") throw new Error("PDF 讀取失敗");
+		return extract(item, ...rest);
+	};
+	await ZB.main.resumeBatch();
+	assert.deepEqual(fs.readdirSync(path.join(vault, "Zotero")).sort(), ["keya.md", "keyb.md", "keyd.md"]);
+	saved = pending();
+	assert.deepEqual(saved.remaining, []);
+	assert.deepEqual(saved.failed, ["1/KEYC"]);
+	assert.equal(env.descriptions.at(-1), "要接續：工具 → 繼續未完成的 Zotero Bridge 同步（1 筆，含失敗 1 筆）");
+	assert.deepEqual(showing("zotero-bridge-menu-resume").args, { count: 1 });
+
+	// Retrying the failure clears the record
+	ZB.adapter.extractItemData = extract;
+	await ZB.main.resumeBatch();
+	assert.ok(fs.existsSync(path.join(vault, "Zotero", "keyc.md")));
+	assert.equal(pending(), null);
+	assert.equal(showing("zotero-bridge-menu-resume").visible, false);
+	assert.equal(showing("zotero-bridge-menu-discard").visible, false);
+
+	// A finished batch leaves nothing; single items and auto-sync are never tracked
+	await ZB.main.run(items.slice(0, 2), { targets: ["obsidian"], ai: "none" });
+	assert.equal(pending(), null);
+	env.prefStore["extensions.zotero-bridge.batch.pending"] = JSON.stringify({ action: { targets: ["obsidian"], ai: "none" }, remaining: ["1/KEYA"], failed: [], total: 1, running: false });
+	await ZB.main.run([items[3]], { targets: ["obsidian"], ai: "none" });
+	await ZB.main.run(items, { targets: ["obsidian"], ai: "none", silent: true });
+	assert.deepEqual(pending().remaining, ["1/KEYA"], "an unrelated single-item or silent run keeps the record");
+
+	// Discard
+	entry("zotero-bridge-menu-discard").onCommand();
+	assert.equal(pending(), null);
+
+	// Every pending item deleted: the record is cleared
+	env.prefStore["extensions.zotero-bridge.batch.pending"] = JSON.stringify({ action: { targets: ["obsidian"], ai: "none" }, remaining: ["1/GONE"], failed: [], total: 1, running: false });
+	await ZB.main.resumeBatch();
+	assert.equal(pending(), null);
+	assert.equal(env.descriptions.at(-1), "未完成的文獻都已刪除，已清除這筆紀錄。");
+	assert.deepEqual(env.errors.map(String), ["Error: PDF 讀取失敗"]);
+});
+
+test("a batch cut off by shutdown is reported at the next startup", async () => {
+	let vault = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-vault-"));
+	let prefs = basePrefs(vault, { "extensions.zotero-bridge.notion.token": "" });
+	let env = makeEnv({ fetch: async () => { throw new Error("no network expected"); }, prefs });
+	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
+	let creators = [{ lastName: "Chen", creatorType: "author" }];
+	let items = ["a", "b", "c"].map(k => new env.MockItem("journalArticle",
+		{ title: `Paper ${k}`, year: "2024", citationKey: `key${k}`, creators, key: `KEY${k.toUpperCase()}` }));
+	let push = env.progressLines.push.bind(env.progressLines);
+	env.progressLines.push = (line) => {
+		if (line.text === "Paper a") vm.runInContext("shutdown()", env.context);
+		return push(line);
+	};
+	await env.context.ZB.main.run(items, { targets: ["obsidian"], ai: "none" });
+	let saved = JSON.parse(env.prefStore["extensions.zotero-bridge.batch.pending"]);
+	assert.deepEqual(saved.remaining, ["1/KEYB", "1/KEYC"]);
+	assert.equal(saved.running, true, "still marked running so the next start reminds the user");
+
+	// Next start with the same prefs
+	let next = makeEnv({ fetch: async () => { throw new Error("no network expected"); }, prefs: env.prefStore });
+	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, next.context);
+	await new Promise(r => setTimeout(r, 0));
+	assert.equal(next.descriptions.at(-1), "還有 2 筆文獻沒有同步。要接續：工具 → 繼續未完成的 Zotero Bridge 同步。");
+	assert.equal(JSON.parse(next.prefStore["extensions.zotero-bridge.batch.pending"]).running, false, "reminded once");
+	assert.deepEqual(next.errors, []);
 });
