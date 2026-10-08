@@ -68,7 +68,9 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 - 要用 API key，**ChatGPT／Claude 的訂閱方案不能直接用在這裡**，API 另外計費。
 - 「Codex」系列是寫程式專用模型。整理文獻用一般模型效果較好，所以預設 `gpt-5.5`；想用 Codex 模型可以自行填入模型名稱。
 - **全文最多送出字元數**：預設 150,000 字元。超過會截斷，筆記的 frontmatter 會標記 `fulltext_truncated: true`，也會告訴 LLM 後段沒有提供。設成 0 表示只送摘要與註記，較省錢。
-- 一次替超過 5 篇文獻產生 AI 筆記前會先跳出確認視窗。
+- 一次替超過 5 篇文獻產生 AI 筆記前會先跳出確認視窗；有用量紀錄時會附上預估費用（依過去呼叫的平均 tokens 估算）。
+- API 暫時忙碌或網路中斷（HTTP 408／409／429／500／502／503／504、Claude 的 529 overloaded）會自動重試最多 4 次，間隔以指數退避並遵守伺服器的 `retry-after`；金鑰錯誤（401）、請求錯誤（400）或模型拒絕處理不會重試。
+- **本月 AI 用量**：設定頁顯示本月呼叫次數、tokens 與估計費用（美元），可重設；每次 AI 執行後，進度視窗也會顯示一行用量摘要。價格表（每百萬 tokens 美元）內建 `claude-opus-5-5` $4／$20、`claude-sonnet-5-5` $2／$10、`claude-haiku-4-5` $1／$5，可以在設定修改；OpenAI 模型沒有內建價格，只顯示 tokens（可自行加入價格）。估計值僅供參考，實際金額以服務商帳單為準。
 
 ### 4. 分流規則（選用）
 
@@ -125,7 +127,7 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 
 ## 注意事項
 
-- API key 和 Notion token 以明碼存在 Zotero 設定檔（profile 的 `prefs.js`）中，請勿分享該檔案。
+- API key 和 Notion token 存在 Zotero 的密碼管理員（與 Zotero 同步帳號的 API key 相同機制；作業系統鑰匙圈可用時會再加密），不會寫進 profile 的 `prefs.js`。舊版存在 `prefs.js` 的金鑰會在啟動時自動搬移並從 `prefs.js` 刪除。
 - 已經 AI 處理過的條目，AI 筆記存在 Zotero 子筆記（標籤 `zotero-bridge-ai`）。你可以直接在 Zotero 修改，下次同步會沿用修改後的內容。
 - Notion 的 API 速率限制約每秒 3 次，同步大量文獻時會比較慢。
 
@@ -153,7 +155,9 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi
 | `bootstrap.js` | 插件生命週期、載入腳本、註冊設定頁 |
 | `content/main.js` | 同步流程、右鍵選單、自動同步 |
 | `content/zotero-adapter.js` | 讀取 Zotero 條目、註記、全文、APA；存 AI 筆記 |
-| `content/llm.js` | 筆記模板、Claude／OpenAI API |
+| `content/llm.js` | 筆記模板、Claude／OpenAI API（重試、token 用量） |
+| `content/secrets.js` | API key／Notion token 存取（Gecko 密碼管理員） |
+| `content/usage.js` | AI 用量月報、價格表與費用估算 |
 | `content/notion.js` | Notion API（2025-09-03，data sources） |
 | `content/core.js` | Obsidian 筆記組裝、frontmatter 合併、分流規則 |
 | `content/markdown.js` | Markdown ⇄ Notion blocks ⇄ HTML |

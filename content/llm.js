@@ -118,8 +118,131 @@
 		}
 	}
 
-	async function callAnthropic({ apiKey, model, effort, system, user, fetch }) {
-		let res = await fetch("https://api.anthropic.com/v1/messages", {
+	// ---------- HTTP: retries ----------
+
+	// Transient statuses worth retrying (529 = Anthropic "overloaded"). 400/401/403/404 and refusals are final.
+	const RETRY_STATUSES = new Set([408, 409, 429, 500, 502, 503, 504, 529]);
+	const MAX_RETRIES = 4;
+	const BACKOFF_BASE_MS = 1000;
+	const BACKOFF_MAX_MS = 30000;
+	// A server-requested delay longer than this is ignored in favor of normal backoff
+	const MAX_RETRY_AFTER_MS = 60000;
+
+	function defaultSleep(ms) {
+		return new Promise(resolve => setTimeout(resolve, ms));
+	}
+
+	function header(res, name) {
+		let h = res && res.headers;
+		if (!h) return null;
+		let v = typeof h.get === "function" ? h.get(name) : h[name];
+		return v === undefined ? null : v;
+	}
+
+	/** Delay requested by `retry-after-ms` or `retry-after` (seconds or HTTP date), in ms; null if absent/unusable. */
+	function retryAfterMs(res, now = Date.now()) {
+		let ms = Number.parseFloat(header(res, "retry-after-ms"));
+		if (!Number.isFinite(ms)) {
+			let value = header(res, "retry-after");
+			if (value !== null && String(value).trim() !== "") {
+				let secs = Number(value);
+				if (Number.isFinite(secs)) {
+					ms = secs * 1000;
+				}
+				else {
+					let date = Date.parse(value);
+					if (Number.isFinite(date)) ms = Math.max(0, date - now);
+				}
+			}
+		}
+		if (!Number.isFinite(ms) || ms < 0 || ms > MAX_RETRY_AFTER_MS) return null;
+		return Math.round(ms);
+	}
+
+	/** Exponential backoff for retry number `attempt` (0-based), reduced by up to 25% jitter. */
+	function backoffDelay(attempt, random = Math.random) {
+		let base = Math.min(BACKOFF_BASE_MS * 2 ** attempt, BACKOFF_MAX_MS);
+		return Math.round(base * (1 - 0.25 * random()));
+	}
+
+	/**
+	 * POST with retries on transient HTTP statuses and network errors.
+	 * @param {object} opts { sleep, maxRetries, random, onRetry({ attempt, maxRetries, delay, status, error }) }
+	 * @returns {Promise<{ res, json, retries }>} the final response (which may still be an error status)
+	 */
+	async function postWithRetry(fetch, url, init, opts = {}) {
+		let sleep = opts.sleep || defaultSleep;
+		let maxRetries = opts.maxRetries === undefined ? MAX_RETRIES : opts.maxRetries;
+		let random = opts.random || Math.random;
+		for (let attempt = 0; ; attempt++) {
+			let res = null;
+			let json = null;
+			let error = null;
+			try {
+				res = await fetch(url, init);
+				json = await readJSON(res);
+			}
+			catch (e) {
+				// fetch rejects (TypeError) when the network fails or the connection drops mid-body
+				error = e;
+			}
+			let retryable = error ? true : RETRY_STATUSES.has(res.status);
+			if (!retryable || attempt >= maxRetries) {
+				if (error) throw error;
+				return { res, json, retries: attempt };
+			}
+			let requested = error ? null : retryAfterMs(res);
+			let delay = requested === null ? backoffDelay(attempt, random) : requested;
+			if (opts.onRetry) {
+				try {
+					opts.onRetry({ attempt: attempt + 1, maxRetries, delay, status: error ? null : res.status, error });
+				}
+				catch (e) {}
+			}
+			await sleep(delay);
+		}
+	}
+
+	function httpError(label, res, json, retries) {
+		let msg = (json.error && json.error.message) || json.raw || res.statusText;
+		let err = new Error(`${label} ${res.status}: ${msg}${retries ? `（已重試 ${retries} 次）` : ""}`);
+		err.status = res.status;
+		return err;
+	}
+
+	// ---------- HTTP: token usage ----------
+
+	function count(n) {
+		return Number.isFinite(n) && n > 0 ? n : 0;
+	}
+
+	/**
+	 * Normalize token usage to { input, output, cacheRead, cacheWrite }. `input` counts full-price input only:
+	 * Claude's input_tokens already excludes cache reads/writes; OpenAI's input_tokens includes cached_tokens.
+	 */
+	function parseUsage(provider, json) {
+		let u = (json && json.usage) || {};
+		if (provider === "openai") {
+			let cached = count(u.input_tokens_details && u.input_tokens_details.cached_tokens);
+			return {
+				input: Math.max(0, count(u.input_tokens) - cached),
+				output: count(u.output_tokens),
+				cacheRead: cached,
+				cacheWrite: 0,
+			};
+		}
+		return {
+			input: count(u.input_tokens),
+			output: count(u.output_tokens),
+			cacheRead: count(u.cache_read_input_tokens),
+			cacheWrite: count(u.cache_creation_input_tokens),
+		};
+	}
+
+	// ---------- providers ----------
+
+	async function callAnthropic({ apiKey, model, effort, system, user, fetch, retry }) {
+		let { res, json, retries } = await postWithRetry(fetch, "https://api.anthropic.com/v1/messages", {
 			method: "POST",
 			headers: {
 				"content-type": "application/json",
@@ -137,12 +260,9 @@
 				system,
 				messages: [{ role: "user", content: user }],
 			}),
-		});
-		let json = await readJSON(res);
-		if (!res.ok) {
-			let msg = (json.error && json.error.message) || json.raw || res.statusText;
-			throw new Error(`Claude API ${res.status}: ${msg}`);
-		}
+		}, retry);
+		if (!res.ok) throw httpError("Claude API", res, json, retries);
+		// A refusal is a final answer (HTTP 200), never retried
 		if (json.stop_reason === "refusal") {
 			let cat = json.stop_details && json.stop_details.category;
 			throw new Error(`Claude 拒絕處理這篇文獻${cat ? `（${cat}）` : ""}`);
@@ -152,12 +272,13 @@
 		if (json.stop_reason === "max_tokens") {
 			text += "\n\n> ⚠️ 輸出達到長度上限，內容可能不完整。";
 		}
-		return { text, model: json.model || model };
+		// json.model names the model that answered (it differs from the request after a server-side fallback)
+		return { text, model: json.model || model, provider: "anthropic", usage: parseUsage("anthropic", json), retries };
 	}
 
-	async function callOpenAI({ apiKey, model, system, user, fetch, baseURL }) {
+	async function callOpenAI({ apiKey, model, system, user, fetch, baseURL, retry }) {
 		let base = (baseURL || "https://api.openai.com/v1").replace(/\/+$/, "");
-		let res = await fetch(`${base}/responses`, {
+		let { res, json, retries } = await postWithRetry(fetch, `${base}/responses`, {
 			method: "POST",
 			headers: {
 				"content-type": "application/json",
@@ -168,12 +289,8 @@
 				instructions: system,
 				input: user,
 			}),
-		});
-		let json = await readJSON(res);
-		if (!res.ok) {
-			let msg = (json.error && json.error.message) || json.raw || res.statusText;
-			throw new Error(`OpenAI API ${res.status}: ${msg}`);
-		}
+		}, retry);
+		if (!res.ok) throw httpError("OpenAI API", res, json, retries);
 		let text = typeof json.output_text === "string" ? json.output_text : "";
 		if (!text) {
 			for (let item of json.output || []) {
@@ -188,22 +305,26 @@
 		if (json.status === "incomplete") {
 			text += "\n\n> ⚠️ 輸出未完成，內容可能不完整。";
 		}
-		return { text, model: json.model || model };
+		return { text, model: json.model || model, provider: "openai", usage: parseUsage("openai", json), retries };
 	}
 
-	/** Run one system + user prompt on the configured provider. */
-	async function generateText(settings, system, user, fetch) {
+	/**
+	 * Run one system + user prompt on the configured provider.
+	 * @param {object} [opts] retry options for postWithRetry: { sleep, maxRetries, random, onRetry }
+	 * @returns {Promise<{ text, model, provider, usage: { input, output, cacheRead, cacheWrite }, retries }>}
+	 */
+	async function generateText(settings, system, user, fetch, opts = {}) {
 		if (!settings.apiKey) throw new Error("尚未設定 LLM API key");
-		let common = { apiKey: settings.apiKey, model: settings.model, system, user, fetch };
+		let common = { apiKey: settings.apiKey, model: settings.model, system, user, fetch, retry: opts };
 		if (settings.provider === "openai") {
 			return callOpenAI(Object.assign(common, { baseURL: settings.baseURL }));
 		}
 		return callAnthropic(Object.assign(common, { effort: settings.effort }));
 	}
 
-	async function generateNote(settings, data, opts, fetch) {
+	async function generateNote(settings, data, opts, fetch, callOpts) {
 		let { system, user } = buildPrompt(data, opts);
-		return generateText(settings, system, user, fetch);
+		return generateText(settings, system, user, fetch, callOpts);
 	}
 
 	/** Pull the one-line summary out of the generated note (for the Notion "Summary" property). */
@@ -219,5 +340,6 @@
 	return {
 		DEFAULT_MODELS, DEFAULT_SYSTEM_PROMPT, buildPrompt, formatAnnotationsForPrompt,
 		callAnthropic, callOpenAI, generateText, generateNote, extractSummary,
+		RETRY_STATUSES, MAX_RETRIES, postWithRetry, retryAfterMs, backoffDelay, parseUsage,
 	};
 });

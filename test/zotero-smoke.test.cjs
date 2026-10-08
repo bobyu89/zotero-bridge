@@ -13,11 +13,41 @@ const { AI_MD } = require("./fixtures.cjs");
 const ROOT = path.join(__dirname, "..");
 const ROOT_URI = "file://" + ROOT + "/";
 
-function makeEnv({ prefs, fetch }) {
+// Gecko login manager (Services.logins) backed by an array; lookups return the stored objects
+function loginManagerMock(initial = []) {
+	let logins = [...initial];
+	let same = (a, b) => a.origin === b.origin && a.httpRealm === b.httpRealm && a.username === b.username;
+	return {
+		logins,
+		searchLoginsAsync: async match => logins.filter(l => Object.entries(match).every(([k, v]) => l[k] === v)),
+		addLoginAsync: async (login) => {
+			if (logins.some(l => same(l, login))) throw new Error("This login already exists.");
+			logins.push(login);
+			return login;
+		},
+		modifyLoginAsync: async (old, login) => {
+			let i = logins.indexOf(old);
+			if (i < 0) throw new Error("No matching logins");
+			logins[i] = login;
+		},
+		removeLoginAsync: async (old) => {
+			let i = logins.indexOf(old);
+			if (i < 0) throw new Error("No matching logins");
+			logins.splice(i, 1);
+		},
+	};
+}
+
+function LoginInfo(origin, formActionOrigin, httpRealm, username, password) {
+	Object.assign(this, { origin, formActionOrigin, httpRealm, username, password });
+}
+
+function makeEnv({ prefs, fetch, logins = [], confirm = () => true }) {
 	let items = new Map();
 	let nextID = 100;
 	let menus = [];
 	let progressLines = [];
+	let descriptions = [];
 	let errors = [];
 	let panes = [];
 
@@ -72,7 +102,7 @@ function makeEnv({ prefs, fetch }) {
 
 	let prefStore = Object.assign({}, prefs);
 	let Zotero = {
-		Prefs: { get: k => prefStore[k], set: (k, v) => { prefStore[k] = v; } },
+		Prefs: { get: k => prefStore[k], set: (k, v) => { prefStore[k] = v; }, clear: (k) => { delete prefStore[k]; } },
 		MenuManager: {
 			registerMenu: (opts) => { menus.push(opts); return opts.menuID; },
 			unregisterMenu: () => true,
@@ -110,7 +140,10 @@ function makeEnv({ prefs, fetch }) {
 				};
 			}
 			changeHeadline() {}
-			addDescription(t) { this.description = t; }
+			addDescription(t) {
+				this.description = t;
+				descriptions.push(t);
+			}
 			show() {}
 			startCloseTimer() {}
 		},
@@ -128,8 +161,18 @@ function makeEnv({ prefs, fetch }) {
 	};
 	let PathUtils = { join: (...parts) => path.join(...parts), filename: p => path.basename(p) };
 
+	let loginManager = loginManagerMock(logins);
 	let context = vm.createContext({
 		Zotero, IOUtils, PathUtils, fetch, console,
+		Components: {
+			// `new Components.Constructor(cid, iface, "init")` returns the nsILoginInfo constructor
+			Constructor: function (cid, iface, init) {
+				assert.equal(cid, "@mozilla.org/login-manager/loginInfo;1");
+				assert.equal(init, "init");
+				return LoginInfo;
+			},
+			interfaces: { nsILoginInfo: {} },
+		},
 		DOMParser: new JSDOM("").window.DOMParser,
 		setTimeout, clearTimeout,
 		Services: {
@@ -139,11 +182,12 @@ function makeEnv({ prefs, fetch }) {
 					vm.runInContext(fs.readFileSync(file, "utf8"), context, { filename: file });
 				},
 			},
-			prompt: { confirm: () => true },
+			prompt: { confirm: (win, title, text) => confirm(text) },
+			logins: loginManager,
 		},
 	});
 	vm.runInContext(fs.readFileSync(path.join(ROOT, "bootstrap.js"), "utf8"), context, { filename: "bootstrap.js" });
-	return { context, Zotero, MockItem, addChild, menus, progressLines, items, prefStore, errors, panes };
+	return { context, Zotero, MockItem, addChild, menus, progressLines, descriptions, items, prefStore, errors, panes, loginManager };
 }
 
 function notionMock(log) {
@@ -152,8 +196,11 @@ function notionMock(log) {
 		let body = init.body ? JSON.parse(init.body) : undefined;
 		let ok = json => ({ status: 200, ok: true, headers: { get: () => null }, text: async () => JSON.stringify(json) });
 		if (url.startsWith("https://api.anthropic.com/")) {
-			log.push({ api: "anthropic", body });
-			return ok({ model: "claude-opus-5-5", stop_reason: "end_turn", content: [{ type: "text", text: AI_MD }] });
+			log.push({ api: "anthropic", body, headers: init.headers });
+			return ok({
+				model: "claude-opus-5-5", stop_reason: "end_turn", content: [{ type: "text", text: AI_MD }],
+				usage: { input_tokens: 12000, output_tokens: 3000, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+			});
 		}
 		let p = url.replace("https://api.notion.com/v1/", "");
 		log.push({ api: "notion", method: init.method, path: p, body });
@@ -237,9 +284,26 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	assert.equal(env.progressLines[0].error, undefined, env.progressLines[0].text);
 	assert.equal(env.progressLines[0].progress, 100);
 
+	// Secrets moved from prefs.js into the login manager on startup, then cleared from prefs
+	assert.equal(env.prefStore["extensions.zotero-bridge.llm.anthropicKey"], undefined);
+	assert.equal(env.prefStore["extensions.zotero-bridge.notion.token"], undefined);
+	assert.deepEqual(env.loginManager.logins.map(l => [l.origin, l.httpRealm, l.username, l.password]).sort(), [
+		["chrome://zotero-bridge", "Zotero Bridge", "anthropicKey", "sk-ant-test"],
+		["chrome://zotero-bridge", "Zotero Bridge", "notionToken", "ntn_test"],
+	]);
+
+	// Usage recorded in this month's ledger and summarized in the progress window
+	let ledger = JSON.parse(env.prefStore["extensions.zotero-bridge.usage.ledger"]);
+	let month = ledger[env.context.ZB.usage.monthKey()];
+	assert.equal(month.calls, 1);
+	assert.deepEqual(month.byModel["claude-opus-5-5"], { calls: 1, input: 12000, output: 3000, cacheRead: 0, cacheWrite: 0 });
+	// 12,000 × $4 + 3,000 × $20 per million = $0.108
+	assert.equal(env.descriptions.at(-1), "AI 用量：1 次呼叫，輸入 12,000／輸出 3,000 tokens，約 US$0.11");
+
 	// LLM call: full text truncated to the configured limit
 	let llmCalls = log.filter(l => l.api === "anthropic");
 	assert.equal(llmCalls.length, 1);
+	assert.equal(llmCalls[0].headers["x-api-key"], "sk-ant-test", "API key read back from the login manager");
 	assert.match(llmCalls[0].body.messages[0].content, /<fulltext>\n（全文過長[^\n]*\n01234567890123456789\n<\/fulltext>/);
 	assert.match(llmCalls[0].body.messages[0].content, /My \*\*own\*\* note/);
 
@@ -282,6 +346,7 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	await env.context.ZB.main.run([], {});
 	assert.deepEqual(env.errors, []);
 	assert.equal(log.filter(l => l.api === "anthropic").length, 0);
+	assert.equal(env.descriptions.at(-1), "完成 1 筆", "no usage line when AI was not called");
 	assert.ok(log.some(l => l.method === "PATCH" && l.path === "pages/page-1"), "existing page is updated, not duplicated");
 	assert.ok(!log.some(l => l.path === "pages" && l.method === "POST"));
 	let text2 = fs.readFileSync(file, "utf8");
@@ -300,7 +365,11 @@ test("AI failure still writes Obsidian, and an unconfigured Notion is skipped", 
 	let calls = [];
 	let fetch = async (url) => {
 		calls.push(url);
-		return { status: 500, ok: false, statusText: "err", headers: { get: () => null }, text: async () => JSON.stringify({ error: { message: "overloaded" } }) };
+		return {
+			status: 500, ok: false, statusText: "err",
+			headers: { get: k => (k === "retry-after-ms" ? "250" : null) },
+			text: async () => JSON.stringify({ error: { message: "overloaded" } }),
+		};
 	};
 	let env = makeEnv({
 		fetch,
@@ -317,13 +386,18 @@ test("AI failure still writes Obsidian, and an unconfigured Notion is skipped", 
 		},
 	});
 	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
+	let sleeps = [];
+	env.context.ZB.main.runtime.retry = { sleep: async (ms) => { sleeps.push(ms); } };
 	let item = new env.MockItem("book", { title: "Nursing Theory", year: "2020", creators: [{ name: "WHO", creatorType: "author" }] });
 	await env.context.ZB.main.run([item], { targets: ["notion", "obsidian"], ai: "missing" });
 
-	assert.deepEqual(calls, ["https://api.openai.com/v1/responses"], "no Notion calls without a token");
+	// 1 try + 4 retries, each waiting the server's retry-after-ms; never any Notion call without a token
+	assert.deepEqual(calls, Array(5).fill("https://api.openai.com/v1/responses"));
+	assert.deepEqual(sleeps, [250, 250, 250, 250]);
 	let line = env.progressLines[0];
 	assert.equal(line.error, true);
-	assert.match(line.text, /AI 筆記：OpenAI API 500: overloaded/);
+	assert.match(line.text, /AI 筆記：OpenAI API 500: overloaded（已重試 4 次）/);
+	assert.equal(env.prefStore["extensions.zotero-bridge.usage.ledger"], undefined, "failed calls are not billed");
 	let text = fs.readFileSync(path.join(vault, "WHO 2020 - Nursing Theory.md"), "utf8");
 	assert.match(text, /^title: "Nursing Theory"$/m);
 	assert.doesNotMatch(text, /AI 文獻筆記/);
@@ -339,6 +413,7 @@ test("item pane shows the AI note; synthesis from a collection writes Obsidian, 
 		if (url.startsWith("https://api.anthropic.com/")) {
 			return ok({
 				model: "claude-opus-5-5", stop_reason: "end_turn",
+				usage: { input_tokens: 50000, output_tokens: 8000 },
 				content: [{ type: "text", text: "## 綜合摘要\n兩篇都有效 [S1, S2]。\n\n## 文獻比較表\n| 文獻 | 設計 |\n|---|---|\n| [S1] | RCT |\n| [S2] | cohort |\n" }],
 			});
 		}
@@ -394,6 +469,8 @@ test("item pane shows the AI note; synthesis from a collection writes Obsidian, 
 	let line = env.progressLines.at(-1);
 	assert.equal(line.error, undefined, line.text);
 	assert.match(line.text, /已寫入 Notion、Obsidian、Zotero 筆記/);
+	// 50,000 × $4 + 8,000 × $20 per million = $0.36
+	assert.equal(env.descriptions.at(-1), "AI 用量：1 次呼叫，輸入 50,000／輸出 8,000 tokens，約 US$0.36");
 
 	let llm = log.find(l => l.url.startsWith("https://api.anthropic.com/"));
 	assert.match(llm.body.messages[0].content, /<source id="S1">[\s\S]*<ai_note>[\s\S]*衛教降低跌倒/);
@@ -417,4 +494,150 @@ test("item pane shows the AI note; synthesis from a collection writes Obsidian, 
 	assert.deepEqual(synNote.collectionsAdded, [7]);
 	assert.deepEqual(synNote.related.sort(), [a.key, b.key].sort());
 	assert.match(synNote.noteHTML, /<table>/);
+});
+
+test("keys come from the login manager; batch confirm shows a cost estimate; 529 is retried", async () => {
+	let vault = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-vault-"));
+	let calls = 0;
+	let fetch = async (url, init) => {
+		assert.equal(init.headers["x-api-key"], "sk-ant-stored");
+		calls++;
+		if (calls === 1) {
+			return {
+				status: 529, ok: false, statusText: "",
+				headers: { get: k => (k === "retry-after" ? "2" : null) },
+				text: async () => JSON.stringify({ error: { type: "overloaded_error", message: "Overloaded" } }),
+			};
+		}
+		return {
+			status: 200, ok: true, headers: { get: () => null },
+			text: async () => JSON.stringify({
+				model: "claude-opus-5-5", stop_reason: "end_turn", content: [{ type: "text", text: AI_MD }],
+				usage: { input_tokens: 1000, output_tokens: 500, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+			}),
+		};
+	};
+	let confirms = [];
+	let env = makeEnv({
+		fetch,
+		confirm: (text) => {
+			confirms.push(text);
+			return true;
+		},
+		// Stored by an earlier session; nothing in prefs
+		logins: [new LoginInfo("chrome://zotero-bridge", null, "Zotero Bridge", "anthropicKey", "sk-ant-stored")],
+		prefs: {
+			"extensions.zotero-bridge.obsidian.vaultPath": vault,
+			"extensions.zotero-bridge.obsidian.folder": "",
+			"extensions.zotero-bridge.obsidian.filenameFormat": "title",
+			"extensions.zotero-bridge.routing.rules": "[]",
+			"extensions.zotero-bridge.llm.enabled": true,
+			"extensions.zotero-bridge.llm.provider": "anthropic",
+			"extensions.zotero-bridge.llm.anthropicModel": "claude-opus-5-5",
+			"extensions.zotero-bridge.llm.fullTextLimit": "0",
+			// Two earlier calls averaging 10,000 input + 2,000 output tokens = $0.08 per call
+			"extensions.zotero-bridge.usage.ledger": JSON.stringify({
+				"2020-01": { calls: 2, input: 20000, output: 4000, byModel: { "claude-opus-5-5": { calls: 2, input: 20000, output: 4000 } } },
+			}),
+		},
+	});
+	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
+	let sleeps = [];
+	env.context.ZB.main.runtime.retry = { sleep: async (ms) => { sleeps.push(ms); } };
+	// Record every status line (the retry notice is replaced once the item finishes)
+	let statuses = [];
+	let push = env.progressLines.push.bind(env.progressLines);
+	env.progressLines.push = (line) => {
+		let setText = line.setText.bind(line);
+		line.setText = (t) => {
+			statuses.push(t);
+			setText(t);
+		};
+		return push(line);
+	};
+	let items = Array.from({ length: 6 }, (_, i) => new env.MockItem("journalArticle", { title: `Paper ${i}`, year: "2024" }));
+	await env.context.ZB.main.run(items, { targets: ["notion", "obsidian"], ai: "missing" });
+
+	assert.deepEqual(env.errors, []);
+	assert.equal(confirms.length, 1);
+	assert.match(confirms[0], /6 筆文獻呼叫 Claude（claude-opus-5-5）/);
+	assert.match(confirms[0], /預估費用：約 US\$0\.48（6 筆 × 每筆約 US\$0\.08，依過去 2 次呼叫的平均用量估算/);
+	assert.equal(calls, 7, "one retry after the 529, then one call per item");
+	assert.deepEqual(sleeps, [2000], "retry-after (seconds) is honored");
+	assert.ok(statuses.some(t => /AI 服務暫時無法使用（529），2 秒後重試（1\/4）/.test(t)), statuses.join("\n"));
+	assert.ok(env.progressLines.every(l => l.progress === 100));
+
+	let ledger = JSON.parse(env.prefStore["extensions.zotero-bridge.usage.ledger"]);
+	let month = ledger[env.context.ZB.usage.monthKey()];
+	assert.equal(month.calls, 6);
+	assert.equal(month.input, 6000);
+	assert.equal(month.output, 3000);
+	assert.equal(ledger["2020-01"].calls, 2, "history kept");
+	// 6,000 × $4 + 3,000 × $20 per million = $0.084
+	assert.equal(env.descriptions.at(-1), "AI 用量：6 次呼叫，輸入 6,000／輸出 3,000 tokens，約 US$0.08");
+	let report = env.context.ZB.main.usageReport();
+	assert.equal(report[0], "呼叫次數：6");
+	assert.match(report[2], /估計費用：US\$0\.08/);
+
+	// Without a stored key nothing is called
+	await env.context.ZB.secrets.clear("anthropicKey");
+	assert.deepEqual(env.loginManager.logins, []);
+	await env.context.ZB.main.run(items, { targets: ["obsidian"], ai: "regenerate" });
+	assert.equal(calls, 7);
+});
+
+test("settings pane loads and saves secrets through the login manager, never prefs", async () => {
+	let xhtml = fs.readFileSync(path.join(ROOT, "content", "preferences.xhtml"), "utf8");
+	let passwords = [...xhtml.matchAll(/<html:input[^>]*type="password"[^>]*>/g)].map(m => m[0]);
+	assert.equal(passwords.length, 3);
+	for (let tag of passwords) assert.doesNotMatch(tag, /preference=/, tag);
+	assert.doesNotMatch(xhtml, /llm\.anthropicKey|llm\.openaiKey|notion\.token/);
+
+	let env = makeEnv({
+		fetch: async () => { throw new Error("no network in this test"); },
+		logins: [new LoginInfo("chrome://zotero-bridge", null, "Zotero Bridge", "notionToken", "ntn_stored")],
+		prefs: {
+			"extensions.zotero-bridge.llm.openaiKey": "sk-legacy",
+			"extensions.zotero-bridge.usage.ledger": "{}",
+		},
+	});
+	env.Zotero.Prefs.registerObserver = () => Symbol("obs");
+	env.Zotero.Prefs.unregisterObserver = () => {};
+	env.Zotero.Libraries.getAll = () => [];
+	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
+
+	let { window } = new JSDOM(`<div>
+		<input id="zb-anthropic-key" type="password"><input id="zb-openai-key" type="password"><input id="zb-notion-token" type="password">
+		<div id="zb-secrets-status"></div><pre id="zb-usage"></pre><div id="zb-rules"></div>
+	</div>`);
+	let paneScope = vm.createContext({ Zotero: env.Zotero, window, document: window.document, Event: window.Event, setTimeout, clearTimeout });
+	vm.runInContext(fs.readFileSync(path.join(ROOT, "content", "preferences.js"), "utf8"), paneScope);
+	let settle = () => new Promise(r => setTimeout(r, 0));
+	window.ZoteroBridgePrefs.init();
+	await env.context.ZB.secrets.get("notionToken");
+	await settle();
+	let $ = id => window.document.getElementById(id);
+	assert.equal($("zb-notion-token").value, "ntn_stored");
+	assert.equal($("zb-openai-key").value, "sk-legacy", "value migrated from prefs is shown");
+	assert.equal($("zb-anthropic-key").value, "");
+	assert.equal($("zb-usage").textContent, "本月尚未呼叫 AI。");
+	assert.equal($("zb-secrets-status").textContent, "");
+
+	// Typing saves to the login manager only
+	let input = $("zb-anthropic-key");
+	input.value = "sk-ant-new";
+	input.dispatchEvent(new window.Event("input"));
+	input.dispatchEvent(new window.Event("change"));
+	await env.context.ZB.secrets.get("anthropicKey");
+	await settle();
+	let stored = Object.fromEntries(env.loginManager.logins.map(l => [l.username, l.password]));
+	assert.deepEqual(stored, { notionToken: "ntn_stored", openaiKey: "sk-legacy", anthropicKey: "sk-ant-new" });
+	assert.ok(!Object.keys(env.prefStore).some(k => /Key$|token$/.test(k)), Object.keys(env.prefStore).join(", "));
+
+	// Clearing the field removes the login
+	$("zb-notion-token").value = "";
+	$("zb-notion-token").dispatchEvent(new window.Event("change"));
+	assert.equal(await env.context.ZB.secrets.get("notionToken"), "");
+	assert.ok(!env.loginManager.logins.some(l => l.username === "notionToken"));
+	window.dispatchEvent(new window.Event("unload"));
 });
