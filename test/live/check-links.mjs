@@ -216,7 +216,7 @@ async function discover(home, query) {
 			"input[name*=query i]:visible", "input[name*=keyword i]:visible", "input[name=q]:visible",
 			"input[placeholder*=搜尋]:visible", "input[placeholder*=查詢]:visible", "input[placeholder*=檢索]:visible", "input[placeholder*=關鍵]:visible",
 			"input[type=text]:visible",
-		];
+		].map(sel => sel.replace(":visible", ":not([type=checkbox]):not([type=radio]):not([type=hidden]):visible"));
 		let box = null;
 		for (let sel of selectors) {
 			let loc = page.locator(sel).first();
@@ -608,7 +608,7 @@ async function runCatalogs(report) {
 				let alt = { ...e, url, kind: template.includes("{q}") ? "search" : "home" };
 				let r = await probe(alt);
 				alts.push({ template, url, code: r.code, why: r.why });
-				log(`    alt ${VERDICTS[r.code].label}  ${short(url, 100)}`);
+				log(`    alt ${VERDICTS[r.code].label}  ${short(url, 100)}\n        ${short(r.why, 400)}`);
 			}
 		}
 		let found = null;
@@ -616,12 +616,13 @@ async function runCatalogs(report) {
 			let key = `discover|${e.home}|${e.query}`;
 			if (!probeCache.has(key)) probeCache.set(key, await discover(e.home || e.url, e.query));
 			found = probeCache.get(key);
-			if (found) log(`    discover: ${found.error || `${found.inUrl ? "query in URL" : "query not in URL"} → ${short(found.finalUrl, 140)} ${found.evidence || ""}`}`);
+			if (found) log(`    discover: ${found.error || `${found.inUrl ? "query in URL" : "query not in URL"} → ${found.finalUrl} ${found.evidence || ""}`}`);
 		}
 		let row = { ...e, ...res, label_verdict: VERDICTS[res.code].label, alts, discovered: found, fix: "" };
 		row.fix = suggestion(e, res, alts);
 		report.catalog.push(row);
-		log(`  → ${VERDICTS[res.code].label}  ${short(res.why, 220)}`);
+		log(`  → ${VERDICTS[res.code].label}  ${short(res.why, 400)}`);
+		if (res.code === "login-expected" && res.fetch && res.fetch.chain.length > 1) log(`    chain: ${res.fetch.chain.join(" → ")}`);
 	}
 }
 
@@ -660,6 +661,23 @@ async function runExtraLinks(report) {
 		report.extra.push({ ...c, status: f.status, finalUrl: f.finalUrl, ok, why: `${f.error || ""} HTTP ${f.status}; ${titleOf(f.body)} ${extra}`.trim() });
 		log(`[extra] ${c.id}: ${ok ? "OK" : "CHECK"} HTTP ${f.status} ${short(f.finalUrl)}`);
 		await sleep(800);
+	}
+	// PubMed "find by title": which title query shapes find the paper (esearch count and whether the PMID is in it)
+	let title = info.title;
+	let variants = [
+		["plugin: \"title\"[ti]", searchLinks.findQuery(byId("pubmed"), { ...info, doi: "" }).query],
+		["no punctuation: \"title\"[ti]", `"${title.replace(/[^\p{L}\p{N}\s-]/gu, " ").replace(/\s+/g, " ").trim()}"[ti]`],
+		["unquoted title[ti]", `${title}[ti]`],
+		["words AND [ti]", title.replace(/[^\p{L}\p{N}\s-]/gu, " ").split(/\s+/).filter(w => w.length > 2 && !/^(?:and|the|for|with|of)$/i.test(w)).map(w => `${w}[ti]`).join(" AND ")],
+		["plain title (ATM)", title],
+	];
+	for (let [label, term] of variants) {
+		let r = await getJSON(pubmedWatch.esearchURL(term, { retmax: 20 }, {}));
+		let p = r.json && r.json.esearchresult ? pubmedWatch.parseESearch(r.json) : { count: "?", ids: [], warnings: [] };
+		let hit = p.ids.includes(TEST_PMID);
+		report.extra.push({ id: "pubmed-title-variant", name: `PubMed title search: ${label}`, url: term, status: r.status, ok: hit, why: `\`${short(term, 120)}\` → count ${p.count}${hit ? `, PMID ${TEST_PMID} found` : ", target not found"}${p.warnings.length ? `; ${p.warnings.join(" / ")}` : ""}` });
+		log(`[extra] pubmed title ${label}: count ${p.count} hit=${hit} ${p.warnings.join(" / ")}`);
+		await sleep(400);
 	}
 	// Europe PMC "find this paper" query syntax (EXT_ID / DOI / TITLE) through its REST API
 	let epmc = byId("europepmc");
