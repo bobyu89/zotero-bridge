@@ -272,6 +272,8 @@ const TESTS = [
 			});
 			let errs = pluginErrors(all);
 			d.consoleErrorsTotal = all.filter(m => m.kind === "error").length;
+			// Every startup error, attributable or not, for the record
+			d.consoleErrors = all.filter(m => m.kind === "error").slice(0, 10);
 			d.pluginWarnings = all.filter(m => m.kind === "warning" && isPluginMessage(m)).slice(0, 20);
 			d.pluginErrors = errs;
 			check(!errs.length, `the plugin logged ${errs.length} error(s) while starting: `

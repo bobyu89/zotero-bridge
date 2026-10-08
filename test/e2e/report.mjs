@@ -62,7 +62,7 @@ for (let t of results.tests) {
 	console.log(`${mark}  ${t.name}${t.ms !== undefined ? ` (${t.ms} ms)` : ""}`);
 	if (t.details && Object.keys(t.details).length) {
 		let json = JSON.stringify(t.details);
-		console.log(`      ${json.length > 600 ? json.slice(0, 600) + "…" : json}`);
+		console.log(`      ${json.length > 1500 ? json.slice(0, 1500) + "…" : json}`);
 	}
 	if (!t.ok) {
 		console.log(String(t.error).split("\n").map(l => "      " + l).join("\n"));
