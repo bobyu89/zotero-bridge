@@ -73,21 +73,25 @@
 				].filter(Boolean).join("\n") || "（沒有摘要或筆記，只有書目資料）";
 			let truncated = body.length > MAX_CHARS_PER_SOURCE;
 			if (truncated) body = body.slice(0, MAX_CHARS_PER_SOURCE) + "\n（內容過長，已截斷）";
-			entries.push({ id, citation: shortCitation(d), data: d, truncated });
+			// citekey: the key export.js writes to references.json (Pandoc [@citekey], review-draft.js)
+			entries.push({ id, citation: shortCitation(d), citekey: d.citationKey || d.generatedCitekey || "", data: d, truncated });
 			blocks.push([
 				`<source id="${id}">`,
 				`標題：${d.title || ""}`,
 				`年份：${d.year || ""}`,
 				`期刊／出處：${d.publication || ""}`,
+				// Optional extra lines (review-draft.js: the AI note's structured data)
+				src.extra || "",
 				body,
 				"</source>",
-			].join("\n"));
+			].filter(Boolean).join("\n"));
 		});
 		let user = [
 			`以下是 ${entries.length} 篇文獻（代號 ${entries.map(e => e.id).join("、")}）。`,
 			...blocks,
 			opts.focus ? `分析重點：${opts.focus}` : "",
-			"請依照系統指示的格式輸出文獻比較與綜合分析。",
+			...(opts.blocks || []),
+			opts.closing || "請依照系統指示的格式輸出文獻比較與綜合分析。",
 		].filter(Boolean).join("\n\n");
 		return {
 			system: (opts.systemPrompt && opts.systemPrompt.trim()) || DEFAULT_SYNTHESIS_PROMPT,
@@ -96,27 +100,64 @@
 		};
 	}
 
+	// One source label with an optional page locator: "S1", "S1, p. 5", "S2，pp. 3–4"
+	const LABEL_SRC = "S\\d+(?:\\s*[,，]\\s*pp?\\.\\s*[\\p{L}\\p{N}]+(?:[-–][\\p{L}\\p{N}]+)?)?";
+	const GROUP_SRC = `\\[(${LABEL_SRC}(?:\\s*[,，、;；]\\s*${LABEL_SRC})*)\\]`;
+	// A run of label groups: [S1] / [S1, S3] / [S1][S2] / [S1] [S2] count as one citation
+	const CITATION_RE = new RegExp(`${GROUP_SRC}(?:[ \\t]?${GROUP_SRC})*`, "giu");
+	const GROUP_RE = new RegExp(GROUP_SRC, "giu");
+
+	/** The labels of one citation run: [{ id: "S1", locator: "p. 5" }] (ids upper-case). */
+	function parseCitation(text) {
+		let out = [];
+		for (let [, inner] of String(text).matchAll(GROUP_RE)) {
+			for (let m of inner.matchAll(/S(\d+)(?:\s*[,，]\s*(pp?)\.\s*([\p{L}\p{N}]+(?:[-–][\p{L}\p{N}]+)?))?/giu)) {
+				out.push({ id: `S${m[1]}`, locator: m[2] ? `${m[2].toLowerCase()}. ${m[3]}` : "" });
+			}
+		}
+		return out;
+	}
+
 	/**
-	 * Replace [S1] / [S1, S3] / [S1][S2] markers.
+	 * Replace [S1] / [S1, S3] / [S1][S2] / [S1, p. 5] markers.
 	 * mode "obsidian": [[note|Chen, 2024]] links (pipe escaped inside table rows)
 	 * mode "plain": (Chen, 2024; Lee, 2023)
+	 * mode "pandoc": [@chen2024; @lee2023] with the entries' citekeys (review-draft.js)
+	 * opts.flagUnknown: a label not in `entries` (or, for Pandoc, without a citekey) becomes a visible
+	 *   【⚠️ …】 marker instead of being left as is or dropped; opts.unknown collects those ids.
 	 */
-	function resolveCitations(md, entries, mode, linkTargets = {}) {
+	function resolveCitations(md, entries, mode, linkTargets = {}, opts = {}) {
 		let byId = new Map(entries.map(e => [e.id.toUpperCase(), e]));
 		return String(md || "").split("\n").map((line) => {
 			let inTable = /^\s*\|.*\|\s*$/.test(line);
-			return line.replace(/\[(S\d+(?:\s*[,，、;；]\s*S\d+)*)\]/gi, (all, inner) => {
-				let ids = inner.split(/\s*[,，、;；]\s*/).map(x => x.toUpperCase());
-				let found = ids.map(id => byId.get(id)).filter(Boolean);
-				if (!found.length) return all;
-				if (mode === "obsidian") {
+			return line.replace(CITATION_RE, (all) => {
+				let labels = parseCitation(all);
+				let found = [];
+				let missing = [];
+				for (let l of labels) {
+					let e = byId.get(l.id);
+					if (e && (mode !== "pandoc" || e.citekey)) found.push({ e, locator: l.locator });
+					else missing.push(e ? `${l.id}（${e.citation} 沒有 citekey）` : l.id);
+				}
+				if (opts.unknown) opts.unknown.push(...missing);
+				let flag = opts.flagUnknown && missing.length ? `【⚠️ 未知來源 ${missing.join("、")}】` : "";
+				if (!found.length) return flag || all;
+				let withLocator = (text, locator) => (locator ? `${text}, ${locator}` : text);
+				let out;
+				if (mode === "pandoc") {
+					out = `[${found.map(f => withLocator("@" + f.e.citekey, f.locator)).join("; ")}]`;
+				}
+				else if (mode === "obsidian") {
 					let sep = inTable ? "\\|" : "|";
-					return found.map((e) => {
+					out = found.map(({ e, locator }) => {
 						let target = linkTargets[e.id];
-						return target ? `[[${target}${sep}${e.citation}]]` : `(${e.citation})`;
+						return target ? `[[${target}${sep}${withLocator(e.citation, locator)}]]` : `(${withLocator(e.citation, locator)})`;
 					}).join("; ");
 				}
-				return `(${found.map(e => e.citation).join("; ")})`;
+				else {
+					out = `(${found.map(f => withLocator(f.e.citation, f.locator)).join("; ")})`;
+				}
+				return out + flag;
 			});
 		}).join("\n");
 	}
@@ -171,7 +212,7 @@
 
 	return {
 		DEFAULT_SYNTHESIS_PROMPT, MAX_CHARS_PER_SOURCE,
-		shortCitation, buildSynthesisPrompt, resolveCitations, referenceList,
+		shortCitation, buildSynthesisPrompt, resolveCitations, parseCitation, CITATION_RE, referenceList,
 		buildSynthesisNote, buildSynthesisPlain,
 	};
 });
