@@ -146,6 +146,27 @@
 	</groupbox>
 
 	<groupbox>
+		<label><html:h2>系統性／範圍回顧篩選</html:h2></label>
+		<description>篩選決定存成 Zotero 標籤：在條目上按右鍵 → Zotero Bridge：篩選；在回顧專案的分類上按右鍵可找重複、產生 PRISMA 流程圖與證據表（存到 Obsidian 預設子資料夾的 Reviews/）。</description>
+		<label value="全文排除原因（一行一個，會成為標籤「排除原因/…」與右鍵選單；留空 = 內建清單）："/>
+		<html:textarea id="zb-screening-reasons" rows="7" preference="extensions.zotero-bridge.screening.reasons" placeholder="族群不符（wrong population）&#10;介入不符（wrong intervention）&#10;結果指標不符（wrong outcome）&#10;研究設計不符（wrong study design）&#10;非全文／研討會摘要（conference abstract）&#10;語言不符（language）&#10;重複發表（duplicate publication）"/>
+		<hbox>
+			<button label="載入內建排除原因來修改" oncommand="ZoteroBridgePrefs.loadDefaultReasons()"/>
+		</hbox>
+		<hbox align="center">
+			<label value="篩選標籤前綴："/>
+			<html:input type="text" preference="extensions.zotero-bridge.screening.tagPrefix" placeholder="篩選/"/>
+			<label value="排除原因前綴："/>
+			<html:input type="text" preference="extensions.zotero-bridge.screening.reasonPrefix" placeholder="排除原因/"/>
+			<label value="資料庫來源前綴："/>
+			<html:input type="text" preference="extensions.zotero-bridge.screening.sourcePrefix" placeholder="來源/"/>
+		</hbox>
+		<label value="PRISMA 頁面的 Notion 父頁面（選填；留空時使用文獻比較表的父頁面，頁面也要分享給 integration）："/>
+		<html:input type="text" preference="extensions.zotero-bridge.screening.notionParent" placeholder="https://www.notion.so/..."/>
+		<description class="zb-hint">改了前綴或排除原因後，舊標籤不會自動改名。資料庫來源：在匯入的文獻加上標籤「來源/PubMed」等；沒有標籤時使用條目的「圖書館目錄」（Library Catalog）欄位（例如從 PubMed 匯入的是「PubMed」）。</description>
+	</groupbox>
+
+	<groupbox>
 		<label><html:h2>自動同步</html:h2></label>
 		<checkbox label="Zotero 條目、註記或筆記變更時自動同步到 Notion 與 Obsidian（不會自動呼叫 AI，沿用既有 AI 筆記）" preference="extensions.zotero-bridge.autoSync"/>
 	</groupbox>

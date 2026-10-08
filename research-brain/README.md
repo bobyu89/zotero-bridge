@@ -47,6 +47,7 @@ Zotero 只能從你的電腦連線，所以大腦要裝在你的電腦，不能�
 | `/research-gaps` | 研究缺口，並提出 PICO 研究問題 | `/research-gaps ICU 病人譫妄的非藥物介入` |
 | `/lit-review-draft` | 文獻探討初稿（先給大綱讓你確認） | `/lit-review-draft 跌倒預防衛教的成效` |
 | `/inbox-triage` | 列出待讀文獻與建議閱讀順序 | `/inbox-triage 碩論` |
+| `/review-prisma` | 讀系統性回顧的 PRISMA 筆記：篩選進度、一致性問題、PRISMA 流程與納入研究特徵段落 | `/review-prisma 跌倒預防 SR` |
 
 也可以直接用一般對話，例如：「把碩論分類裡 2020 年以後的 RCT 找出來，比較它們的測量工具」。
 
