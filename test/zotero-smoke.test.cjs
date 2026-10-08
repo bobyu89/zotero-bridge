@@ -1607,3 +1607,41 @@ test("reading status: without a vault the last synced value lives in a pref; the
 	assert.equal(body.querySelector("select"), null);
 	assert.deepEqual(env.errors, []);
 });
+
+// Found by the e2e test in Zotero 10.0.6: Zotero sends "unload" to the pane's root element and then
+// nukes the pane script's sandbox, so cleanup registered on the window never ran ("can't access dead
+// object"), the pref observers stayed registered and a key typed just before closing was not saved
+test("settings pane: closing it saves a pending key and unregisters its pref observers (unload on the pane root)", async () => {
+	let env = makeEnv({
+		fetch: async () => { throw new Error("no network in this test"); },
+		prefs: { "extensions.zotero-bridge.usage.ledger": "{}" },
+	});
+	let registered = new Set();
+	env.Zotero.Prefs.registerObserver = () => {
+		let s = Symbol("obs");
+		registered.add(s);
+		return s;
+	};
+	env.Zotero.Prefs.unregisterObserver = s => registered.delete(s);
+	env.Zotero.Libraries.getAll = () => [];
+	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
+
+	let { window } = new JSDOM(`<div id="zotero-bridge-prefs">
+		<input id="zb-anthropic-key" type="password"><input id="zb-openai-key" type="password"><input id="zb-notion-token" type="password">
+		<div id="zb-secrets-status"></div><pre id="zb-usage"></pre><div id="zb-rules"></div>
+	</div>`);
+	let paneScope = vm.createContext({ Zotero: env.Zotero, window, document: window.document, Event: window.Event, setTimeout, clearTimeout });
+	vm.runInContext(fs.readFileSync(path.join(ROOT, "content", "preferences.js"), "utf8"), paneScope);
+	window.ZoteroBridgePrefs.init();
+	await env.context.ZB.secrets.get("notionToken");
+	await new Promise(r => setTimeout(r, 0));
+	assert.equal(registered.size, 3, "provider + two usage pref observers");
+
+	// Typed, and the window closed before the 600 ms save delay
+	let input = window.document.getElementById("zb-openai-key");
+	input.value = "sk-typed-then-closed";
+	input.dispatchEvent(new window.Event("input"));
+	window.document.getElementById("zotero-bridge-prefs").dispatchEvent(new window.Event("unload"));
+	assert.equal(await env.context.ZB.secrets.get("openaiKey"), "sk-typed-then-closed");
+	assert.equal(registered.size, 0, "pref observers left registered after the pane closed");
+});

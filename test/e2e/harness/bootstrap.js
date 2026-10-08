@@ -302,6 +302,69 @@ const TESTS = [
 		},
 	},
 	{
+		name: "diagnose: which step logs uncaught exception: undefined",
+		async fn(d) {
+			let win = mainWindow();
+			let doc = win.document;
+			let step = async (name, fn) => {
+				let from = messages.length;
+				try {
+					await fn();
+				}
+				catch (e) {
+					d[name] = `threw ${e}`;
+					return;
+				}
+				await delay(1500);
+				d[name] = messages.slice(from).filter(m => m.kind === "error").map(m => m.text);
+			};
+			let mine = (Zotero.ItemPaneManager.customSectionData.options || []).find(o => o.pluginID === PLUGIN_ID);
+			await step("reinsertFTL", () => {
+				doc.querySelector('link[href="zotero-bridge.ftl"]').remove();
+				win.MozXULElement.insertFTLIfNeeded("zotero-bridge.ftl");
+			});
+			let ids = [];
+			await step("sectionCloneAllHooks", () => {
+				ids.push(Zotero.ItemPaneManager.registerSection({
+					paneID: "zb-e2e-clone1", pluginID: "zb-e2e-harness@bobyu89.github.io",
+					header: mine.header, sidenav: mine.sidenav,
+					onInit: mine.onInit, onItemChange: mine.onItemChange, onRender: mine.onRender,
+				}));
+			});
+			await step("sectionItemChangeOnly", () => {
+				ids.push(Zotero.ItemPaneManager.registerSection({
+					paneID: "zb-e2e-clone2", pluginID: "zb-e2e-harness@bobyu89.github.io",
+					header: mine.header, sidenav: mine.sidenav,
+					onItemChange: ({ setEnabled }) => {
+						setEnabled(false);
+						return true;
+					},
+					onRender: () => {},
+				}));
+			});
+			await step("sectionPluginIcon", () => {
+				ids.push(Zotero.ItemPaneManager.registerSection({
+					paneID: "zb-e2e-clone3", pluginID: "zb-e2e-harness@bobyu89.github.io",
+					header: { l10nID: mine.header.l10nID, icon: mine.header.icon },
+					sidenav: { l10nID: mine.sidenav.l10nID, icon: mine.sidenav.icon },
+					onRender: () => {},
+				}));
+				d.icon = mine.header.icon;
+			});
+			await step("unregisterClones", () => {
+				for (let id of ids) Zotero.ItemPaneManager.unregisterSection(id);
+			});
+			let menu = Zotero.MenuManager._menuManager.options.find(o => o.pluginID === PLUGIN_ID);
+			await step("menuClone", () => {
+				let id = Zotero.MenuManager.registerMenu({
+					menuID: "zb-e2e-menu", pluginID: "zb-e2e-harness@bobyu89.github.io", target: menu.target,
+					menus: [{ menuType: "menuitem", l10nID: "zotero-bridge-menu-settings" }],
+				});
+				Zotero.MenuManager.unregisterMenu(id);
+			});
+		},
+	},
+	{
 		name: "no plugin errors in the console during startup",
 		async fn(d) {
 			let all = startupMessages();
@@ -928,6 +991,10 @@ const TESTS = [
 				check(!untranslated.length, `untranslated l10n elements: ${d.untranslated.join(", ")}`);
 				let anthropicBox = c.querySelector("#zb-anthropic-box");
 				check(anthropicBox && !anthropicBox.hidden, "provider anthropic: #zb-anthropic-box should be visible");
+				// A key typed just before closing (the pane saves 600 ms after the last keystroke)
+				let key = c.querySelector("#zb-openai-key");
+				key.value = "sk-e2e-typed-then-closed";
+				key.dispatchEvent(new win.Event("input"));
 			}
 			finally {
 				d.innerWindowID = win.windowGlobalChild && win.windowGlobalChild.innerWindowId;
@@ -938,6 +1005,18 @@ const TESTS = [
 				mark("secret cleared");
 			}
 			await delay(1000);
+			eq(await zb().secrets.get("openaiKey"), "sk-e2e-typed-then-closed",
+				"openaiKey typed just before the window closed (the pane's unload handler should save it)");
+			await zb().secrets.clear("openaiKey");
+			// The pane's pref observers must be gone with the window
+			let from = messages.length;
+			setPref("llm.provider", "openai");
+			setPref("llm.provider", "anthropic");
+			setPref("usage.prices", "{}");
+			Zotero.Prefs.clear(ZB_PREF + "usage.prices", true);
+			await delay(500);
+			let dead = messages.slice(from).filter(m => m.kind === "error");
+			check(!dead.length, `changing prefs after the settings window closed logged: ${dead.map(m => m.text).join(" | ")} (pref observers of the closed pane are still registered)`);
 		},
 		get allow() {
 			return ctx.keyStoreUsable ? null : /os-keystore|OSKeyStore|key store|鑰匙圈/i;
