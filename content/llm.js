@@ -166,6 +166,8 @@
 	 * @param {object} data - item data from the Zotero adapter (may include fullText, fullTextStatus)
 	 * @param {object} opts - { systemPrompt, notesMarkdown: [{title, md}], fullTextTruncated, pdf }
 	 *   pdf: a scanned PDF sent along as a file ({ data: base64, filename, pages }); replaces <fulltext>
+	 * @returns {{ system, user, systemParts }} systemParts = [system, STUDY_DATA_PROMPT]: the same for
+	 *   every item, so it is sent first (Claude caches it as one prefix); `user` holds only this item
 	 */
 	function buildPrompt(data, opts = {}) {
 		let meta = [
@@ -185,11 +187,13 @@
 		let notes = (opts.notesMarkdown || []).map(n => n.md).filter(Boolean).join("\n\n---\n\n");
 		if (notes) sections.push(`<user_notes>\n${notes}\n</user_notes>`);
 		sections.push(fullTextSection(data, opts));
-		sections.push(STUDY_DATA_PROMPT);
 		sections.push("請依照系統指示的格式輸出這篇文獻的結構化筆記，並在最後附上 JSON 資料區塊。");
+		let system = (opts.systemPrompt && opts.systemPrompt.trim()) || DEFAULT_SYSTEM_PROMPT;
 		return {
-			system: (opts.systemPrompt && opts.systemPrompt.trim()) || DEFAULT_SYSTEM_PROMPT,
+			system,
 			user: sections.join("\n\n"),
+			// Plugin-owned JSON instructions after the (possibly custom) template, ahead of the item
+			systemParts: [system, STUDY_DATA_PROMPT],
 		};
 	}
 
@@ -302,11 +306,20 @@
 	}
 
 	/**
-	 * Normalize token usage to { input, output, cacheRead, cacheWrite }. `input` counts full-price input only:
+	 * Normalize token usage to { input, output, cacheRead, cacheWrite }, plus cacheWrite1h (the part of
+	 * cacheWrite written with the 1-hour TTL) when there is any. `input` counts full-price input only:
 	 * Claude's input_tokens already excludes cache reads/writes; OpenAI's input_tokens includes cached_tokens.
 	 */
 	function parseUsage(provider, json) {
 		let u = (json && json.usage) || {};
+		let usage = parseUsageCounts(provider, u);
+		// Cache writes with the 1-hour TTL (the batch path) cost more than 5-minute ones: kept apart
+		let write1h = count(u.cache_creation && u.cache_creation.ephemeral_1h_input_tokens);
+		if (provider !== "openai" && write1h) usage.cacheWrite1h = Math.min(write1h, usage.cacheWrite);
+		return usage;
+	}
+
+	function parseUsageCounts(provider, u) {
 		if (provider === "openai") {
 			let cached = count(u.input_tokens_details && u.input_tokens_details.cached_tokens);
 			return {
@@ -348,27 +361,57 @@
 		}];
 	}
 
-	async function callAnthropic({ apiKey, model, effort, system, user, pdf, fetch, retry }) {
-		let { res, json, retries } = await postWithRetry(fetch, "https://api.anthropic.com/v1/messages", {
-			method: "POST",
-			headers: {
-				"content-type": "application/json",
-				"x-api-key": apiKey,
-				"anthropic-version": "2023-06-01",
-				// Re-run on Anthropic's recommended model if a safety classifier declines
-				"anthropic-beta": "server-side-fallback-2026-07-01",
-				"anthropic-dangerous-direct-browser-access": "true",
-			},
-			body: JSON.stringify({
-				model: model || DEFAULT_MODELS.anthropic,
-				max_tokens: 16000,
-				fallbacks: "default",
-				output_config: { effort: effort || "medium" },
-				system,
-				messages: [{ role: "user", content: anthropicContent(user, pdf) }],
-			}),
-		}, retry);
-		if (!res.ok) throw httpError("Claude API", res, json, retries);
+	/**
+	 * Claude `system` as text blocks with a cache breakpoint on the last one, so everything up to the end
+	 * of the system prompt (the same for every item) is cached and reused by the next calls; the item
+	 * itself is in the user message after the breakpoint. A prefix shorter than the model's minimum
+	 * cacheable length (512–4096 tokens depending on the model) is simply not cached: no error, no charge.
+	 * @param {string|string[]} system one string or several parts (one block each)
+	 */
+	function anthropicSystem(system) {
+		let parts = (Array.isArray(system) ? system : [system]).filter(p => typeof p === "string" && p.trim());
+		if (!parts.length) return undefined;
+		let blocks = parts.map(text => ({ type: "text", text }));
+		blocks[blocks.length - 1].cache_control = { type: "ephemeral" };
+		return blocks;
+	}
+
+	/**
+	 * The Messages API request body. The Message Batches path (ai-batch.js) sends this same body,
+	 * adjusted only where the Batches API differs (ai-batch.batchParams).
+	 */
+	function anthropicBody({ model, effort, system, user, pdf }) {
+		let body = {
+			model: model || DEFAULT_MODELS.anthropic,
+			max_tokens: 16000,
+			fallbacks: "default",
+			output_config: { effort: effort || "medium" },
+		};
+		let blocks = anthropicSystem(system);
+		if (blocks) body.system = blocks;
+		body.messages = [{ role: "user", content: anthropicContent(user, pdf) }];
+		return body;
+	}
+
+	function anthropicHeaders(apiKey, opts = {}) {
+		let headers = {
+			"content-type": "application/json",
+			"x-api-key": apiKey,
+			"anthropic-version": "2023-06-01",
+		};
+		// Re-run on Anthropic's recommended model if a safety classifier declines (not for Batches,
+		// which reject the `fallbacks` parameter)
+		if (opts.fallback !== false) headers["anthropic-beta"] = "server-side-fallback-2026-07-01";
+		headers["anthropic-dangerous-direct-browser-access"] = "true";
+		return headers;
+	}
+
+	/**
+	 * Read a Claude Message (a Messages API response, or a succeeded Batches result): text, model,
+	 * usage. Throws on a refusal or an empty answer; marks an answer cut off at max_tokens.
+	 */
+	function readAnthropicMessage(json, model) {
+		json = json || {};
 		// A refusal is a final answer (HTTP 200), never retried
 		if (json.stop_reason === "refusal") {
 			let cat = json.stop_details && json.stop_details.category;
@@ -380,7 +423,17 @@
 			text += "\n\n> ⚠️ 輸出達到長度上限，內容可能不完整。";
 		}
 		// json.model names the model that answered (it differs from the request after a server-side fallback)
-		return { text, model: json.model || model, provider: "anthropic", usage: parseUsage("anthropic", json), retries };
+		return { text, model: json.model || model, provider: "anthropic", usage: parseUsage("anthropic", json) };
+	}
+
+	async function callAnthropic({ apiKey, model, effort, system, user, pdf, fetch, retry }) {
+		let { res, json, retries } = await postWithRetry(fetch, "https://api.anthropic.com/v1/messages", {
+			method: "POST",
+			headers: anthropicHeaders(apiKey),
+			body: JSON.stringify(anthropicBody({ model, effort, system, user, pdf })),
+		}, retry);
+		if (!res.ok) throw httpError("Claude API", res, json, retries);
+		return Object.assign(readAnthropicMessage(json, model), { retries });
 	}
 
 	async function callOpenAI({ apiKey, model, system, user, pdf, fetch, baseURL, retry }) {
@@ -393,7 +446,7 @@
 			},
 			body: JSON.stringify({
 				model: model || DEFAULT_MODELS.openai,
-				instructions: system,
+				instructions: Array.isArray(system) ? system.filter(Boolean).join("\n\n") : system,
 				input: openaiInput(user, pdf),
 			}),
 		}, retry);
@@ -444,13 +497,25 @@
 		return content;
 	}
 
-	async function generateNote(settings, data, opts, fetch, callOpts) {
-		let { system, user } = buildPrompt(data, opts);
+	/** The prompt of a literature note: { system (parts), user (string or content array), pdf }. */
+	function notePrompt(settings, data, opts = {}) {
+		let { systemParts, user } = buildPrompt(data, opts);
 		// Image annotations (annotation-images.js; only offered for Claude)
-		if (opts && opts.images && opts.images.length && settings.provider !== "openai") {
+		if (opts.images && opts.images.length && settings.provider !== "openai") {
 			user = imageContent(user, opts.images);
 		}
-		return generateText(settings, system, user, fetch, opts.pdf ? Object.assign({}, callOpts, { pdf: opts.pdf }) : callOpts);
+		return { system: systemParts, user, pdf: opts.pdf || null };
+	}
+
+	/** The Claude request body generateNote() sends for this item (also used by the batch path). */
+	function noteRequestBody(settings, data, opts) {
+		let p = notePrompt(settings, data, opts);
+		return anthropicBody({ model: settings.model, effort: settings.effort, system: p.system, user: p.user, pdf: p.pdf });
+	}
+
+	async function generateNote(settings, data, opts, fetch, callOpts) {
+		let p = notePrompt(settings, data, opts);
+		return generateText(settings, p.system, p.user, fetch, p.pdf ? Object.assign({}, callOpts, { pdf: p.pdf }) : callOpts);
 	}
 
 	/** Pull the one-line summary out of the generated note (for the Notion "Summary" property). */
@@ -692,7 +757,8 @@
 	return {
 		DEFAULT_MODELS, DEFAULT_SYSTEM_PROMPT, buildPrompt, formatAnnotationsForPrompt, PDF_ATTACHED_NOTE,
 		anthropicContent, openaiInput, callAnthropic, callOpenAI, generateText, generateNote, imageContent, extractSummary,
-		RETRY_STATUSES, MAX_RETRIES, postWithRetry, retryAfterMs, backoffDelay, parseUsage,
+		anthropicSystem, anthropicBody, anthropicHeaders, readAnthropicMessage, notePrompt, noteRequestBody,
+		RETRY_STATUSES, MAX_RETRIES, postWithRetry, retryAfterMs, backoffDelay, parseUsage, httpError,
 		STUDY_FIELDS, STUDY_DESIGNS, APPRAISAL_VERDICTS, STUDY_DATA_HEADING, STUDY_DATA_PROMPT, APPRAISAL_HEADING,
 		normalizeStudyData, extractStudyData, hasStudyData, studyDataBlock,
 	};

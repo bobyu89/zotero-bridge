@@ -58,6 +58,9 @@
 				pdfMaxMB: Number(pref("llm.pdfMaxMB")) || 0,
 				pdfMaxPages: Number(pref("llm.pdfMaxPages")) || 0,
 				synthesisPrompt: pref("llm.synthesisPrompt") || "",
+				// Message Batches API for runs with at least batchThreshold AI notes (ai-batch.js; Claude only)
+				batchAPI: pref("llm.batchAPI") === true,
+				batchThreshold: Math.max(2, Number(pref("llm.batchThreshold")) || 10),
 			},
 			notionSynthesisParent: String(pref("notion.synthesisParent") || "").trim(),
 		};
@@ -103,9 +106,9 @@
 		return ZB.usage.parseLedger(pref("usage.ledger"));
 	}
 
-	/** Add one LLM call to the monthly ledger pref and to the current run's totals. */
+	/** Add one LLM call to the monthly ledger pref and to the current run's totals (result.batch: Batches API). */
 	function recordAIUsage(result, runTotals) {
-		let call = { model: result.model, usage: result.usage };
+		let call = { model: result.model, usage: result.usage, batch: !!result.batch };
 		try {
 			Zotero.Prefs.set(PREF + "usage.ledger", JSON.stringify(ZB.usage.recordUsage(readLedger(), call)), true);
 		}
@@ -184,6 +187,34 @@
 		return { md: check.md, data: parsed.data, raw: parsed.found && !parsed.data ? parsed.raw : "", messages, check };
 	}
 
+	/** The user's Zotero notes as Markdown, when they are part of the sync. */
+	function notesFor(settings, data) {
+		return settings.includeNotes
+			? data.notes.map(n => ({ title: n.title, md: ZB.markdown.htmlToMd(n.html, parseHTML) }))
+			: [];
+	}
+
+	/** Options for llm.generateNote / llm.noteRequestBody (the normal and the batch path send the same). */
+	function noteOptions(settings, data, notesMarkdown, promptImages, pdf) {
+		return {
+			systemPrompt: settings.llm.systemPrompt,
+			notesMarkdown,
+			fullTextTruncated: data.fullTextTruncated,
+			images: pdf ? [] : promptImages,
+			pdf,
+		};
+	}
+
+	/** Save a processed AI note as the item's child note (without auto-sync reacting to it). */
+	async function saveGeneratedNote(item, ai, processed) {
+		// Saving a child note also reports a change of the item itself, and Zotero notifies
+		// before saveTx() returns: mark the item first (the notes are checked again at flush time)
+		markSelfModified(item.id);
+		let saved = await ZB.adapter.saveAINote(item, aiNoteHTML(ai.md, ai.model, ai.at, processed.data, processed.raw));
+		markSelfModified(saved.note.id);
+		return saved;
+	}
+
 	// ---------- per-item pipeline ----------
 
 	async function syncItem(item, action, settings, ctx) {
@@ -197,9 +228,7 @@
 			// Always judged, for the frontmatter full_text and the Notion "Full Text" column
 			checkFullText: true,
 		});
-		let notesMarkdown = settings.includeNotes
-			? data.notes.map(n => ({ title: n.title, md: ZB.markdown.htmlToMd(n.html, parseHTML) }))
-			: [];
+		let notesMarkdown = notesFor(settings, data);
 
 		// A failing step doesn't stop the others; errors are reported together at the end
 		let errors = [];
@@ -221,24 +250,16 @@
 				// When the PDF itself is sent the AI sees the figures on its pages, so the annotation
 				// images are only added if it has to fall back to text
 				let promptImages = await ZB.images.forPrompt(images, settings.llm, ctx, messages);
-				let result = await ZB.scanned.generateWithPDF(aiInput, data, notesMarkdown, pdf => ZB.llm.generateNote(settings.llm, data, {
-					systemPrompt: settings.llm.systemPrompt,
-					notesMarkdown,
-					fullTextTruncated: data.fullTextTruncated,
-					images: pdf ? [] : promptImages,
-					pdf,
-				}, (url, init) => fetch(url, init), Object.assign({ onRetry: retryStatus(ctx.status) }, ctx.retry)), messages);
+				let result = await ZB.scanned.generateWithPDF(aiInput, data, notesMarkdown, pdf => ZB.llm.generateNote(settings.llm, data,
+					noteOptions(settings, data, notesMarkdown, promptImages, pdf),
+					(url, init) => fetch(url, init), Object.assign({ onRetry: retryStatus(ctx.status) }, ctx.retry)), messages);
 				recordAIUsage(result, ctx.usage);
 				let at = nowISO();
 				let processed = processGeneratedNote(result.text.trim(), data);
 				messages.push(...processed.messages);
 				quoteCheck = processed.check;
 				ai = { md: processed.md, model: result.model || settings.llm.model, at, data: processed.data };
-				// Saving a child note also reports a change of the item itself, and Zotero notifies
-				// before saveTx() returns: mark the item first (the notes are checked again at flush time)
-				markSelfModified(item.id);
-				let saved = await ZB.adapter.saveAINote(item, aiNoteHTML(ai.md, ai.model, at, processed.data, processed.raw));
-				markSelfModified(saved.note.id);
+				await saveGeneratedNote(item, ai, processed);
 			}
 			catch (e) {
 				errors.push(`AI 筆記：${e.message || e}`);
@@ -590,6 +611,28 @@
 		return batch ? batch.remaining.length + batch.failed.length : 0;
 	}
 
+	/**
+	 * Add items to the stop/resume list as failed, so 「繼續未完成的同步」 retries them (ai-batch.js:
+	 * batch requests that errored, expired or were canceled). An existing record with another action
+	 * is kept: targets are merged, and differing AI actions become "missing" (never a surprise regenerate).
+	 */
+	function addPendingFailures(refs, action) {
+		if (!refs.length) return readPendingBatch();
+		let targets = [...new Set(action.targets)];
+		let batch = readPendingBatch() || { action: { targets, ai: action.ai }, remaining: [], failed: [], total: 0, running: false, startedAt: nowISO() };
+		batch.action = {
+			targets: [...new Set([...batch.action.targets, ...targets])],
+			ai: batch.action.ai === action.ai ? action.ai : "missing",
+		};
+		for (let ref of refs) {
+			if (batch.remaining.includes(ref) || batch.failed.includes(ref)) continue;
+			batch.failed.push(ref);
+			batch.total = (batch.total || 0) + 1;
+		}
+		writePendingBatch(batch);
+		return batch;
+	}
+
 	/** Tools menu: stop the running batch after the item in progress. */
 	function cancelBatch() {
 		if (!currentBatch || currentBatch.cancelled) return false;
@@ -670,7 +713,17 @@
 			notify("Zotero Bridge", "AI 筆記需要 API key：請到 設定 → Zotero Bridge 填入，或改用「不呼叫 AI」同步。");
 			return;
 		}
-		if (willGenerate && items.length > 5 && !action.silent) {
+		// Many AI notes with 「使用批次 API」 on: the user picks the Message Batches API or the normal path;
+		// the batched items are synced when the batch has ended (ai-batch.js), the others below
+		if (willGenerate && ZB.aiBatch.applies(aiItemCount(items, action), action, settings)) {
+			let choice = confirmBatchMode(items, action, settings);
+			if (!choice) return;
+			if (choice === "batch") {
+				items = await ZB.aiBatch.submit(items, action, settings);
+				if (!items.length) return;
+			}
+		}
+		else if (willGenerate && items.length > 5 && !action.silent) {
 			let ok = Services.prompt.confirm(Zotero.getMainWindow(), "Zotero Bridge",
 				`即將為最多 ${items.length} 筆文獻呼叫 ${settings.llm.provider === "openai" ? "OpenAI" : "Claude"}（${settings.llm.model}）產生 AI 筆記，會產生 API 費用。`
 				+ batchEstimate(items, action, settings) + "要繼續嗎？");
@@ -804,19 +857,49 @@
 		}
 	}
 
-	/** Rough cost for the confirm dialog, from the ledger's average tokens per call ("" when unknown). */
-	function batchEstimate(items, action, settings) {
+	/** How many of the items this run would generate an AI note for. */
+	function aiItemCount(items, action) {
+		return action.ai === "regenerate" ? items.length : items.filter(i => !ZB.adapter.getAINote(i)).length;
+	}
+
+	/**
+	 * Rough cost for the confirm dialog, from the ledger's average tokens per call ("" when unknown).
+	 * withBatch: the normal and the Message Batches estimate side by side.
+	 */
+	function batchEstimate(items, action, settings, withBatch = false) {
 		try {
-			let n = action.ai === "regenerate" ? items.length : items.filter(i => !ZB.adapter.getAINote(i)).length;
-			let est = ZB.usage.estimateCost(readLedger(), settings.llm.model, readPrices().prices, n);
-			if (!est) return "";
+			let n = aiItemCount(items, action);
+			let { prices } = readPrices();
+			let est = ZB.usage.estimateCost(readLedger(), settings.llm.model, prices, n);
+			if (!est) return withBatch ? "\n\n" : "";
+			if (withBatch) {
+				let batch = ZB.usage.estimateCost(readLedger(), settings.llm.model, prices, n, true);
+				return `\n\n預估費用：一般模式約 ${ZB.usage.formatUSD(est.total)}；批次 API 約 ${ZB.usage.formatUSD(batch.total)}`
+					+ `（${n} 筆，依過去 ${est.samples} 次呼叫的平均用量估算；實際費用依全文長度與快取命中而定）。\n\n`;
+			}
 			return `\n\n預估費用：約 ${ZB.usage.formatUSD(est.total)}（${n} 筆 × 每筆約 ${ZB.usage.formatUSD(est.perCall)}，`
 				+ `依過去 ${est.samples} 次呼叫的平均用量估算；實際費用依全文長度而定）。\n\n`;
 		}
 		catch (e) {
 			Zotero.logError(e);
-			return "";
+			return withBatch ? "\n\n" : "";
 		}
+	}
+
+	/** Confirm a large AI run with 「使用批次 API」 on: "batch", "normal" or null (cancelled). */
+	function confirmBatchMode(items, action, settings) {
+		let p = Services.prompt;
+		let n = aiItemCount(items, action);
+		let text = `即將為 ${n} 筆文獻呼叫 Claude（${settings.llm.model}）產生 AI 筆記，會產生 API 費用。\n\n`
+			+ "批次 API 約半價（通常 1 小時內完成，最長 24 小時）；完成後自動寫入 AI 筆記並同步到 Notion／Obsidian，"
+			+ "期間可從 工具 → 檢查 AI 批次進度 查看。一般模式立即逐篇產生。"
+			+ batchEstimate(items, action, settings, true) + "要用哪一種方式？";
+		// Cancel at button 1: closing the dialog also returns 1
+		let flags = p.BUTTON_POS_0 * p.BUTTON_TITLE_IS_STRING + p.BUTTON_POS_1 * p.BUTTON_TITLE_CANCEL
+			+ p.BUTTON_POS_2 * p.BUTTON_TITLE_IS_STRING + p.BUTTON_POS_0_DEFAULT;
+		let button = p.confirmEx(Zotero.getMainWindow(), "Zotero Bridge", text, flags,
+			"批次 API（約半價）", null, "一般模式（立即產生）", null, {});
+		return button === 0 ? "batch" : button === 2 ? "normal" : null;
 	}
 
 	/** Run `fn` after any sync in progress, like run() (status.js uses it for the status-only pass). */
@@ -1263,6 +1346,8 @@
 		menuIDs.push(...ZB.citationChase.registerMenus({ pluginID, icon }));
 		// Medical-literature search links (search-links.js): item and Tools menus
 		menuIDs.push(...ZB.searchLinks.registerMenus({ pluginID, icon }));
+		// Claude Message Batches for bulk AI notes (ai-batch.js): Tools menu
+		menuIDs.push(...ZB.aiBatch.registerMenus({ pluginID, icon }));
 	}
 
 	// ---------- item pane: AI note section ----------
@@ -1431,6 +1516,8 @@
 		remindInterruptedBatch();
 		// Automatic PubMed checks (off unless enabled in the settings)
 		ZB.pubmedWatch.init();
+		// Polling of AI batches submitted earlier (ai-batch.js)
+		ZB.aiBatch.init();
 	}
 
 	// A batch still marked running at startup was cut off by Zotero quitting or crashing
@@ -1460,11 +1547,14 @@
 		archiveQueue.clear();
 		ZB.bibliography.shutdown();
 		ZB.pubmedWatch.shutdown();
+		ZB.aiBatch.shutdown();
 	}
 
 	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime,
 		// for status.js
 		enqueue, notify, buildObsidianIndex, saveQuietly,
 		// for review-draft.js
-		recordAIUsage, runUsageLine, retryStatus };
+		recordAIUsage, runUsageLine, retryStatus,
+		// for ai-batch.js
+		notesFor, noteOptions, processGeneratedNote, saveGeneratedNote, addPendingFailures, itemRef };
 })(this);

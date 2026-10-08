@@ -192,6 +192,15 @@ test("callAnthropic sends the expected request and reads text blocks", async () 
 	assert.equal(sent.body.fallbacks, "default");
 	assert.deepEqual(sent.body.output_config, { effort: "high" });
 	assert.equal(sent.body.thinking, undefined);
+	// Prompt caching: one breakpoint, on the last system block (template + JSON instructions); the
+	// item is in the user message after it
+	assert.deepEqual(sent.body.system, [
+		{ type: "text", text: llm.DEFAULT_SYSTEM_PROMPT },
+		{ type: "text", text: llm.STUDY_DATA_PROMPT, cache_control: { type: "ephemeral" } },
+	]);
+	assert.equal(typeof sent.body.messages[0].content, "string");
+	assert.doesNotMatch(JSON.stringify(sent.body.messages), /cache_control/);
+	assert.match(sent.body.messages[0].content, /標題：Effects of nurse-led/);
 	assert.equal(r.text, AI_MD);
 });
 
@@ -220,7 +229,9 @@ test("callOpenAI uses the Responses API", async () => {
 	assert.equal(sent.url, "https://api.openai.com/v1/responses");
 	assert.equal(sent.init.headers.authorization, "Bearer sk");
 	assert.equal(sent.body.model, "gpt-5.5");
-	assert.equal(sent.body.instructions, llm.DEFAULT_SYSTEM_PROMPT);
+	// The template, then the plugin's JSON instructions (the same for every item, ahead of it)
+	assert.equal(sent.body.instructions, llm.DEFAULT_SYSTEM_PROMPT + "\n\n" + llm.STUDY_DATA_PROMPT);
+	assert.equal(sent.body.input.includes(llm.STUDY_DATA_PROMPT), false);
 	assert.equal(r.text, "## 一句話摘要\nOK");
 });
 
@@ -369,12 +380,17 @@ test("the note prompt asks for critical appraisal, verbatim quotes and the JSON 
 	assert.match(system, /官方原文逐題轉述為繁體中文/);
 	assert.match(system, /逐字照抄/);
 	assert.match(system, /^## 可引用的句子$/m);
-	// The JSON instructions come last in the user message, also with a custom template
-	assert.ok(user.indexOf(llm.STUDY_DATA_PROMPT) > user.indexOf("</fulltext>"));
-	for (let field of llm.STUDY_FIELDS) assert.match(user, new RegExp(`"${field}"`));
+	// The JSON instructions follow the template in the system prompt (the cached prefix, the same for
+	// every item), also with a custom template; the user message holds only this item and ends with
+	// the request for the JSON block
+	let { systemParts } = llm.buildPrompt(sampleItem({ fullText: "FULL" }), {});
+	assert.deepEqual(systemParts, [system, llm.STUDY_DATA_PROMPT]);
+	for (let field of llm.STUDY_FIELDS) assert.match(systemParts[1], new RegExp(`"${field}"`));
+	assert.ok(!user.includes(llm.STUDY_DATA_PROMPT));
+	assert.ok(user.indexOf("JSON 資料區塊") > user.indexOf("</fulltext>"));
 	let custom = llm.buildPrompt(sampleItem(), { systemPrompt: "my template" });
 	assert.equal(custom.system, "my template");
-	assert.ok(custom.user.includes(llm.STUDY_DATA_PROMPT));
+	assert.deepEqual(custom.systemParts, ["my template", llm.STUDY_DATA_PROMPT]);
 	// The example in the prompt is itself valid, parseable data
 	let example = llm.extractStudyData(llm.STUDY_DATA_PROMPT.slice(llm.STUDY_DATA_PROMPT.indexOf("```json")));
 	assert.equal(example.error, "");
