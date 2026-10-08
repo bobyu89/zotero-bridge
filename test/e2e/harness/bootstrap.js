@@ -75,12 +75,13 @@ function errText(e) {
 // ---------- console capture ----------
 
 function describe(msg) {
-	let d = { kind: "log", text: "", source: "", stack: "" };
+	let d = { kind: "log", text: "", source: "", stack: "", time: Date.now() };
 	try {
 		let se = msg.QueryInterface(Ci.nsIScriptError);
 		d.text = se.errorMessage;
 		d.source = se.sourceName ? `${se.sourceName}:${se.lineNumber}` : "";
 		d.category = se.category;
+		if (se.innerWindowID) d.innerWindowID = se.innerWindowID;
 		if (se.flags & Ci.nsIScriptError.warningFlag) d.kind = "warning";
 		else if (se.flags & Ci.nsIScriptError.infoFlag) d.kind = "info";
 		else d.kind = "error";
@@ -833,6 +834,27 @@ const TESTS = [
 		},
 	},
 	{
+		name: "control: Zotero's own preferences window opens and closes cleanly",
+		timeout: 60000,
+		async fn(d) {
+			// Same steps as the next test, on a built-in pane: console errors seen here come from Zotero
+			let from = messages.length;
+			let win = Zotero.Utilities.Internal.openPreferences("zotero-prefpane-general");
+			try {
+				let pane = await waitFor(() => win.Zotero_Preferences && win.Zotero_Preferences.panes
+					&& win.Zotero_Preferences.panes.get("zotero-prefpane-general"), "the general pane", 30000);
+				await waitFor(() => pane.loaded, "the general pane to load", 30000);
+				d.innerWindowID = win.windowGlobalChild && win.windowGlobalChild.innerWindowId;
+			}
+			finally {
+				win.close();
+			}
+			await delay(1000);
+			ctx.prefsControlErrors = messages.slice(from).filter(m => m.kind === "error").map(m => m.text);
+			d.errors = ctx.prefsControlErrors;
+		},
+	},
+	{
 		name: "preferences pane opens and renders",
 		needs: ["preferences pane is registered"],
 		timeout: 90000,
@@ -867,12 +889,19 @@ const TESTS = [
 				check(anthropicBox && !anthropicBox.hidden, "provider anthropic: #zb-anthropic-box should be visible");
 			}
 			finally {
+				d.innerWindowID = win.windowGlobalChild && win.windowGlobalChild.innerWindowId;
+				d.closedAt = Date.now();
 				win.close();
 				await zb().secrets.clear("notionToken");
 			}
+			await delay(1000);
 		},
 		get allow() {
 			return ctx.keyStoreUsable ? null : /os-keystore|OSKeyStore|key store|鑰匙圈/i;
+		},
+		// Errors Zotero's own preferences window logs as well (control test above)
+		get allowUnattributed() {
+			return ctx.prefsControlErrors || [];
 		},
 	},
 	{
@@ -904,7 +933,7 @@ const TESTS = [
 // ---------- runner ----------
 
 async function runTest(t, passed) {
-	let rec = { name: t.name, ok: true, ms: 0, error: "", details: {} };
+	let rec = { name: t.name, ok: true, ms: 0, error: "", details: {}, startedAt: Date.now() };
 	results.tests.push(rec);
 	let missing = (t.needs || []).filter(n => !passed.has(n));
 	if (missing.length) {
@@ -951,7 +980,7 @@ async function runTest(t, passed) {
 	if (otherErrors.length) rec.otherConsoleErrors = otherErrors.slice(0, 10);
 	// An error without a source (a promise rejected with undefined, a failed Fluent translation) can't
 	// be attributed; Zotero without the plugin logs none (baseline), so count it against the test
-	let unattributed = otherErrors.filter(m => !m.source && !m.stack);
+	let unattributed = otherErrors.filter(m => !m.source && !m.stack && !(t.allowUnattributed || []).includes(m.text));
 	if (unattributed.length && rec.ok) {
 		rec.ok = false;
 		rec.error = `console error(s) without a source during this test (e.g. a rejected promise or a failed Fluent translation): `

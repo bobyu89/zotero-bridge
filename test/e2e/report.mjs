@@ -64,11 +64,11 @@ for (let t of results.tests) {
 		let json = JSON.stringify(t.details);
 		console.log(`      ${json.length > 1500 ? json.slice(0, 1500) + "…" : json}`);
 	}
-	for (let m of t.ok ? t.otherConsoleErrors || [] : []) console.log(`      (Zotero console error: ${m.text} (${m.source || "no source"}))`);
+	for (let m of t.ok ? t.otherConsoleErrors || [] : []) console.log(`      (Zotero console error: ${m.text} (${m.source || "no source"}; +${m.time - t.startedAt} ms, window ${m.innerWindowID || "-"}))`);
 	if (!t.ok) {
 		console.log(String(t.error).split("\n").map(l => "      " + l).join("\n"));
 		for (let m of t.pluginErrors || []) console.log(`      plugin error: ${m.text} (${m.source})${m.stack ? "\n        " + m.stack.split("\n").join("\n        ") : ""}`);
-		for (let m of t.otherConsoleErrors || []) console.log(`      other console error: ${m.text} (${m.source})`);
+		for (let m of t.otherConsoleErrors || []) console.log(`      other console error: ${m.text} (${m.source || "no source"}; +${m.time - t.startedAt} ms, window ${m.innerWindowID || "-"})`);
 	}
 	rows.push(`| ${t.ok ? "✅" : t.skipped ? "⏭️" : "❌"} | ${t.name} | ${t.ok ? "" : String(t.error).split("\n")[0].replace(/\|/g, "\\|")} |`);
 }

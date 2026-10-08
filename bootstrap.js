@@ -12,6 +12,11 @@ async function startup({ id, version, rootURI }) {
 	// Exposed so the preferences pane (a separate scope) can call testNotion()
 	Zotero.ZoteroBridge = ZB;
 	ZB.version = version;
+	// The FTL goes into open windows before the item pane section and menus are registered: the
+	// window translates the section's header right away, and a missing message rejects with undefined
+	for (let win of Zotero.getMainWindows()) {
+		onMainWindowLoad({ window: win });
+	}
 	ZB.main.init({ id, rootURI });
 	await Zotero.PreferencePanes.register({
 		pluginID: id,
@@ -22,9 +27,6 @@ async function startup({ id, version, rootURI }) {
 		scripts: [rootURI + "content/preferences.js"],
 		stylesheets: [rootURI + "content/preferences.css"],
 	});
-	for (let win of Zotero.getMainWindows()) {
-		onMainWindowLoad({ window: win });
-	}
 }
 
 function onMainWindowLoad({ window }) {
