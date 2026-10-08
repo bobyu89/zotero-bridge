@@ -5,6 +5,15 @@ pref("extensions.zotero-bridge.obsidian.filenameFormat", "citekey");
 pref("extensions.zotero-bridge.obsidian.createBase", true);
 // Rebuild <folder>/研究儀表板.md after each manual sync (content/dashboard.js)
 pref("extensions.zotero-bridge.dashboard.autoUpdate", true);
+// Concept hub notes (content/concepts.js): rebuild <folder>/<concepts.folder>/*.md after each manual sync;
+// measures (and outcomes) from the structured data as concepts; alias groups, one per line: 跌倒 = Accidental Falls = falls;
+// a custom prompt for 「為概念卡片產生 AI 綜整」 (empty = built-in)
+pref("extensions.zotero-bridge.concepts.autoUpdate", true);
+pref("extensions.zotero-bridge.concepts.folder", "概念");
+pref("extensions.zotero-bridge.concepts.measures", true);
+pref("extensions.zotero-bridge.concepts.outcomes", false);
+pref("extensions.zotero-bridge.concepts.aliases", "");
+pref("extensions.zotero-bridge.concepts.aiPrompt", "");
 pref("extensions.zotero-bridge.includeNotes", true);
 pref("extensions.zotero-bridge.images.export", true);
 pref("extensions.zotero-bridge.images.sendToAI", false);

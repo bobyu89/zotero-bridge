@@ -351,6 +351,8 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 		"main/library/collection", "main/menubar/tools",
 		// progress-report.js
 		"main/menubar/tools",
+		// concepts.js
+		"main/menubar/tools",
 		// ai-batch.js
 		"main/menubar/tools"]);
 	assert.equal(env.panes[0].paneID, "zotero-bridge-ai-note");

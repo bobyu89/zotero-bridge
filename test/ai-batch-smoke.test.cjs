@@ -353,6 +353,7 @@ function prefsFor(vault, extra = {}) {
 		"extensions.zotero-bridge.obsidian.filenameFormat": "citekey",
 		"extensions.zotero-bridge.obsidian.createBase": false,
 		"extensions.zotero-bridge.dashboard.autoUpdate": false,
+		"extensions.zotero-bridge.concepts.autoUpdate": false,
 		"extensions.zotero-bridge.notion.token": "",
 		"extensions.zotero-bridge.routing.rules": "[]",
 		"extensions.zotero-bridge.llm.enabled": true,

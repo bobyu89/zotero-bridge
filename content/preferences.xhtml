@@ -134,6 +134,20 @@
 	</groupbox>
 
 	<groupbox>
+		<label><html:h2>概念卡片（Obsidian）</html:h2></label>
+		<description>把 AI 文獻筆記「關鍵概念」中的 [[概念]] 整理成概念卡片：每個概念一份筆記（別名、MeSH／PubMed 連結、提到它的文獻表、常一起出現的概念），加上「概念索引」。只讀 vault 裡的筆記，不連網、不呼叫 AI；也可從 工具 → 更新概念卡片。你寫在自動區塊外的定義與筆記不會被覆寫，概念卡片也不會被刪除。</description>
+		<checkbox label="手動同步後更新概念卡片" preference="extensions.zotero-bridge.concepts.autoUpdate"/>
+		<hbox align="center">
+			<label value="概念卡片資料夾（在 Obsidian 資料夾之下）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.concepts.folder" placeholder="概念"/>
+		</hbox>
+		<checkbox label="測量工具（研讀資料的 measures）也做成概念卡片" preference="extensions.zotero-bridge.concepts.measures"/>
+		<checkbox label="結果指標（研讀資料的 outcomes，以頓號、逗號拆開）也做成概念卡片" preference="extensions.zotero-bridge.concepts.outcomes"/>
+		<label value="同義詞合併（一行一組，第一個是卡片名稱，用 = 分隔）："/>
+		<html:textarea rows="4" preference="extensions.zotero-bridge.concepts.aliases" placeholder="跌倒 = Accidental Falls = falls&#10;自我效能 = Self-efficacy"/>
+	</groupbox>
+
+	<groupbox>
 		<label><html:h2>Notion</html:h2></label>
 		<label value="Integration token（notion.so/profile/integrations 建立，並把資料庫分享給這個 integration）："/>
 		<html:input id="zb-notion-token" type="password" placeholder="ntn_..." autocomplete="off"/>

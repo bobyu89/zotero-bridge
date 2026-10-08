@@ -865,6 +865,15 @@
 		}
 		// 「同步時自動更新參考文獻檔」 (export.js); never throws
 		if (ok) await ZB.bibliography.afterSync(settings);
+		// 概念卡片 after manual runs (concepts.js), before the dashboard lists them; must never fail the sync
+		if (ok && !action.silent) {
+			try {
+				await ZB.concepts.afterSync(settings);
+			}
+			catch (e) {
+				Zotero.logError(e);
+			}
+		}
 		// 研究儀表板 after manual runs (dashboard.js); must never fail the sync
 		if (ok && !action.silent) {
 			try {
@@ -1376,6 +1385,8 @@
 		menuIDs.push(...ZB.appraisalForm.registerMenus({ pluginID, icon }));
 		// 進度報告 for advisor meetings (progress-report.js): Tools menu
 		menuIDs.push(...ZB.progressReport.registerMenus({ pluginID, icon }));
+		// Concept hub notes (concepts.js): Tools menu
+		menuIDs.push(...ZB.concepts.registerMenus({ pluginID, icon }));
 		// Claude Message Batches for bulk AI notes (ai-batch.js): Tools menu
 		menuIDs.push(...ZB.aiBatch.registerMenus({ pluginID, icon }));
 	}
