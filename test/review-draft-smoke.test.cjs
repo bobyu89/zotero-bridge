@@ -272,7 +272,10 @@ test("literature review draft: menu → dialog → Claude → Obsidian (Pandoc) 
 	let req = calls[0].body;
 	assert.equal(req.model, "claude-opus-5-5");
 	assert.equal(req.max_tokens, 16000);
-	assert.match(req.system, /^你是護理與醫學領域的學術寫作助理/);
+	// One system block, cached (prompt caching on every Claude call)
+	assert.equal(req.system.length, 1);
+	assert.match(req.system[0].text, /^你是護理與醫學領域的學術寫作助理/);
+	assert.deepEqual(req.system[0].cache_control, { type: "ephemeral" });
 	let user = req.messages[0].content;
 	assert.match(user, /<source id="S1">\n標題：Nurse-led education and falls[\s\S]*<study_data>\n研究設計：RCT\n樣本數：80\nOxford CEBM 證據等級：2\nJBI 證據等級：1\.c\n<\/study_data>\n<ai_note>\n## 主要結果\n\n介入組跌倒率降低 30%。\n<\/ai_note>/);
 	assert.doesNotMatch(user, /結構化資料（Zotero Bridge）/);

@@ -346,7 +346,9 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 		// citation-chase.js
 		"main/library/item", "main/library/collection", "main/menubar/tools",
 		// search-links.js
-		"main/library/item", "main/menubar/tools"]);
+		"main/library/item", "main/menubar/tools",
+		// ai-batch.js
+		"main/menubar/tools"]);
 	assert.equal(env.panes[0].paneID, "zotero-bridge-ai-note");
 
 	let { MockItem, addChild } = env;

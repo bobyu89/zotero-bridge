@@ -260,6 +260,7 @@ const TESTS = [
 				dashboard: ["update", "afterSync", "registerMenus"],
 				citationChase: ["chaseCollection", "chaseItems", "importChecked", "registerMenus"],
 				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "registerMenus"],
+				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "registerMenus", "batchParams", "parseResults"],
 				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly"],
 			};
 			let missing = [];
@@ -344,6 +345,7 @@ const TESTS = [
 				"zotero-bridge-chase-tools": "main/menubar/tools",
 				"zotero-bridge-search-item": "main/library/item",
 				"zotero-bridge-search-tools": "main/menubar/tools",
+				"zotero-bridge-ai-batch-tools": "main/menubar/tools",
 			};
 			d.registered = mine.map(o => `${o.menuID} → ${o.target}`);
 			let problems = [];
