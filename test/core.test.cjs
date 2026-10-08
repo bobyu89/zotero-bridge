@@ -130,6 +130,54 @@ test("buildBaseFile has a table and a status kanban", () => {
 	assert.match(base, /^ {2}- type: table$/m);
 	assert.match(base, /^ {2}- type: kanban\n {4}name: 閱讀進度\n {4}groupBy:\n {6}property: note\.status\n {6}direction: ASC$/m);
 	assert.match(base, /groupOrder:\n {6}- 待讀\n {6}- 閱讀中\n {6}- 已讀\n {6}- 已引用/);
+	// Structured-data columns in the table view
+	assert.match(base, /^ {2}note\.study_design:\n {4}displayName: 研究設計$/m);
+	assert.match(base, /- note\.publication\n {6}- note\.study_design\n {6}- note\.sample_size\n {6}- note\.evidence_level\n/);
+});
+
+const STUDY = {
+	study_design: "RCT", sample_size: 120, setting: "內科病房", population: "65 歲以上住院病人",
+	intervention: "護理師主導衛教", comparison: "", outcomes: "跌倒發生率", measures: ["Morse Fall Scale", "FES-I"],
+	evidence_level: "2", jbi_level: "1.c", appraisal_tool: "JBI Checklist for Randomized Controlled Trials",
+	appraisal_overall: "納入", country: "Taiwan",
+};
+
+test("structured data goes into frontmatter for Bases filters", () => {
+	let text = core.buildObsidianNote(null, sampleItem(), { aiMarkdown: AI_MD, study: STUDY });
+	let { frontmatter } = core.splitFrontmatter(text);
+	assert.match(frontmatter, /^study_design: "RCT"$/m);
+	assert.match(frontmatter, /^sample_size: 120$/m, "a number, so Bases can filter sample_size > 100");
+	assert.match(frontmatter, /^evidence_level: "2"$/m);
+	assert.match(frontmatter, /^jbi_level: "1\.c"$/m);
+	assert.match(frontmatter, /^appraisal_tool: "JBI Checklist for Randomized Controlled Trials"$/m);
+	assert.match(frontmatter, /^appraisal_overall: "納入"$/m);
+	assert.match(frontmatter, /^population: "65 歲以上住院病人"$/m);
+	assert.match(frontmatter, /^measures:\n {2}- "Morse Fall Scale"\n {2}- "FES-I"$/m);
+	assert.match(frontmatter, /^country: "Taiwan"$/m);
+	assert.doesNotMatch(frontmatter, /^comparison:/m, "empty values are left out");
+	for (let key of core.STUDY_KEYS) assert.ok(core.MANAGED_KEYS.includes(key));
+});
+
+test("structured frontmatter: updated with new data, kept when a sync has none", () => {
+	let first = core.buildObsidianNote(null, sampleItem(), { study: STUDY });
+	// A sync whose AI note has no data block keeps the earlier values
+	let kept = core.buildObsidianNote(first, sampleItem(), {});
+	assert.match(kept, /^study_design: "RCT"$/m);
+	assert.match(kept, /^measures:\n {2}- "Morse Fall Scale"/m);
+	// New data replaces old values; fields now empty are removed
+	let changed = core.buildObsidianNote(first, sampleItem(), {
+		study: Object.assign({}, STUDY, { study_design: "cohort", sample_size: null, measures: [], country: "" }),
+	});
+	let fm = core.splitFrontmatter(changed).frontmatter;
+	assert.match(fm, /^study_design: "cohort"$/m);
+	assert.doesNotMatch(fm, /^sample_size:/m);
+	assert.doesNotMatch(fm, /^country:/m);
+	assert.match(fm, /^measures: \[\]$/m);
+	assert.equal((fm.match(/^study_design:/gm) || []).length, 1);
+	// Idempotent
+	assert.equal(core.buildObsidianNote(changed, sampleItem(), {
+		study: Object.assign({}, STUDY, { study_design: "cohort", sample_size: null, measures: [], country: "" }),
+	}), changed);
 });
 
 test("re-sync when the user deleted the markers re-inserts the managed block", () => {

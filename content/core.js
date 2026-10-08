@@ -16,10 +16,18 @@
 	const MARK_START_RE = /^%% zotero-bridge:start.*%%[ \t]*$/m;
 	const MARK_END_RE = /^%% zotero-bridge:end %%[ \t]*$/m;
 
-	// Frontmatter keys owned by the plugin; every other key is the user's and survives re-sync
+	// Structured data from the AI note's JSON block (same names as the JSON fields), for Bases filters
+	const STUDY_KEYS = [
+		"study_design", "sample_size", "evidence_level", "jbi_level", "appraisal_tool", "appraisal_overall",
+		"setting", "population", "intervention", "comparison", "outcomes", "measures", "country",
+	];
+
+	// Frontmatter keys owned by the plugin; every other key is the user's and survives re-sync.
+	// STUDY_KEYS are only rewritten when the sync has structured data (see buildFrontmatter).
 	const MANAGED_KEYS = [
 		"title", "authors", "year", "publication", "item_type", "doi", "url", "citekey",
 		"zotero", "zotero_key", "library", "collections", "tags", "notion",
+		...STUDY_KEYS,
 		"ai_model", "ai_generated", "fulltext_truncated", "date_added", "last_synced",
 	];
 
@@ -187,7 +195,9 @@
 		}
 		if (existingFrontmatter) {
 			for (let block of parseFrontmatterBlocks(existingFrontmatter)) {
-				if (block.key && MANAGED_KEYS.includes(block.key)) continue;
+				// A managed key is replaced only when this sync provides it (even as empty), so
+				// structured fields survive a sync whose AI note has no data block
+				if (block.key && MANAGED_KEYS.includes(block.key) && Object.prototype.hasOwnProperty.call(managed, block.key)) continue;
 				if (!block.key && !block.text.trim()) continue;
 				lines.push(block.text);
 			}
@@ -195,8 +205,21 @@
 		return `---\n${lines.join("\n")}\n---\n`;
 	}
 
+	/** Frontmatter values for the structured data; {} when there is none (existing values are kept). */
+	function studyFrontmatter(study) {
+		if (!study) return {};
+		let out = {};
+		for (let key of STUDY_KEYS) {
+			let v = study[key];
+			if (key === "measures") out[key] = Array.isArray(v) ? v.filter(Boolean) : [];
+			else if (key === "sample_size") out[key] = Number.isFinite(v) ? v : "";
+			else out[key] = v === null || v === undefined ? "" : String(v);
+		}
+		return out;
+	}
+
 	function managedFrontmatter(data, opts = {}) {
-		return {
+		return Object.assign({
 			title: data.title || "",
 			authors: authorNames(data),
 			year: /^\d{4}$/.test(data.year || "") ? Number(data.year) : (data.year || ""),
@@ -211,12 +234,13 @@
 			collections: data.collections || [],
 			tags: (data.tags || []).map(tagToObsidian).filter(Boolean),
 			notion: opts.notionUrl || "",
+		}, studyFrontmatter(opts.study), {
 			ai_model: opts.aiModel || "",
 			ai_generated: opts.aiGeneratedAt || "",
 			fulltext_truncated: opts.fullTextTruncated ? true : "",
 			date_added: data.dateAdded || "",
 			last_synced: opts.now || "",
-		};
+		});
 	}
 
 	// ---------- Markdown body ----------
@@ -370,6 +394,12 @@
 			"    displayName: 閱讀狀態",
 			"  note.collections:",
 			"    displayName: 分類",
+			"  note.study_design:",
+			"    displayName: 研究設計",
+			"  note.sample_size:",
+			"    displayName: 樣本數",
+			"  note.evidence_level:",
+			"    displayName: 證據等級",
 			"views:",
 			"  - type: table",
 			"    name: 文獻總表",
@@ -379,6 +409,9 @@
 			"      - note.authors",
 			"      - note.year",
 			"      - note.publication",
+			"      - note.study_design",
+			"      - note.sample_size",
+			"      - note.evidence_level",
 			"      - note.status",
 			"      - note.collections",
 			"  - type: kanban",
@@ -443,10 +476,10 @@
 	}
 
 	return {
-		MARK_START, MARK_END, MANAGED_KEYS, COLORS,
+		MARK_START, MARK_END, MANAGED_KEYS, STUDY_KEYS, COLORS,
 		colorInfo, sanitizeFilename, creatorName, authorNames, firstAuthorLastName,
 		noteBasename, splitFolder, demoteHeadings, zoteroSelectURI, annotationURI, obsidianURI, tagToObsidian,
-		yamlScalar, splitFrontmatter, parseFrontmatterBlocks, buildFrontmatter, managedFrontmatter,
+		yamlScalar, splitFrontmatter, parseFrontmatterBlocks, buildFrontmatter, managedFrontmatter, studyFrontmatter,
 		annotationsMarkdown, buildManagedSection, buildObsidianNote,
 		resolveRoute, parseRules, truncate, buildBaseFile, STATUSES,
 	};

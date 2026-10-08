@@ -39,6 +39,7 @@ test("buildProperties only writes properties that exist with the right type", ()
 	let all = notion.buildProperties(full, {
 		title: "T", volume: "12", issue: "3", pages: "45-67", publisher: "Wiley", url: "https://x.y",
 		abstract: "a".repeat(2500), date: "2024-03-01", dateAdded: "2024-05-01T08:00:00Z",
+		study: llm.normalizeStudyData({ study_design: "RCT", sample_size: 120, measures: ["Morse Fall Scale"] }),
 	});
 	assert.equal(all.Volume.rich_text[0].text.content, "12");
 	assert.equal(all.Pages.rich_text[0].text.content, "45-67");
@@ -192,4 +193,156 @@ test("callOpenAI uses the Responses API", async () => {
 test("extractSummary returns the one-line summary section", () => {
 	assert.equal(llm.extractSummary(AI_MD), "護理師主導衛教可降低住院病人跌倒率 30%（[[Fall prevention]]）。");
 	assert.equal(llm.extractSummary("no headings here\n\nsecond"), "no headings here");
+});
+
+// ---------- structured data, critical appraisal ----------
+
+const STUDY_JSON = `{
+  "study_design": "randomized controlled trial",
+  "sample_size": "N = 1,204",
+  "setting": "台灣某醫學中心內科病房",
+  "population": "65 歲以上住院病人",
+  "intervention": "護理師主導衛教",
+  "comparison": "文中未報告",
+  "outcomes": "跌倒發生率",
+  "measures": ["Morse Fall Scale", "morse fall scale", "FES-I"],
+  "evidence_level": "Level 2",
+  "jbi_level": "Level 1.c",
+  "appraisal_tool": "JBI Checklist for Randomized Controlled Trials",
+  "appraisal_overall": "Include",
+  "country": "Taiwan"
+}`;
+
+test("buildProperties fills the structured columns and leaves them alone without data", () => {
+	let props = Object.fromEntries(Object.entries(notion.PROPERTY_SCHEMA).map(([k, v]) => [k, Object.keys(v)[0]]));
+	let schema = { titleName: null, props };
+	let study = llm.normalizeStudyData(JSON.parse(STUDY_JSON));
+	let p = notion.buildProperties(schema, { study });
+	assert.deepEqual(p["Study Design"], { select: { name: "RCT" } });
+	assert.deepEqual(p["Sample Size"], { number: 1204 });
+	assert.deepEqual(p["Evidence Level"], { select: { name: "2" } });
+	assert.deepEqual(p["JBI Level"], { select: { name: "1.c" } });
+	assert.deepEqual(p["Appraisal Tool"], { select: { name: "JBI Checklist for Randomized Controlled Trials" } });
+	assert.deepEqual(p.Appraisal, { select: { name: "納入" } });
+	assert.equal(p.Population.rich_text[0].text.content, "65 歲以上住院病人");
+	assert.deepEqual(p.Comparison, { rich_text: [] }, "not-reported placeholders are stored empty");
+	assert.deepEqual(p.Measures, { multi_select: [{ name: "Morse Fall Scale" }, { name: "FES-I" }] });
+	assert.deepEqual(p.Country, { select: { name: "Taiwan" } });
+	let none = notion.buildProperties(schema, { study: null });
+	for (let name of ["Study Design", "Sample Size", "Measures", "Appraisal", "Population"]) {
+		assert.equal(none[name], undefined, `${name} untouched without structured data`);
+	}
+	let empty = notion.buildProperties(schema, { study: llm.normalizeStudyData({}) });
+	assert.deepEqual(empty["Study Design"], { select: null });
+	assert.deepEqual(empty["Sample Size"], { number: null });
+	assert.deepEqual(empty.Measures, { multi_select: [] });
+});
+
+test("normalizeStudyData maps designs, numbers, levels and verdicts to canonical values", () => {
+	let n = x => llm.normalizeStudyData(x);
+	assert.equal(n({ study_design: "RCT" }).study_design, "RCT");
+	assert.equal(n({ study_design: "Mixed-Methods" }).study_design, "mixed methods");
+	assert.equal(n({ study_design: "systematic review and meta-analysis" }).study_design, "meta-analysis");
+	assert.equal(n({ study_design: "non-randomized controlled trial" }).study_design, "quasi-experimental");
+	assert.equal(n({ study_design: "單組前後測" }).study_design, "quasi-experimental");
+	assert.equal(n({ study_design: "prospective cohort study" }).study_design, "cohort");
+	assert.equal(n({ study_design: "descriptive phenomenology" }).study_design, "qualitative");
+	assert.equal(n({ study_design: "case report" }).study_design, "other");
+	assert.equal(n({ study_design: null }).study_design, "");
+	assert.equal(n({ sample_size: 85.0 }).sample_size, 85);
+	assert.equal(n({ sample_size: "未報告" }).sample_size, null);
+	assert.equal(n({ sample_size: -3 }).sample_size, null);
+	assert.equal(n({ evidence_level: 3 }).evidence_level, "3");
+	assert.equal(n({ evidence_level: "CEBM 2011 Level 4" }).evidence_level, "4");
+	assert.equal(n({ evidence_level: "不適用" }).evidence_level, "");
+	assert.equal(n({ evidence_level: "Level IV" }).evidence_level, "4");
+	assert.equal(n({ evidence_level: "ii" }).evidence_level, "2");
+	assert.equal(n({ evidence_level: "invalid" }).evidence_level, "");
+	assert.equal(n({ jbi_level: "JBI Level 2.d" }).jbi_level, "2.d");
+	assert.equal(n({ appraisal_overall: "seek further info" }).appraisal_overall, "需更多資訊");
+	assert.equal(n({ appraisal_overall: "排除" }).appraisal_overall, "排除");
+	assert.deepEqual(n({ measures: "Barthel Index；SF-36、SF-36" }).measures, ["Barthel Index", "SF-36"]);
+	assert.equal(n({ population: ["older adults", "caregivers"] }).population, "older adults; caregivers");
+	assert.deepEqual(Object.keys(n({})), llm.STUDY_FIELDS);
+	assert.equal(n(null), null);
+	assert.equal(n([1]), null);
+	assert.equal(llm.hasStudyData(n({})), false);
+	assert.equal(llm.hasStudyData(n({ measures: ["X"] })), true);
+});
+
+test("extractStudyData strips the final json block and parses it", () => {
+	let md = `${AI_MD}\n\`\`\`json\n${STUDY_JSON}\n\`\`\`\n`;
+	let r = llm.extractStudyData(md);
+	assert.equal(r.found, true);
+	assert.equal(r.error, "");
+	assert.equal(r.md, AI_MD.trimEnd());
+	assert.equal(r.data.study_design, "RCT");
+	assert.equal(r.data.sample_size, 1204);
+	assert.equal(r.data.appraisal_overall, "納入");
+
+	// A heading the model added anyway, and the "output cut off" notice after the block, are handled
+	let withHeading = `## 一句話摘要\nx\n\n---\n\n## 結構化資料（JSON）\n\n\`\`\`json\n{"study_design": "cohort",}\n\`\`\`\n\n> ⚠️ 輸出達到長度上限，內容可能不完整。`;
+	let h = llm.extractStudyData(withHeading);
+	assert.equal(h.md, "## 一句話摘要\nx\n\n> ⚠️ 輸出達到長度上限，內容可能不完整。");
+	assert.equal(h.data.study_design, "cohort", "trailing comma tolerated");
+});
+
+test("extractStudyData is tolerant: missing, invalid and truncated blocks", () => {
+	let missing = llm.extractStudyData(AI_MD);
+	assert.deepEqual([missing.found, missing.data, missing.error, missing.md], [false, null, "", AI_MD]);
+
+	let invalid = llm.extractStudyData("## 一句話摘要\nx\n\n```json\n{ study_design: RCT }\n```");
+	assert.equal(invalid.found, true);
+	assert.equal(invalid.data, null);
+	assert.match(invalid.error, /JSON 格式錯誤/);
+	assert.equal(invalid.md, "## 一句話摘要\nx");
+	assert.equal(invalid.raw, "{ study_design: RCT }");
+
+	let truncated = llm.extractStudyData("## 一句話摘要\nx\n\n```json\n{\"study_design\": \"RCT\", \"sample\n\n> ⚠️ 輸出達到長度上限，內容可能不完整。");
+	assert.equal(truncated.md, "## 一句話摘要\nx\n\n> ⚠️ 輸出達到長度上限，內容可能不完整。");
+	assert.equal(truncated.data, null);
+	assert.match(truncated.error, /不完整/);
+
+	// Other code blocks are not mistaken for the data block
+	let code = "## 統計分析\n```\nlm(y ~ x)\n```\n\n## 一句話摘要\nx";
+	assert.equal(llm.extractStudyData(code).found, false);
+	assert.equal(llm.extractStudyData(code).md, code);
+});
+
+test("studyDataBlock round-trips through the stored-note format (plain ``` under the heading)", () => {
+	let data = llm.normalizeStudyData(JSON.parse(STUDY_JSON));
+	let block = llm.studyDataBlock(data);
+	assert.ok(block.startsWith(`## ${llm.STUDY_DATA_HEADING}\n\n\`\`\`json\n{\n  "study_design": "RCT"`));
+	// What htmlToMd gives back for <h2> + <pre>: the language tag is gone
+	let stored = `${AI_MD.trim()}\n\n${block.replace("```json", "```")}`;
+	let r = llm.extractStudyData(stored);
+	assert.equal(r.md, AI_MD.trim());
+	assert.deepEqual(r.data, data);
+	// Invalid JSON is stored raw so the user can fix it in Zotero
+	assert.equal(llm.studyDataBlock(null, "{ broken"), `## ${llm.STUDY_DATA_HEADING}\n\n\`\`\`json\n{ broken\n\`\`\``);
+	assert.equal(llm.studyDataBlock(null, ""), "");
+	let broken = llm.extractStudyData(`x\n\n## ${llm.STUDY_DATA_HEADING}\n\n\`\`\`\n{ broken\n\`\`\``);
+	assert.equal(broken.md, "x");
+	assert.match(broken.error, /JSON/);
+});
+
+test("the note prompt asks for critical appraisal, verbatim quotes and the JSON block", () => {
+	let { system, user } = llm.buildPrompt(sampleItem({ fullText: "FULL" }), {});
+	assert.match(system, /^## 嚴格評讀$/m);
+	assert.match(system, /是／否／不清楚／不適用/);
+	assert.match(system, /納入／排除／需更多資訊/);
+	assert.match(system, /JBI Checklist for Randomized Controlled Trials/);
+	assert.match(system, /官方原文逐題轉述為繁體中文/);
+	assert.match(system, /逐字照抄/);
+	assert.match(system, /^## 可引用的句子$/m);
+	// The JSON instructions come last in the user message, also with a custom template
+	assert.ok(user.indexOf(llm.STUDY_DATA_PROMPT) > user.indexOf("</fulltext>"));
+	for (let field of llm.STUDY_FIELDS) assert.match(user, new RegExp(`"${field}"`));
+	let custom = llm.buildPrompt(sampleItem(), { systemPrompt: "my template" });
+	assert.equal(custom.system, "my template");
+	assert.ok(custom.user.includes(llm.STUDY_DATA_PROMPT));
+	// The example in the prompt is itself valid, parseable data
+	let example = llm.extractStudyData(llm.STUDY_DATA_PROMPT.slice(llm.STUDY_DATA_PROMPT.indexOf("```json")));
+	assert.equal(example.error, "");
+	assert.equal(example.data.study_design, "RCT");
 });
