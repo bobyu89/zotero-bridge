@@ -53,6 +53,10 @@
 				baseURL: String(pref("llm.openaiBaseURL") || "").trim(),
 				systemPrompt: pref("llm.systemPrompt") || "",
 				fullTextLimit: Number(pref("llm.fullTextLimit")) || 0,
+				// Scanned PDFs (scanned.js): send the file itself, within these limits
+				sendScannedPDF: pref("llm.sendScannedPDF") !== false,
+				pdfMaxMB: Number(pref("llm.pdfMaxMB")) || 0,
+				pdfMaxPages: Number(pref("llm.pdfMaxPages")) || 0,
 				synthesisPrompt: pref("llm.synthesisPrompt") || "",
 			},
 			notionSynthesisParent: String(pref("notion.synthesisParent") || "").trim(),
@@ -159,7 +163,7 @@
 		for (let att of data.attachments || []) {
 			for (let ann of att.annotations || []) texts.push(ann.text);
 		}
-		let check = ZB.verify.verifyQuotes(parsed.md.trim(), { fullText: data.fullText, texts });
+		let check = ZB.verify.verifyQuotes(parsed.md.trim(), ZB.scanned.quoteSources(data, texts));
 		let summary = ZB.verify.summarize(check);
 		if (summary) messages.push(summary);
 		return { md: check.md, data: parsed.data, raw: parsed.found && !parsed.data ? parsed.raw : "", messages, check };
@@ -175,6 +179,8 @@
 		}
 		let data = await ZB.adapter.extractItemData(item, {
 			fullTextLimit: needAI ? settings.llm.fullTextLimit : 0,
+			// Always judged, for the frontmatter full_text and the Notion "Full Text" column
+			checkFullText: true,
 		});
 		let notesMarkdown = settings.includeNotes
 			? data.notes.map(n => ({ title: n.title, md: ZB.markdown.htmlToMd(n.html, parseHTML) }))
@@ -185,14 +191,22 @@
 		let messages = [];
 		let quoteCheck = null;
 		let ai = null;
+		// Scanned PDF: send the file itself; nothing at all to read: no AI call (scanned.js)
+		let aiInput = null;
+		if (needAI) {
+			aiInput = await ZB.scanned.prepareAIInput(data, settings.llm, notesMarkdown, IOUtils);
+			messages.push(...aiInput.messages);
+			if (aiInput.skip) needAI = false;
+		}
 		if (needAI) {
 			ctx.status("AI 產生筆記中…");
 			try {
-				let result = await ZB.llm.generateNote(settings.llm, data, {
+				let result = await ZB.scanned.generateWithPDF(aiInput, data, notesMarkdown, pdf => ZB.llm.generateNote(settings.llm, data, {
 					systemPrompt: settings.llm.systemPrompt,
 					notesMarkdown,
 					fullTextTruncated: data.fullTextTruncated,
-				}, (url, init) => fetch(url, init), Object.assign({ onRetry: retryStatus(ctx.status) }, ctx.retry));
+					pdf,
+				}, (url, init) => fetch(url, init), Object.assign({ onRetry: retryStatus(ctx.status) }, ctx.retry)), messages);
 				recordAIUsage(result, ctx.usage);
 				let at = nowISO();
 				let processed = processGeneratedNote(result.text.trim(), data);
@@ -481,6 +495,7 @@
 			citationKey: data.citationKey,
 			zoteroKey,
 			summary: opts.ai ? ZB.markdown.plainText(ZB.llm.extractSummary(opts.ai.md)) : "",
+			fullText: data.fullTextStatus,
 			study,
 			apa: data.apa,
 			lastSynced: nowISO(),

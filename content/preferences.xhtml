@@ -45,6 +45,8 @@
 			<label value="全文最多送出字元數（0 = 不送全文，只用摘要與註記）："/>
 			<html:input type="number" min="0" step="10000" preference="extensions.zotero-bridge.llm.fullTextLimit"/>
 		</hbox>
+		<checkbox label="掃描版 PDF 直接傳給 AI 讀（Claude；較耗 token）" preference="extensions.zotero-bridge.llm.sendScannedPDF"/>
+		<description class="zb-hint">PDF 沒有文字層（掃描檔）時，把 PDF 檔本身傳給 AI 看每一頁（上限 20 MB、100 頁）；OpenAI 官方 API 也適用。比較省錢的做法是先用 OCR（例如 OCRmyPDF）加上文字層，或重新下載有文字的 PDF。</description>
 		<label value="筆記模板（system prompt；留空 = 使用內建的護理／醫學文獻模板）："/>
 		<html:textarea id="zb-system-prompt" rows="8" preference="extensions.zotero-bridge.llm.systemPrompt"/>
 		<hbox>

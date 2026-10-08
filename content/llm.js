@@ -143,9 +143,29 @@
 		return lines.join("\n");
 	}
 
+	const PDF_ATTACHED_NOTE = "（全文以附件 PDF 提供：這份 PDF 是掃描版或大部分沒有文字層，請直接閱讀附件的每一頁。引用時標示 PDF 上印的頁碼；看不清楚的內容寫「無法辨識」，不要推測。）";
+
+	// The <fulltext> part of the prompt, depending on the full-text status (scanned.js) and an attached PDF
+	function fullTextSection(data, opts) {
+		if (opts.pdf) return PDF_ATTACHED_NOTE;
+		// A scan's text layer holds at most a download stamp: not worth sending
+		if (data.fullText && data.fullTextStatus !== "none") {
+			let note = opts.fullTextTruncated ? "（全文過長，以下只提供前段內容；後段未提供的部分請勿推測）\n" : "";
+			if (data.fullTextStatus === "partial") {
+				note += "（這份 PDF 大部分頁面是掃描影像，以下只有少數頁面的文字；缺少的內容寫「文中未報告」，不要推測）\n";
+			}
+			return `<fulltext>\n${note}${data.fullText}\n</fulltext>`;
+		}
+		if (data.fullTextStatus === "none") {
+			return "（這篇的 PDF 是掃描版，沒有可用的全文；只能依據書目資料、摘要與註記撰寫；無法判斷的欄位寫「文中未報告」。）";
+		}
+		return "（沒有可用的全文，只能依據書目資料、摘要與註記撰寫；無法判斷的欄位寫「文中未報告」。）";
+	}
+
 	/**
-	 * @param {object} data - item data from the Zotero adapter (may include fullText)
-	 * @param {object} opts - { systemPrompt, notesMarkdown: [{title, md}], fullTextTruncated }
+	 * @param {object} data - item data from the Zotero adapter (may include fullText, fullTextStatus)
+	 * @param {object} opts - { systemPrompt, notesMarkdown: [{title, md}], fullTextTruncated, pdf }
+	 *   pdf: a scanned PDF sent along as a file ({ data: base64, filename, pages }); replaces <fulltext>
 	 */
 	function buildPrompt(data, opts = {}) {
 		let meta = [
@@ -164,13 +184,7 @@
 		if (anns) sections.push(`<user_annotations>\n${anns}\n</user_annotations>`);
 		let notes = (opts.notesMarkdown || []).map(n => n.md).filter(Boolean).join("\n\n---\n\n");
 		if (notes) sections.push(`<user_notes>\n${notes}\n</user_notes>`);
-		if (data.fullText) {
-			let note = opts.fullTextTruncated ? "（全文過長，以下只提供前段內容；後段未提供的部分請勿推測）\n" : "";
-			sections.push(`<fulltext>\n${note}${data.fullText}\n</fulltext>`);
-		}
-		else {
-			sections.push("（沒有可用的全文，只能依據書目資料、摘要與註記撰寫；無法判斷的欄位寫「文中未報告」。）");
-		}
+		sections.push(fullTextSection(data, opts));
 		sections.push(STUDY_DATA_PROMPT);
 		sections.push("請依照系統指示的格式輸出這篇文獻的結構化筆記，並在最後附上 JSON 資料區塊。");
 		return {
@@ -312,7 +326,28 @@
 
 	// ---------- providers ----------
 
-	async function callAnthropic({ apiKey, model, effort, system, user, fetch, retry }) {
+	/** Claude user content: the scanned PDF as a base64 document block before the prompt text. */
+	function anthropicContent(user, pdf) {
+		if (!pdf) return user;
+		return [
+			{ type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf.data } },
+			{ type: "text", text: user },
+		];
+	}
+
+	/** OpenAI Responses `input`: the scanned PDF as an input_file part (data URL) before the prompt text. */
+	function openaiInput(user, pdf) {
+		if (!pdf) return user;
+		return [{
+			role: "user",
+			content: [
+				{ type: "input_file", filename: pdf.filename || "document.pdf", file_data: `data:application/pdf;base64,${pdf.data}` },
+				{ type: "input_text", text: user },
+			],
+		}];
+	}
+
+	async function callAnthropic({ apiKey, model, effort, system, user, pdf, fetch, retry }) {
 		let { res, json, retries } = await postWithRetry(fetch, "https://api.anthropic.com/v1/messages", {
 			method: "POST",
 			headers: {
@@ -329,7 +364,7 @@
 				fallbacks: "default",
 				output_config: { effort: effort || "medium" },
 				system,
-				messages: [{ role: "user", content: user }],
+				messages: [{ role: "user", content: anthropicContent(user, pdf) }],
 			}),
 		}, retry);
 		if (!res.ok) throw httpError("Claude API", res, json, retries);
@@ -347,7 +382,7 @@
 		return { text, model: json.model || model, provider: "anthropic", usage: parseUsage("anthropic", json), retries };
 	}
 
-	async function callOpenAI({ apiKey, model, system, user, fetch, baseURL, retry }) {
+	async function callOpenAI({ apiKey, model, system, user, pdf, fetch, baseURL, retry }) {
 		let base = (baseURL || "https://api.openai.com/v1").replace(/\/+$/, "");
 		let { res, json, retries } = await postWithRetry(fetch, `${base}/responses`, {
 			method: "POST",
@@ -358,7 +393,7 @@
 			body: JSON.stringify({
 				model: model || DEFAULT_MODELS.openai,
 				instructions: system,
-				input: user,
+				input: openaiInput(user, pdf),
 			}),
 		}, retry);
 		if (!res.ok) throw httpError("OpenAI API", res, json, retries);
@@ -381,12 +416,13 @@
 
 	/**
 	 * Run one system + user prompt on the configured provider.
-	 * @param {object} [opts] retry options for postWithRetry: { sleep, maxRetries, random, onRetry }
+	 * @param {object} [opts] retry options for postWithRetry: { sleep, maxRetries, random, onRetry },
+	 *   plus `pdf` ({ data: base64, filename }) to send a PDF file along with the prompt
 	 * @returns {Promise<{ text, model, provider, usage: { input, output, cacheRead, cacheWrite }, retries }>}
 	 */
 	async function generateText(settings, system, user, fetch, opts = {}) {
 		if (!settings.apiKey) throw new Error("尚未設定 LLM API key");
-		let common = { apiKey: settings.apiKey, model: settings.model, system, user, fetch, retry: opts };
+		let common = { apiKey: settings.apiKey, model: settings.model, system, user, pdf: opts.pdf || null, fetch, retry: opts };
 		if (settings.provider === "openai") {
 			return callOpenAI(Object.assign(common, { baseURL: settings.baseURL }));
 		}
@@ -395,7 +431,7 @@
 
 	async function generateNote(settings, data, opts, fetch, callOpts) {
 		let { system, user } = buildPrompt(data, opts);
-		return generateText(settings, system, user, fetch, callOpts);
+		return generateText(settings, system, user, fetch, opts.pdf ? Object.assign({}, callOpts, { pdf: opts.pdf }) : callOpts);
 	}
 
 	/** Pull the one-line summary out of the generated note (for the Notion "Summary" property). */
@@ -635,8 +671,8 @@
 	}
 
 	return {
-		DEFAULT_MODELS, DEFAULT_SYSTEM_PROMPT, buildPrompt, formatAnnotationsForPrompt,
-		callAnthropic, callOpenAI, generateText, generateNote, extractSummary,
+		DEFAULT_MODELS, DEFAULT_SYSTEM_PROMPT, buildPrompt, formatAnnotationsForPrompt, PDF_ATTACHED_NOTE,
+		anthropicContent, openaiInput, callAnthropic, callOpenAI, generateText, generateNote, extractSummary,
 		RETRY_STATUSES, MAX_RETRIES, postWithRetry, retryAfterMs, backoffDelay, parseUsage,
 		STUDY_FIELDS, STUDY_DESIGNS, APPRAISAL_VERDICTS, STUDY_DATA_HEADING, STUDY_DATA_PROMPT, APPRAISAL_HEADING,
 		normalizeStudyData, extractStudyData, hasStudyData, studyDataBlock,

@@ -493,7 +493,8 @@ test("AI failure still writes Obsidian, and an unconfigured Notion is skipped", 
 	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
 	let sleeps = [];
 	env.context.ZB.main.runtime.retry = { sleep: async (ms) => { sleeps.push(ms); } };
-	let item = new env.MockItem("book", { title: "Nursing Theory", year: "2020", creators: [{ name: "WHO", creatorType: "author" }] });
+	// An abstract to read (an item with nothing at all to read never reaches the AI)
+	let item = new env.MockItem("book", { title: "Nursing Theory", year: "2020", creators: [{ name: "WHO", creatorType: "author" }], abstractNote: "Abstract" });
 	await env.context.ZB.main.run([item], { targets: ["notion", "obsidian"], ai: "missing" });
 
 	// 1 try + 4 retries, each waiting the server's retry-after-ms; never any Notion call without a token
@@ -506,6 +507,113 @@ test("AI failure still writes Obsidian, and an unconfigured Notion is skipped", 
 	let text = fs.readFileSync(path.join(vault, "WHO 2020 - Nursing Theory.md"), "utf8");
 	assert.match(text, /^title: "Nursing Theory"$/m);
 	assert.doesNotMatch(text, /AI 文獻筆記/);
+});
+
+test("scanned PDF: the file goes to Claude, the status reaches Obsidian and Notion; nothing to read skips the AI", async () => {
+	let vault = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-vault-"));
+	let storage = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-storage-"));
+	let pdfPath = path.join(storage, "scan.pdf");
+	let pdfBytes = Buffer.from("%PDF-1.4\n% scanned pages, images only\n");
+	fs.writeFileSync(pdfPath, pdfBytes);
+	let log = [];
+	let env = makeEnv({
+		fetch: notionMock(log),
+		prefs: basePrefs(vault, {
+			"extensions.zotero-bridge.llm.enabled": true,
+			"extensions.zotero-bridge.llm.provider": "anthropic",
+			"extensions.zotero-bridge.llm.anthropicKey": "sk-ant-test",
+			"extensions.zotero-bridge.llm.anthropicModel": "claude-opus-5-5",
+			"extensions.zotero-bridge.llm.fullTextLimit": "150000",
+		}),
+	});
+	// Zotero's full-text index: a scan without text is never indexed, so the page count comes from
+	// the PDF worker; the partly scanned PDF below is indexed (10 pages)
+	let pageRows = new Map();
+	let workerCalls = [];
+	env.Zotero.Fulltext = { getPages: async id => pageRows.get(id) || false };
+	env.Zotero.PDFWorker = {
+		getFullText: async (id, maxPages) => {
+			workerCalls.push([id, maxPages]);
+			return { text: "", extractedPages: 0, totalPages: 3 };
+		},
+	};
+	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
+	let creators = [{ lastName: "Chen", creatorType: "author" }];
+
+	let scan = new env.MockItem("journalArticle", { title: "Scanned RCT", year: "1998", citationKey: "chen1998", creators, abstractNote: "Abstract of a scanned paper" });
+	let pdf = new env.MockItem("attachment", { title: "Full Text PDF", fulltext: "" });
+	pdf.getFilePathAsync = async () => pdfPath;
+	env.addChild(scan, pdf);
+	pdf.annotations = [{
+		key: "ANN1", annotationType: "highlight", annotationText: "Falls decreased", annotationComment: "",
+		annotationColor: "#ffd400", annotationPageLabel: "5", annotationSortIndex: "00001", getTags: () => [],
+	}];
+	// Bibliographic fields only: nothing for the AI to read
+	let bare = new env.MockItem("journalArticle", { title: "Bare record", year: "2001", citationKey: "lee2001", creators });
+
+	await env.context.ZB.main.run([scan, bare], { targets: ["notion", "obsidian"], ai: "missing" });
+	assert.deepEqual(env.errors, []);
+	assert.deepEqual(workerCalls, [[pdf.id, 1]], "only the page count is asked of the PDF worker");
+
+	// One Claude call, for the scan, with the PDF as a base64 document block before the prompt
+	let llmCalls = log.filter(l => l.api === "anthropic");
+	assert.equal(llmCalls.length, 1);
+	let content = llmCalls[0].body.messages[0].content;
+	assert.deepEqual(content[0], { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBytes.toString("base64") } });
+	assert.equal(content[1].type, "text");
+	assert.match(content[1].text, /全文以附件 PDF 提供/);
+	assert.doesNotMatch(content[1].text, /<fulltext>/);
+
+	let [scanLine, bareLine] = env.progressLines.filter(l => !/要中途停止/.test(l.text));
+	assert.equal(scanLine.error, undefined, scanLine.text);
+	assert.equal(scanLine.text, "Scanned RCT — ⚠️ 掃描版 PDF（沒有文字層）：已把 PDF 直接傳給 AI 讀（3 頁，較耗 token）；可引用句 2 句：✅ 1、⚠️ 1 句無全文可查證");
+	assert.equal(bareLine.error, undefined, bareLine.text);
+	assert.equal(bareLine.text, "Bare record — ⚠️ 沒有全文、摘要、劃線或筆記可讀，略過 AI 筆記（避免 AI 憑空產生內容）");
+
+	// The call is in the usage ledger like any other
+	let month = JSON.parse(env.prefStore["extensions.zotero-bridge.usage.ledger"])[env.context.ZB.usage.monthKey()];
+	assert.equal(month.calls, 1);
+	assert.equal(month.input, 12000);
+
+	// Quotes: the one from the highlight is verified, the other can't be checked without a text layer
+	let aiNote = env.Zotero.Items.get(scan.getNotes()).find(n => n.tags.includes("zotero-bridge-ai"));
+	assert.match(aiNote.noteHTML, /Falls decreased by 30%&quot; \(p\. 5\) ⚠️ 無全文可查證/);
+	assert.equal(env.Zotero.Items.get(bare.getNotes()).length, 0, "no AI note for the bare record");
+
+	// Obsidian frontmatter and the Notion column
+	let scanNote = fs.readFileSync(path.join(vault, "Zotero", "chen1998.md"), "utf8");
+	assert.match(scanNote, /^full_text: "none"$/m);
+	let bareNote = fs.readFileSync(path.join(vault, "Zotero", "lee2001.md"), "utf8");
+	assert.match(bareNote, /^full_text: "no_pdf"$/m);
+	assert.doesNotMatch(bareNote, /^ai_model:/m);
+	let created = log.filter(l => l.path === "pages" && l.method === "POST");
+	assert.deepEqual(created.map(c => c.body.properties["Full Text"]), [{ select: { name: "none" } }, { select: { name: "no_pdf" } }]);
+
+	// A mostly scanned PDF with the option off: the partial text layer is sent, with a warning
+	log.length = 0;
+	env.prefStore["extensions.zotero-bridge.llm.sendScannedPDF"] = false;
+	let partial = new env.MockItem("journalArticle", { title: "Partly scanned", year: "2005", citationKey: "wu2005", creators, abstractNote: "Abstract" });
+	let partialPdf = new env.MockItem("attachment", { title: "PDF", fulltext: "Page one text. ".repeat(160) });
+	partialPdf.getFilePathAsync = async () => pdfPath;
+	env.addChild(partial, partialPdf);
+	pageRows.set(partialPdf.id, { indexedPages: 10, total: 10 });
+	await env.context.ZB.main.run([partial], { targets: ["notion", "obsidian"], ai: "missing" });
+	assert.deepEqual(env.errors, []);
+	assert.equal(workerCalls.length, 1, "indexed PDFs take the page count from the index");
+	let call = log.find(l => l.api === "anthropic");
+	assert.equal(typeof call.body.messages[0].content, "string", "no PDF attached");
+	assert.match(call.body.messages[0].content, /<fulltext>\n（這份 PDF 大部分頁面是掃描影像/);
+	assert.match(env.progressLines.at(-1).text, /^Partly scanned — ⚠️ PDF 大部分沒有文字層（每頁平均約 192 字），AI 讀到的全文不完整；/);
+	assert.match(fs.readFileSync(path.join(vault, "Zotero", "wu2005.md"), "utf8"), /^full_text: "partial"$/m);
+
+	// A sync without AI still writes the status (and reads no PDF)
+	log.length = 0;
+	await env.context.ZB.main.run([scan], { targets: ["notion", "obsidian"], ai: "none" });
+	assert.equal(log.filter(l => l.api === "anthropic").length, 0);
+	assert.match(fs.readFileSync(path.join(vault, "Zotero", "chen1998.md"), "utf8"), /^full_text: "none"$/m);
+	let patch = log.find(l => l.method === "PATCH" && /^pages\/page-\d+$/.test(l.path));
+	assert.deepEqual(patch.body.properties["Full Text"], { select: { name: "none" } });
+	assert.equal(env.progressLines.at(-1).text, "Scanned RCT", "status warnings only when the AI ran");
 });
 
 test("item pane shows the AI note; synthesis from a collection writes Obsidian, Notion and a Zotero note", async () => {
@@ -664,7 +772,7 @@ test("keys come from the login manager; batch confirm shows a cost estimate; 529
 		};
 		return push(line);
 	};
-	let items = Array.from({ length: 6 }, (_, i) => new env.MockItem("journalArticle", { title: `Paper ${i}`, year: "2024" }));
+	let items = Array.from({ length: 6 }, (_, i) => new env.MockItem("journalArticle", { title: `Paper ${i}`, year: "2024", abstractNote: `Abstract ${i}` }));
 	await env.context.ZB.main.run(items, { targets: ["notion", "obsidian"], ai: "missing" });
 
 	assert.deepEqual(env.errors, []);
