@@ -451,7 +451,8 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     diagnostic: '診斷準確性研究', diagnostictest: '診斷準確性研究', economic: '經濟評估', economicevaluation: '經濟評估',
     cpr: '臨床預測規則', clinicalpredictionrule: '臨床預測規則', quasiexperimental: '類實驗研究', quasi: '類實驗研究',
     casereport: '個案報告', caseseries: '病例系列', prevalence: '盛行率研究', textandopinion: '專家意見／文本', textopinion: '專家意見／文本',
-    guideline: '臨床指引', mixedmethods: '混合方法研究'
+    guideline: '臨床指引', mixedmethods: '混合方法研究',
+    diagnosticaccuracy: '診斷準確性研究', scopingreview: '範圍回顧（scoping review）', other: '其他'
   };
   function designKey(d) { return String(d || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
   function designLabel(d) { return DESIGN_LABEL[designKey(d)] || String(d || ''); }
@@ -957,6 +958,19 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
       }
       li.appendChild(head);
       if (hint) li.appendChild(hint);
+      var lab = doc.createElement('label'); lab.className = 'vh'; lab.htmlFor = 'note-' + it.id; lab.textContent = '第 ' + (i + 1) + ' 題評析根據';
+      var ta = doc.createElement('textarea'); ta.id = 'note-' + it.id; ta.rows = 2; ta.className = 'grow'; ta.dataset.note = it.id;
+      ta.placeholder = '評析根據：引用原文的設計、數字或頁碼';
+      ta.value = (cur.answers[it.id] || {}).note || '';
+      if (it.open) {
+        // 開放題（例如 CASP「結果是什麼？」）：只寫文字，不計入是／否統計
+        li.classList.add('openq');
+        var oq = doc.createElement('p'); oq.className = 'hint'; oq.textContent = '開放題：請在下方寫下結果（不計入「是／否」統計）';
+        ta.placeholder = '寫下結果：效應量、95% CI、p 值與頁碼';
+        li.append(oq, lab, ta);
+        ol.appendChild(li);
+        return;
+      }
       var ra = doc.createElement('div'); ra.className = 'ans a';
       var wa = doc.createElement('span'); wa.className = 'who'; wa.textContent = 'A';
       var sa = segButtons('A', it.id); sa.setAttribute('aria-labelledby', t.id);
@@ -966,10 +980,6 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
       var sb = segButtons('B', it.id); sb.setAttribute('aria-label', '評讀者 B：第 ' + (i + 1) + ' 題');
       var dt = doc.createElement('span'); dt.className = 'distag'; dt.textContent = '⚠ 兩位評讀者不一致，請討論後決定'; dt.hidden = true;
       rb.append(wb, sb, dt);
-      var lab = doc.createElement('label'); lab.className = 'vh'; lab.htmlFor = 'note-' + it.id; lab.textContent = '第 ' + (i + 1) + ' 題評析根據';
-      var ta = doc.createElement('textarea'); ta.id = 'note-' + it.id; ta.rows = 2; ta.className = 'grow'; ta.dataset.note = it.id;
-      ta.placeholder = '評析根據：引用原文的設計、數字或頁碼';
-      ta.value = (cur.answers[it.id] || {}).note || '';
       li.append(ra, rb, lab, ta);
       ol.appendChild(li);
     });
@@ -1001,7 +1011,8 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     doc.querySelectorAll('#items li.item').forEach(function (li) {
       var d = dis.indexOf(li.dataset.item) !== -1;
       li.classList.toggle('disagree', d);
-      li.querySelector('.distag').hidden = !d;
+      var tag = li.querySelector('.distag');
+      if (tag) tag.hidden = !d; // open items have no answer rows
     });
     doc.querySelectorAll('#verdict button').forEach(function (b) { b.setAttribute('aria-pressed', String(cur.verdict === b.dataset.verdict)); });
 

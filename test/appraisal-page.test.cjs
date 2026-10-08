@@ -464,12 +464,17 @@ test("real catalog (content/appraisal-tools.js): page works with every tool", { 
 		assert.equal(A.state().current.toolId, tool.id);
 		assert.equal(doc.querySelectorAll("#items li.item").length, tool.items.length, tool.id);
 		if (tool.source) assert.equal(doc.getElementById("toolSrc").href, new win.URL(tool.source).href, tool.id);
-		// answer every item with the first answer
-		for (const it of tool.items) answer(doc, it.id, T.ANSWERS[0]);
+		// answer every closed item with the first answer; open items (e.g. CASP "what are the results?")
+		// have no answer buttons and don't count in the summary
+		const closed = tool.items.filter(it => !it.open);
+		for (const it of tool.items.filter(it => it.open)) {
+			assert.equal(doc.querySelector(`#items li.item[data-item="${it.id}"] .seg`), null, `${tool.id} open item ${it.id}`);
+		}
+		for (const it of closed) answer(doc, it.id, T.ANSWERS[0]);
 		const s = T.summarize(tool, A.state().current.answers);
-		assert.equal(s.answered, tool.items.length, tool.id);
-		assert.equal(s.total, tool.items.length, tool.id);
-		assert.match(doc.getElementById("progLine").textContent, new RegExp(`已答 ${tool.items.length}／${tool.items.length} 題`));
+		assert.equal(s.answered, closed.length, tool.id);
+		assert.equal(s.total, closed.length, tool.id);
+		assert.match(doc.getElementById("progLine").textContent, new RegExp(`已答 ${closed.length}／${closed.length} 題`));
 		doc.getElementById("copyMdBtn").click();
 		await tick();
 		assert.ok(out.copied.at(-1).includes(T.toMarkdownTable(tool, A.state().current.answers, { includeNotes: true })), tool.id);
