@@ -128,6 +128,27 @@ function stopCapture() {
 	consoleListener = null;
 }
 
+/** Every console message so far: the console's buffer, Zotero's error list and what we captured. */
+function startupMessages() {
+	let early = [];
+	try {
+		early = Services.console.getMessageArray().map(describe);
+	}
+	catch (e) {}
+	let zoteroErrors = [];
+	try {
+		zoteroErrors = Zotero.getErrors(false).map(describe);
+	}
+	catch (e) {}
+	let seen = new Set();
+	return [...early, ...zoteroErrors, ...messages].filter((m) => {
+		let k = `${m.kind}|${m.text}|${m.source}`;
+		if (seen.has(k)) return false;
+		seen.add(k);
+		return true;
+	});
+}
+
 // ---------- helpers on the real Zotero ----------
 
 function zb() {
@@ -253,31 +274,29 @@ const TESTS = [
 	{
 		name: "no plugin errors in the console during startup",
 		async fn(d) {
-			let early = [];
-			try {
-				early = Services.console.getMessageArray().map(describe);
-			}
-			catch (e) {}
-			let zoteroErrors = [];
-			try {
-				zoteroErrors = Zotero.getErrors(false).map(describe);
-			}
-			catch (e) {}
-			let seen = new Set();
-			let all = [...early, ...zoteroErrors, ...messages].filter((m) => {
-				let k = `${m.kind}|${m.text}|${m.source}`;
-				if (seen.has(k)) return false;
-				seen.add(k);
-				return true;
-			});
+			let all = startupMessages();
+			let errors = all.filter(m => m.kind === "error");
 			let errs = pluginErrors(all);
-			d.consoleErrorsTotal = all.filter(m => m.kind === "error").length;
-			// Every startup error, attributable or not, for the record
-			d.consoleErrors = all.filter(m => m.kind === "error").slice(0, 10);
+			d.consoleErrors = errors.slice(0, 10);
 			d.pluginWarnings = all.filter(m => m.kind === "warning" && isPluginMessage(m)).slice(0, 20);
-			d.pluginErrors = errs;
 			check(!errs.length, `the plugin logged ${errs.length} error(s) while starting: `
 				+ errs.slice(0, 3).map(m => `${m.text} (${m.source})`).join(" | "));
+			// Errors without a source can't be attributed: compare with Zotero started without the plugin
+			let baseline = null;
+			try {
+				baseline = JSON.parse(await IOUtils.readUTF8(PathUtils.join(workDir, "baseline.json")));
+			}
+			catch (e) {
+				d.baseline = `no baseline.json (${e.message || e})`;
+			}
+			if (baseline) {
+				let known = new Set(baseline.errors.map(m => m.text));
+				d.baselineErrors = baseline.errors.map(m => m.text);
+				let extra = errors.filter(m => !isPluginMessage(m) && !known.has(m.text));
+				d.notInBaseline = extra;
+				check(!extra.length, `console error(s) at startup that Zotero without the plugin does not log: `
+					+ extra.slice(0, 3).map(m => `${m.text} (${m.source || "no source"})`).join(" | "));
+			}
 		},
 	},
 	{
@@ -989,6 +1008,25 @@ async function main() {
 	}
 }
 
+/** Zotero without the plugin: record the console errors of a plain startup, then quit. */
+async function baseline() {
+	try {
+		await Zotero.initializationPromise;
+		await Zotero.uiReadyPromise;
+		await delay(10000);
+		let errors = startupMessages().filter(m => m.kind === "error");
+		await IOUtils.writeUTF8(PathUtils.join(workDir, "baseline.json"),
+			JSON.stringify({ zoteroVersion: Zotero.version, errors }, null, 2));
+		log(`baseline: ${errors.length} console error(s) without the plugin`);
+	}
+	catch (e) {
+		log(`baseline failed: ${errText(e)}`);
+	}
+	finished = true;
+	stopCapture();
+	Services.startup.quit(Ci.nsIAppStartup.eForceQuit);
+}
+
 function install() {}
 
 function startup({ id, version }) {
@@ -998,8 +1036,10 @@ function startup({ id, version }) {
 	ctx.expectedVersion = Services.prefs.getStringPref(E2E_PREF + "expectedVersion", "");
 	ctx.expectKeyStore = Services.prefs.getBoolPref(E2E_PREF + "expectKeyStore", false);
 	results = { harness: `${id} ${version}`, startedAt: new Date().toISOString(), tests: [] };
-	log(`harness started, work dir ${workDir}`);
-	main();
+	let mode = Services.prefs.getStringPref(E2E_PREF + "mode", "test");
+	log(`harness started (${mode}), work dir ${workDir}`);
+	if (mode === "baseline") baseline();
+	else main();
 }
 
 function shutdown() {

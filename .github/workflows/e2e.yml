@@ -83,5 +83,7 @@ jobs:
           path: |
             ${{ env.WORK }}/results.json
             ${{ env.WORK }}/zotero.log
+            ${{ env.WORK }}/baseline.json
+            ${{ env.WORK }}/zotero-baseline.log
             ${{ env.WORK }}/vault/
           if-no-files-found: warn
