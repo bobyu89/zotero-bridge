@@ -209,6 +209,35 @@ function fmValue(fm, key) {
 	return m ? m[1].trim().replace(/^"(.*)"$/, "$1") : undefined;
 }
 
+/**
+ * Open the Zotero Bridge toolbar menu as a click does, read what it shows (visible group IDs, entry
+ * IDs and translated labels), close it again.
+ */
+async function openToolbarMenu(button) {
+	let win = button.ownerGlobal;
+	let popup = button.querySelector("menupopup");
+	check(popup, "the toolbar button has no menupopup");
+	popup.openPopup(button, "after_start", 0, 0, false, false);
+	try {
+		await waitFor(() => popup.state === "open", "the Zotero Bridge toolbar menu to open", 10000);
+		// Fluent translates the entries asynchronously
+		await win.document.l10n.translateFragment(popup);
+		let shown = el => !el.hidden;
+		let groups = [...popup.querySelectorAll("[data-zb-group]")].filter(shown);
+		let entries = [...popup.children].filter(el => el.hasAttribute("data-zb-entry") && shown(el));
+		return {
+			groups: groups.map(el => el.getAttribute("data-zb-group")),
+			entries: entries.map(el => el.getAttribute("data-zb-entry")),
+			labels: [...groups, ...entries].map(el => `${el.getAttribute("data-l10n-id")}: ${el.getAttribute("label") || ""}`),
+			untranslated: [...groups, ...entries].filter(el => !(el.getAttribute("label") || "").trim()).map(el => el.getAttribute("data-l10n-id")),
+		};
+	}
+	finally {
+		popup.hidePopup();
+		await waitFor(() => popup.state === "closed", "the Zotero Bridge toolbar menu to close", 10000);
+	}
+}
+
 const ctx = { l10nSourceErrors: [] };
 
 // ---------- tests ----------
@@ -242,16 +271,18 @@ const TESTS = [
 			const MODULES = {
 				apaZh: ["formatReference", "isChineseItem", "options"],
 				appraisalTools: ["getTool", "toolsForDesign", "findToolByName", "summarize", "toMarkdownTable", "toCSV", "toJSON", "fromJSON"],
-				core: ["buildObsidianNote", "resolveRoute", "buildBaseFile"],
+				core: ["buildObsidianNote", "resolveRoute", "buildBaseFile", "buildNoteSections", "colorMeanings"],
 				markdown: ["htmlToMd", "mdToHtml"],
-				notion: ["NotionClient"],
+				notion: ["NotionClient", "resolveSchema", "renamePlan", "pageProperty"],
 				llm: ["generateNote", "extractStudyData"],
 				synthesis: [],
 				verify: ["verifyQuotes"],
 				scanned: ["classifyFullText", "prepareAIInput", "countChars"],
+				fulltextMd: ["toMarkdown", "trimForAI", "markHighlights", "buildFullTextNote", "notionChunks"],
 				usage: ["recordUsage"],
 				secrets: ["get", "set", "clear", "migrateFromPrefs", "createStore", "geckoBackend"],
 				adapter: ["extractItemData", "saveAINote", "getAINote", "toRegularItems"],
+				fulltext: ["prepare", "render", "verifyAIHighlights", "writeObsidian", "writeNotion", "runMarkitdown"],
 				bibliography: ["exportLibrary", "exportCollections", "citekeyFor", "afterSync"],
 				images: ["collect"],
 				status: ["runPass", "prepare", "setItemStatus"],
@@ -260,6 +291,7 @@ const TESTS = [
 				pubmedWatch: ["init", "shutdown", "runAll", "registerMenus"],
 				dashboard: ["update", "afterSync", "registerMenus"],
 				concepts: ["update", "afterSync", "dashboardSection", "synthesizeFromMenu", "registerMenus"],
+				classify: ["parseRules", "evaluate", "parseTopics", "suggest", "defaultPicks", "planApply", "apply", "undoLast", "readLastRun", "review", "renderReview", "run", "registerMenus"],
 				citationChase: ["chaseCollection", "chaseItems", "importChecked", "registerMenus"],
 				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "registerMenus"],
 				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "registerMenus", "batchParams", "parseResults"],
@@ -267,7 +299,8 @@ const TESTS = [
 				appraisalForm: ["renderPaneRow", "syncInfo", "saveRecord", "exportSummary", "registerMenus"],
 				progressReport: ["run", "askOptions", "logStatusChange", "latestReport", "registerMenus"],
 				features: ["isEnabled", "rawValue", "applyPreset", "currentPreset", "snapshot", "restore", "migrate", "gateMenus"],
-				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly"],
+				toolbar: ["init", "add", "remove", "shutdown", "update"],
+				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly", "renameNotionColumns", "notionClient", "prepareFullText"],
 			};
 			let missing = [];
 			for (let [mod, fns] of Object.entries(MODULES)) {
@@ -284,6 +317,9 @@ const TESTS = [
 			// Let startup's async work settle (secrets migration, the interrupted-batch reminder)
 			await delay(3000);
 		},
+		// Still part of startup (it waits for startup() to finish): the l10n-registration errors can
+		// arrive here instead of in the first test; the startup test judges them against the baseline
+		allowUnattributed: ["uncaught exception: undefined", "uncaught exception: undefined"],
 	},
 	{
 		name: "no plugin errors in the console during startup",
@@ -356,6 +392,9 @@ const TESTS = [
 				"zotero-bridge-appraisal-collection": "main/library/collection",
 				"zotero-bridge-appraisal-tools": "main/menubar/tools",
 				"zotero-bridge-progress-report-tools": "main/menubar/tools",
+				"zotero-bridge-classify-item": "main/library/item",
+				"zotero-bridge-classify-collection": "main/library/collection",
+				"zotero-bridge-classify-tools": "main/menubar/tools",
 			};
 			d.registered = mine.map(o => `${o.menuID} → ${o.target}`);
 			let problems = [];
@@ -420,7 +459,7 @@ const TESTS = [
 				if (!ctx.l10n.has(m[1])) ctx.l10n.set(m[1], null);
 			}
 			let ids = [...ctx.l10n.keys()];
-			let args = { count: 3, reason: "E2E", name: "E2E", preset: "guided", req: "sync" };
+			let args = { count: 3, reason: "E2E", name: "E2E", preset: "guided", req: "sync", color: "yellow" };
 			let report = {};
 			let problems = [];
 			for (let locale of ["en-US", "zh-TW"]) {
@@ -492,6 +531,65 @@ const TESTS = [
 			}
 			d.rendered = rendered;
 			check(!problems.length, problems.join("; "));
+		},
+	},
+	{
+		name: "toolbar button in the main window: place, label, icon, size, translated menu, keyboard, switch",
+		needs: ["Zotero.ZoteroBridge is set and has every module"],
+		async fn(d) {
+			let win = mainWindow();
+			let doc = win.document;
+			let T = zb().toolbar;
+			let button = await waitFor(() => doc.getElementById(T.BUTTON_ID),
+				"the Zotero Bridge toolbar button (bootstrap onMainWindowLoad → ZB.toolbar.add)", 10000);
+			eq(doc.querySelectorAll("#" + T.BUTTON_ID).length, 1, "toolbar buttons in the main window");
+			d.parent = button.parentNode && button.parentNode.id;
+			eq(d.parent, "zotero-items-toolbar", "the toolbar holding the button");
+			eq(button.previousElementSibling && button.previousElementSibling.id, "zotero-tb-note-add", "the button's neighbour on the left");
+			eq(button.getAttribute("aria-label"), "Zotero Bridge", "aria-label");
+			eq(button.getAttribute("tooltiptext"), "Zotero Bridge", "tooltiptext");
+			eq(button.getAttribute("type"), "menu", "button type");
+			check(button.classList.contains("zotero-tb-button"), "the button lacks Zotero's zotero-tb-button class");
+			check(!button.hidden, "the button is hidden although 工具列按鈕 is on");
+			// toolbar.css is applied: the plugin's icon, at the size of Zotero's own buttons
+			d.listStyleImage = win.getComputedStyle(button).listStyleImage;
+			check(/bridge\.svg/.test(d.listStyleImage), `list-style-image is ${d.listStyleImage} (is content/toolbar.css loaded?)`);
+			let note = doc.getElementById("zotero-tb-note-add");
+			let size = (el) => {
+				let r = el.getBoundingClientRect();
+				return `${Math.round(r.width)}x${Math.round(r.height)}`;
+			};
+			d.size = size(button);
+			d.noteAddSize = size(note);
+			eq(d.size, d.noteAddSize, "button size (width x height) compared with Zotero's 新增筆記 menu button");
+			let icon = button.querySelector(".toolbarbutton-icon");
+			let noteIcon = note.querySelector(".toolbarbutton-icon");
+			if (icon && noteIcon) {
+				d.iconSize = size(icon);
+				eq(d.iconSize, size(noteIcon), "icon size compared with 新增筆記");
+			}
+			// The menu as a click opens it: labelled groups, every entry translated, 設定… last
+			let menu = await openToolbarMenu(button);
+			d.menu = menu.labels;
+			check(menu.groups.length > 0, "no group shows in the toolbar menu");
+			check(!menu.untranslated.length, `toolbar menu entries without a label: ${menu.untranslated.join(", ")}`);
+			eq(menu.entries[menu.entries.length - 1], "settings", "last entry of the toolbar menu");
+			// Keyboard: Zotero's arrow-key row continues from 新增筆記 to the button and back
+			note.focus();
+			note.dispatchEvent(new win.KeyboardEvent("keydown", { key: Zotero.arrowNextKey, bubbles: true, cancelable: true }));
+			eq(doc.activeElement && doc.activeElement.id, T.BUTTON_ID, "focus after ArrowNext on 新增筆記");
+			button.dispatchEvent(new win.KeyboardEvent("keydown", { key: Zotero.arrowPreviousKey, bubbles: true, cancelable: true }));
+			eq(doc.activeElement && doc.activeElement.id, "zotero-tb-note-add", "focus after ArrowPrevious on the button");
+			note.blur();
+			// The 工具列按鈕 switch hides it live
+			try {
+				zb().features.setEnabled("toolbarButton", false);
+				await waitFor(() => button.hidden, "the button to hide with 工具列按鈕 off", 5000);
+			}
+			finally {
+				Zotero.Prefs.clear(ZB_PREF + "feature.toolbarButton", true);
+			}
+			await waitFor(() => !button.hidden, "the button to come back with 工具列按鈕 on", 5000);
 		},
 	},
 	{
@@ -634,6 +732,19 @@ const TESTS = [
 			ctx.noteDir = PathUtils.join(vault, "Zotero");
 			setPref("obsidian.vaultPath", vault);
 			setPref("export.bibtex", true);
+			// A red highlight on the text PDF: coloured in place in the full-text note (fulltext.js)
+			let highlight = new Zotero.Item("annotation");
+			// The library first: the annotation setters look the parent attachment up by library and key
+			highlight.libraryID = ctx.textPDF.libraryID;
+			highlight.parentID = ctx.textPDF.id;
+			highlight.annotationType = "highlight";
+			highlight.annotationText = "The intervention reduced the rate of falls by thirty percent compared with usual care.";
+			highlight.annotationColor = "#ff6666";
+			highlight.annotationPageLabel = "1";
+			highlight.annotationSortIndex = "00000|000500|00300";
+			highlight.annotationPosition = JSON.stringify({ pageIndex: 0, rects: [[40, 600, 420, 610]] });
+			await highlight.saveTx();
+			ctx.highlight = highlight;
 			let items = [ctx.english, ctx.chinese, ctx.book, ctx.extra1, ctx.extra2];
 			await zb().main.run(items, { targets: ["obsidian"], ai: "none" });
 			let problems = [];
@@ -672,6 +783,29 @@ const TESTS = [
 				problems.push(`English APA line (Zotero citeproc) wrong: ${(/^.*APA 7.*$/m.exec(en) || ["(no APA line)"])[0]}`);
 			}
 			if (!en.includes("E2E child note")) problems.push("English note does not contain the child note text");
+			// The compact layout: 「重點」 first in the managed block, the highlight under its colour's meaning
+			if (!/%% zotero-bridge:start[^\n]*%%\n\n> \[!abstract\] 重點\n/.test(en)) problems.push("English note has no 「重點」 block at the top of the managed region");
+			if (!/^> \[!quote\]- 🔴 限制／疑問（1）\n> - ==🔴The intervention reduced the rate of falls by thirty percent compared with usual care\.== · \[p\. 1\]/m.test(en)) {
+				problems.push("English note does not list the red highlight under 限制／疑問");
+			}
+			// The full-text note next to it (全文筆記 is on in 研究生引導), with the highlight coloured in place
+			let fullTextPath = PathUtils.join(ctx.noteDir, "全文", PathUtils.filename(notes.english.path));
+			if (!(await IOUtils.exists(fullTextPath))) {
+				problems.push(`no full-text note ${fullTextPath}; files in 全文: ${(await listFiles(PathUtils.join(ctx.noteDir, "全文"))).map(p => PathUtils.filename(p)).join(", ")}`);
+			}
+			else {
+				let ft = await IOUtils.readUTF8(fullTextPath);
+				d.fullTextHead = ft.slice(0, 600);
+				if (!ft.includes(`fulltext_of: "library/${ctx.english.key}"`)) problems.push("full-text note lacks fulltext_of");
+				if (/zotero_key:/.test(ft)) problems.push("full-text note has a zotero_key (it would be indexed as a literature note)");
+				if (!/==🔴The intervention reduced the rate of falls by thirty percent compared with usual care==/.test(ft)) {
+					problems.push(`full-text note does not colour the highlight in place: ${(/^.*thirty percent.*$/m.exec(ft) || ["(sentence not found)"])[0]}`);
+				}
+				if (!en.includes(`fulltext: "[[Zotero/全文/${PathUtils.filename(notes.english.path).replace(/\.md$/, "")}]]"`)) problems.push("English note does not link to its full-text note");
+			}
+			if (await IOUtils.exists(PathUtils.join(ctx.noteDir, "全文", PathUtils.filename(notes.chinese.path)))) {
+				problems.push("a full-text note was written for the scanned PDF (no text layer)");
+			}
 			if (!/^tags:\n(?: {2}- .*\n)*? {2}- "?falls"?$/m.test(fm("english") + "\n")) problems.push("English note frontmatter tags do not include falls");
 			if (!/^collections:\n {2}- "?E2E Review"?$/m.test(fm("english"))) problems.push("English note frontmatter collections do not include E2E Review");
 			let base = PathUtils.join(ctx.noteDir, "Zotero 文獻庫.base");
@@ -874,6 +1008,146 @@ const TESTS = [
 		},
 	},
 	{
+		name: "文獻自動分類 by rules and heuristics creates real sub-collections; undo removes exactly them (ZB.classify)",
+		needs: ["create items with PDF attachments in the real library"],
+		async fn(d) {
+			let C = zb().classify;
+			let libraryID = Zotero.Libraries.userLibraryID;
+			// Rules and the study-design guess only: no AI, no network
+			setPref("classify.ruleList", "跌倒 = title:falls OR tag:跌倒\n中文文獻 = language:zh\n近年 = year>=2020");
+			setPref("classify.topics", false);
+			setPref("classify.pico", false);
+			let topLevel = name => Zotero.Collections.getByLibrary(libraryID).filter(c => !c.deleted && c.name === name);
+			let child = (parent, name) => parent && Zotero.Collections.getByParent(parent.id).find(c => !c.deleted && c.name === name);
+			// Members straight from the database (collectionItems), not from the objects' caches
+			let members = async (collection) => {
+				let ids = await Zotero.DB.columnQueryAsync("SELECT itemID FROM collectionItems WHERE collectionID=?", [collection.id]);
+				return Zotero.Items.get(ids || []).map(i => i.key).sort();
+			};
+			let same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+			let reviewBefore = await members(ctx.collection);
+			try {
+				check(!topLevel("自動分類").length, "a collection 自動分類 already exists before the test");
+				let items = [ctx.english, ctx.chinese, ctx.book, ctx.extra1, ctx.extra2];
+				let plan = await C.suggest(items, { ui: { confirmAI: () => "skip", status: () => {} } });
+				check(plan && Array.isArray(plan.items), `suggest() returned ${JSON.stringify(plan)}`);
+				d.notes = plan.notes;
+				let picks = C.defaultPicks(plan);
+				d.picks = picks.map(p => `${p.itemKey} → ${p.dimension}/${p.value}`);
+				let want = [
+					`${ctx.english.key} → rule/跌倒`, `${ctx.english.key} → rule/近年`,
+					`${ctx.chinese.key} → rule/跌倒`, `${ctx.chinese.key} → rule/中文文獻`, `${ctx.chinese.key} → rule/近年`,
+					`${ctx.extra1.key} → rule/近年`, `${ctx.extra2.key} → design/Cohort`,
+				].sort();
+				check(same(d.picks.slice().sort(), want), `pre-checked suggestions ${JSON.stringify(d.picks)}, expected ${JSON.stringify(want)}`);
+
+				let result = await C.apply(plan, picks);
+				d.apply = result;
+				eq(result.errors.length, 0, `apply() errors: ${result.errors.join("; ")}`);
+				eq(result.added, 7, "memberships added");
+				eq(result.created, 7, "collections created (自動分類, 規則, 跌倒, 中文文獻, 近年, 研究設計, Cohort)");
+				let parent = topLevel("自動分類");
+				eq(parent.length, 1, "top-level collections named 自動分類");
+				let rules = child(parent[0], "規則");
+				let design = child(parent[0], "研究設計");
+				check(rules && design, `folders under 自動分類: ${Zotero.Collections.getByParent(parent[0].id).map(c => c.name).join(", ")}`);
+				let expect = {
+					"跌倒": [ctx.english.key, ctx.chinese.key],
+					"中文文獻": [ctx.chinese.key],
+					"近年": [ctx.english.key, ctx.chinese.key, ctx.extra1.key],
+				};
+				let problems = [];
+				for (let [name, keys] of Object.entries(expect)) {
+					let c = child(rules, name);
+					if (!c) {
+						problems.push(`no 自動分類/規則/${name}`);
+						continue;
+					}
+					let got = await members(c);
+					if (!same(got, keys.slice().sort())) problems.push(`規則/${name} holds ${JSON.stringify(got)}, expected ${JSON.stringify(keys.slice().sort())}`);
+				}
+				let cohort = child(design, "Cohort");
+				if (!cohort) problems.push("no 自動分類/研究設計/Cohort");
+				else if (!same(await members(cohort), [ctx.extra2.key])) problems.push(`研究設計/Cohort holds ${JSON.stringify(await members(cohort))}`);
+				check(!problems.length, problems.join("; "));
+				check(same(await members(ctx.collection), reviewBefore), "the user's collection E2E Review changed");
+				let last = C.readLastRun();
+				check(last && last.libraries.length === 1 && last.libraries[0].created.length === 7, `classify.lastRun ${JSON.stringify(last)}`);
+
+				// Again: everything is reused, nothing added, the undo record stays
+				let again = await C.apply(await C.suggest(items, { ui: { confirmAI: () => "skip", status: () => {} } }), picks);
+				d.again = again;
+				eq(again.created, 0, "collections created by a second identical run");
+				eq(again.added, 0, "memberships added by a second identical run");
+				eq(again.already, 7, "picks already in place on the second run");
+				eq(topLevel("自動分類").length, 1, "top-level 自動分類 after the second run");
+				check(same(C.readLastRun(), last), "a run that changed nothing replaced the undo record");
+
+				// 復原上次分類
+				let undo = await C.undoLast({ silent: true });
+				d.undo = undo;
+				check(undo, "undoLast() returned null");
+				eq(undo.removed, 7, "memberships removed by undo");
+				eq(undo.deleted, 7, "collections deleted by undo");
+				eq(undo.kept.length, 0, `collections kept by undo: ${undo.kept.join(", ")}`);
+				eq(topLevel("自動分類").length, 0, "top-level 自動分類 after undo");
+				let left = await Zotero.DB.valueQueryAsync("SELECT COUNT(*) FROM collections WHERE collectionName IN ('自動分類', '規則', '研究設計', '跌倒', '中文文獻', '近年', 'Cohort')");
+				eq(Number(left), 0, "collections with the run's names left in the database");
+				check(same(await members(ctx.collection), reviewBefore), "the user's collection E2E Review changed after undo");
+				for (let name of ["english", "chinese", "extra1", "extra2"]) {
+					check(!ctx[name].deleted, `${name} was deleted`);
+				}
+				eq(C.readLastRun(), null, "classify.lastRun after undo");
+			}
+			finally {
+				if (C.readLastRun()) await C.undoLast({ silent: true });
+				for (let key of ["classify.ruleList", "classify.topics", "classify.pico"]) Zotero.Prefs.clear(ZB_PREF + key, true);
+			}
+		},
+	},
+	{
+		name: "文獻自動分類 review window opens from chrome://zotero-bridge/ and 取消 writes nothing",
+		needs: ["文獻自動分類 by rules and heuristics creates real sub-collections; undo removes exactly them (ZB.classify)"],
+		timeout: 60000,
+		async fn(d) {
+			let C = zb().classify;
+			setPref("classify.ruleList", "跌倒 = title:falls");
+			setPref("classify.topics", false);
+			let win = null;
+			try {
+				let plan = await C.suggest([ctx.english, ctx.extra2], { ui: { confirmAI: () => "skip", status: () => {} } });
+				let opened = null;
+				let result = C.review(plan, { onOpen: (w) => {
+					opened = w;
+				} });
+				win = await waitFor(() => opened, "the review window (chrome://zotero-bridge/content/classify-review.xhtml) to show the plan", 30000);
+				let doc = win.document;
+				d.url = doc.documentURI;
+				eq(doc.documentURI, C.DIALOG_URL, "review window URL");
+				let root = doc.getElementById(C.DIALOG_ROOT);
+				let boxes = root.querySelectorAll("input[type=checkbox]");
+				d.checkboxes = boxes.length;
+				check(boxes.length >= 2, `only ${boxes.length} checkbox(es) in the review window`);
+				d.summary = root.querySelector(".zb-cl-summary").textContent;
+				check(/^已勾選 \d+ 項/.test(d.summary), `summary line: ${d.summary}`);
+				d.titles = [...root.querySelectorAll(".zb-cl-item-title")].map(h => h.textContent);
+				check(d.titles.includes("Exercise and falls"), `item titles: ${JSON.stringify(d.titles)}`);
+				// classify-review.css is applied (registered chrome package)
+				d.rootDisplay = win.getComputedStyle(root).display;
+				eq(d.rootDisplay, "flex", "display of #zb-classify (is classify-review.css loaded?)");
+				root.querySelector(".zb-cl-cancel").click();
+				eq(await result, null, "review() result after 取消");
+				await waitFor(() => win.closed, "the review window to close after 取消", 10000);
+				eq(Zotero.Collections.getByLibrary(Zotero.Libraries.userLibraryID).filter(c => !c.deleted && c.name === "自動分類").length, 0, "collections named 自動分類 after 取消");
+				eq(C.readLastRun(), null, "classify.lastRun after 取消");
+			}
+			finally {
+				if (win && !win.closed) win.close();
+				for (let key of ["classify.ruleList", "classify.topics"]) Zotero.Prefs.clear(ZB_PREF + key, true);
+			}
+		},
+	},
+	{
 		name: "control: Zotero's own preferences window opens and closes cleanly",
 		timeout: 60000,
 		async fn(d) {
@@ -934,6 +1208,12 @@ const TESTS = [
 				let untranslated = [...c.querySelectorAll("[data-l10n-id]")].filter(e => !e.textContent.trim() && !e.getAttribute("label"));
 				d.untranslated = untranslated.map(e => e.dataset.l10nId);
 				check(!untranslated.length, `untranslated l10n elements: ${d.untranslated.join(", ")}`);
+				// 劃線顏色與意義: one row per Zotero colour (ZoteroBridgePrefs.init); 全文筆記 shows in 研究生引導
+				await waitFor(() => c.querySelectorAll("#zb-colors > li").length === 8, "#zb-colors to list Zotero's 8 highlight colours", 10000);
+				d.colorRows = [...c.querySelectorAll("#zb-colors > li input")].map(i => i.value);
+				eq(d.colorRows[0], "重要發現", "first colour meaning (yellow)");
+				let fullTextBox = c.querySelector('groupbox[data-zb-feature="fullTextMarkdown"]');
+				check(fullTextBox && !fullTextBox.hasAttribute("hidden"), "全文筆記 is on in 研究生引導: its settings section should show");
 				let anthropicBox = c.querySelector("#zb-anthropic-box");
 				check(anthropicBox && !anthropicBox.hidden, "provider anthropic: #zb-anthropic-box should be visible");
 				// 功能: one switch per feature, the preset of this fresh profile, and progressive disclosure
@@ -1023,7 +1303,7 @@ const TESTS = [
 			];
 			// On in both presets
 			const ALWAYS = ["zotero-bridge-menu-sync", "zotero-bridge-search-tools", "zotero-bridge-screen-tools-dedup",
-				"zotero-bridge-menu-dashboard", "zotero-bridge-menu-concepts-update"];
+				"zotero-bridge-menu-dashboard", "zotero-bridge-menu-concepts-update", "zotero-bridge-classify-items", "zotero-bridge-classify-tools"];
 			// What a menu's onShowing decides, with the context MenuManager would pass
 			let visibility = (menu) => {
 				let visible = null;
@@ -1036,9 +1316,17 @@ const TESTS = [
 				});
 				return visible;
 			};
+			// The toolbar menu's entries (content/toolbar.js), off in 研究生引導 / on in both
+			const TOOLBAR_GATED = ["pubmed-watch", "chase-items", "chase-included", "chase-import", "synthesis", "review-draft",
+				"ebhc-report", "progress-report", "concepts-ai"];
+			const TOOLBAR_ALWAYS = ["sync", "sync-no-ai", "sync-obsidian", "sync-notion", "status", "classify", "dashboard", "concepts",
+				"bibliography", "quick-search", "screen", "dedup", "prisma", "appraisal-summary", "regenerate", "settings"];
+			let button = mainWindow().document.getElementById(ZB.toolbar.BUTTON_ID);
 			let before = F.snapshot();
 			let problems = [];
+			if (!button) problems.push("no Zotero Bridge toolbar button in the main window");
 			d.visible = {};
+			d.toolbar = {};
 			try {
 				for (let [preset, gatedVisible] of [["guided", false], ["advanced", true], ["guided", false]]) {
 					F.applyPreset(preset);
@@ -1060,6 +1348,20 @@ const TESTS = [
 						if (got !== want) problems.push(`${preset}: ${id} setVisible(${got}), expected ${want}`);
 					}
 					d.visible[preset] = seen;
+					// The toolbar menu follows the same switches, opened as a click opens it
+					if (button) {
+						let menu = await openToolbarMenu(button);
+						d.toolbar[preset] = menu.entries;
+						let groupsWant = ["sync", "organize", "search", "appraise", "ai"];
+						if (JSON.stringify(menu.groups) !== JSON.stringify(groupsWant)) {
+							problems.push(`${preset}: toolbar menu groups ${JSON.stringify(menu.groups)}, expected ${JSON.stringify(groupsWant)}`);
+						}
+						for (let id of [...TOOLBAR_GATED, ...TOOLBAR_ALWAYS]) {
+							let want = TOOLBAR_GATED.includes(id) ? gatedVisible : true;
+							let got = menu.entries.includes(id);
+							if (got !== want) problems.push(`${preset}: toolbar menu entry ${id} ${got ? "shown" : "hidden"}, expected ${want ? "shown" : "hidden"}`);
+						}
+					}
 				}
 				// One switch away from a preset is 自訂
 				F.setEnabled("synthesis", true);
@@ -1075,6 +1377,14 @@ const TESTS = [
 					check(render().querySelector("[data-zb-appraisal]"), "with 文獻評讀表 on, the item pane should show its row");
 					F.setEnabled("appraisalForm", false);
 					check(!render().querySelector("[data-zb-appraisal]"), "with 文獻評讀表 off, the item pane should not show its row");
+				}
+				// A toolbar group whose features are all off hides with its label
+				if (button) {
+					F.setEnabled("appraisalForm", false);
+					F.setEnabled("screening", false);
+					let menu = await openToolbarMenu(button);
+					d.toolbar.custom = menu.groups;
+					check(!menu.groups.includes("appraise"), `toolbar menu groups with 篩選 and 評讀表 off: ${JSON.stringify(menu.groups)}`);
 				}
 				// The PubMed watch timer only runs while the feature is on (no watches are saved: nothing is fetched)
 				setPref("pubmedWatch.autoCheck", true);
@@ -1105,12 +1415,18 @@ const TESTS = [
 			await waitFor(() => count() === 0, "the plugin's menus to be unregistered", 10000);
 			check(!(Zotero.ItemPaneManager.customSectionData.options || []).some(o => o.pluginID === PLUGIN_ID), "item pane section still registered after shutdown");
 			check(!mainWindow().document.querySelector('link[href="zotero-bridge.ftl"]'), "FTL link still in the main window after shutdown (onMainWindowUnload)");
+			check(!mainWindow().document.getElementById("zotero-bridge-tb-button"), "toolbar button still in the main window after shutdown");
+			check(!mainWindow().document.getElementById("zotero-bridge-tb-popup"), "toolbar menu still in the main window after shutdown");
+			check(!mainWindow().document.getElementById("zotero-bridge-toolbar-css"), "toolbar stylesheet still in the main window after shutdown");
 			await addon.enable();
 			await waitFor(() => Zotero.ZoteroBridge && Zotero.ZoteroBridge !== before, "a new Zotero.ZoteroBridge after enable()", 20000);
 			await waitFor(() => count() === menus, `${menus} menus registered again`, 10000);
 			await waitFor(() => (Zotero.ItemPaneManager.customSectionData.options || []).some(o => o.pluginID === PLUGIN_ID),
 				"item pane section registered again", 10000);
 			await waitFor(() => mainWindow().document.querySelector('link[href="zotero-bridge.ftl"]'), "FTL link back in the main window", 10000);
+			await waitFor(() => mainWindow().document.getElementById("zotero-bridge-tb-button"), "toolbar button back in the main window", 10000);
+			eq(mainWindow().document.querySelectorAll("#zotero-bridge-tb-button").length, 1, "toolbar buttons after the cycle");
+			eq(mainWindow().document.querySelectorAll("#zotero-bridge-toolbar-css").length, 1, "toolbar stylesheets after the cycle");
 			d.menus = menus;
 		},
 		// disable() and enable() each rebuild Zotero's plugin l10n source (see the startup test)
@@ -1267,8 +1583,14 @@ async function baseline() {
 			let src = win.L10nFileSource.createMock("zb-e2e-baseline", "app", Services.locale.availableLocales,
 				"zb-e2e-baseline:{locale}/", Services.locale.availableLocales.map(l => ({ path: `zb-e2e-baseline:${l}/x.ftl`, source: "zb-e2e-x = x\n" })));
 			reg.registerSources([src]);
-			await delay(1500);
-			diag.registerMockSource = messages.slice(from).filter(m => m.kind === "error").map(m => m.text);
+			// What it logs arrives asynchronously, after a varying delay (a fixed 1.5 s wait sometimes
+			// missed it): wait up to 10 s for the first error, then give any that follow a moment to land
+			let logged = () => messages.slice(from).filter(m => m.kind === "error");
+			let start = Date.now();
+			while (!logged().length && Date.now() - start < 10000) await delay(100);
+			diag.registerMockSourceWaitMs = Date.now() - start;
+			if (logged().length) await delay(1000);
+			diag.registerMockSource = logged().map(m => m.text);
 		}
 		catch (e) {
 			diag.registerMockSource = `threw ${e}`;

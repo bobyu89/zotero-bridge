@@ -213,7 +213,25 @@
 			fullTextTruncated: data.fullTextTruncated,
 			images: pdf ? [] : promptImages,
 			pdf,
+			// 「AI 標重點」: the key sentences come in the same call (no extra request)
+			aiHighlights: featureOn("aiHighlights"),
 		};
+	}
+
+	/**
+	 * 「全文筆記」 on: the item's text as Markdown (fulltext.js). With `llm` (this sync sends full text
+	 * to the AI), data.fullText becomes the trimmed Markdown. Never throws; null when off or no text.
+	 */
+	async function prepareFullText(data, llm, messages) {
+		if (!featureOn("fullTextMarkdown")) return null;
+		try {
+			return await ZB.fulltext.prepare(data, llm, messages);
+		}
+		catch (e) {
+			Zotero.logError(e);
+			if (messages) messages.push(`⚠️ 全文 Markdown：${e.message || e}`);
+			return null;
+		}
 	}
 
 	/** Save a processed AI note as the item's child note (without auto-sync reacting to it). */
@@ -246,6 +264,8 @@
 		let messages = [];
 		let quoteCheck = null;
 		let ai = null;
+		// The full text as Markdown: the AI reads it (References and the like cut) and it becomes the full-text note
+		let fullText = await prepareFullText(data, needAI ? settings.llm : null, messages);
 		// PNGs of image/ink annotations, when this sync uses them (annotation-images.js)
 		let images = await ZB.images.collect(data, { targets: action.targets, ai: needAI }, ctx, messages);
 		// Scanned PDF: send the file itself; nothing at all to read: no AI call (scanned.js)
@@ -290,6 +310,26 @@
 			messages.push(`⚠️ 文獻評讀表無法讀取：${e.message || e}`);
 		}
 
+		// 「AI 標重點」: only the AI's key sentences that really are in the text
+		let aiHighlights = [];
+		if (ai && ai.data && ai.data.highlights && featureOn("aiHighlights")) {
+			aiHighlights = ZB.fulltext.verifyAIHighlights(ai.data.highlights, fullText, data);
+			let dropped = ai.data.highlights.length - aiHighlights.length;
+			if (dropped && needAI) messages.push(`AI 標的重點 ${ai.data.highlights.length} 句，${dropped} 句在全文中找不到，已刪除`);
+		}
+		let ftOptions = fullText ? ZB.fulltext.options() : null;
+		let rendered = null;
+		if (fullText) {
+			try {
+				rendered = ZB.fulltext.render(fullText, data, { colorMeanings: ftOptions.colorMeanings, aiHighlights });
+			}
+			catch (e) {
+				Zotero.logError(e);
+				messages.push(`⚠️ 全文劃線標記：${e.message || e}`);
+			}
+		}
+		let fullTextInfo = rendered ? Object.assign({ rendered, engine: fullText.sources[0].engine }, ftOptions) : null;
+
 		let route = ZB.core.resolveRoute(data, settings.rules, settings.defaults);
 		let folderParts = ZB.core.splitFolder(route.obsidianFolder);
 		let basename = ZB.core.noteBasename(data, settings.filenameFormat);
@@ -309,7 +349,7 @@
 			try {
 				if (!route.notionDatabase) throw new Error(`沒有對應的資料庫（規則：${route.ruleName || "預設"}）`);
 				notionUrl = await syncNotion(ctx.notion(settings.notionToken), route.notionDatabase, data, {
-					ai, notesMarkdown, obsidianURI: obsidian && obsidian.uri, messages, images, status, appraisal,
+					ai, notesMarkdown, obsidianURI: obsidian && obsidian.uri, messages, images, status, appraisal, aiHighlights, fullText: fullTextInfo,
 				}, ctx);
 			}
 			catch (e) {
@@ -321,7 +361,7 @@
 			ctx.status("寫入 Obsidian…");
 			try {
 				let noteData = await ZB.images.writeToVault(obsidian, data, images, messages);
-				await writeObsidian(obsidian, noteData, { ai, notesMarkdown, notionUrl, status, appraisal });
+				await writeObsidian(obsidian, noteData, { ai, notesMarkdown, notionUrl, status, appraisal, aiHighlights, fullText: fullTextInfo, settings, messages });
 				if (ctx.obsidianIndex) ctx.obsidianIndex.add(`${data.libraryPath}/${data.key}`, obsidian.path, obsidian.relParts);
 			}
 			catch (e) {
@@ -329,7 +369,10 @@
 			}
 		}
 		if (errors.length) throw new Error([...errors, ...messages].join("；"));
-		return { route, notionUrl, obsidianPath: obsidian && obsidian.relPath, generated: !!ai && needAI, messages, quoteCheck };
+		return {
+			route, notionUrl, obsidianPath: obsidian && obsidian.relPath, generated: !!ai && needAI, messages, quoteCheck,
+			fullTextStats: needAI && fullText ? fullText.stats : null,
+		};
 	}
 
 	// ---------- Obsidian note lookup ----------
@@ -483,6 +526,13 @@
 		return null;
 	}
 
+	/** The vault path in a note's `fulltext: "[[…]]"` frontmatter ("" when none). */
+	function fullTextLinkOf(text) {
+		let fm = ZB.core.splitFrontmatter(text).frontmatter || "";
+		let m = /^\[\[([^\]|]+)(?:\|[^\]]*)?\]\]$/.exec(ZB.core.frontmatterScalar(fm, "fulltext"));
+		return m ? m[1].trim() : "";
+	}
+
 	async function writeObsidian(obsidian, data, opts) {
 		await IOUtils.makeDirectory(obsidian.dir, { createAncestors: true, ignoreExisting: true });
 		let existing = (await IOUtils.exists(obsidian.path)) ? await IOUtils.readUTF8(obsidian.path) : null;
@@ -492,6 +542,25 @@
 			let fm = ZB.core.splitFrontmatter(existing).frontmatter || "";
 			let m = /^notion:\s*"?([^"\n]+)"?\s*$/m.exec(fm);
 			if (m) notionUrl = m[1];
+		}
+		// The full-text note (fulltext.js) next to this one; its link goes into the note
+		let previousLink = existing ? fullTextLinkOf(existing) : "";
+		let fullTextLink = "";
+		if (opts.fullText) {
+			try {
+				fullTextLink = await ZB.fulltext.writeObsidian(obsidian, data, opts.fullText.rendered, {
+					folder: opts.fullText.folder, engine: opts.fullText.engine, previousLink, vaultPath: opts.settings && opts.settings.vaultPath,
+				});
+			}
+			catch (e) {
+				Zotero.logError(e);
+				if (opts.messages) opts.messages.push(`⚠️ 全文筆記：${e.message || e}`);
+			}
+		}
+		// No text this time (e.g. the PDF isn't on this computer): keep the link to the existing full-text note
+		if (!fullTextLink && previousLink && featureOn("fullTextMarkdown") && opts.settings
+				&& await IOUtils.exists(PathUtils.join(opts.settings.vaultPath, ...previousLink.split("/").filter(Boolean)) + ".md")) {
+			fullTextLink = previousLink;
 		}
 		let text = ZB.core.buildObsidianNote(existing, data, {
 			aiMarkdown: opts.ai && opts.ai.md,
@@ -505,6 +574,9 @@
 			searchCallout: ZB.searchLinks.calloutFor(data, opts.ai && opts.ai.data),
 			appraisalMarkdown: opts.appraisal && opts.appraisal.markdown,
 			appraisal: opts.appraisal && opts.appraisal.values,
+			colorMeanings: pref("annotations.colorMeanings") || "",
+			aiHighlights: opts.aiHighlights,
+			fullTextLink,
 			now: nowISO(),
 		});
 		text = ZB.status.applyPlanToNote(text, opts.status);
@@ -539,11 +611,11 @@
 		if (study && !schema.props["Study Design"] && !ctx.schemaHints.has(dsId)) {
 			// Databases set up before these columns existed: adding them is the user's call
 			ctx.schemaHints.add(dsId);
-			if (opts.messages) opts.messages.push("Notion 資料庫還沒有研讀欄位（Study Design 等）：到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」即可加上");
+			if (opts.messages) opts.messages.push("Notion 資料庫還沒有研讀欄位（研究設計／Study Design 等）：到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」即可加上");
 		}
 		if (opts.appraisal && !schema.props["Appraisal Verified"] && !ctx.schemaHints.has(dsId + "/appraisal")) {
 			ctx.schemaHints.add(dsId + "/appraisal");
-			if (opts.messages) opts.messages.push("Notion 資料庫還沒有「Appraisal Verified」欄位：到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」即可加上");
+			if (opts.messages) opts.messages.push("Notion 資料庫還沒有「評讀已核對」（Appraisal Verified）欄位：到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」即可加上");
 		}
 		let zoteroKey = `${data.libraryPath}/${data.key}`;
 		let properties = ZB.notion.buildProperties(schema, {
@@ -592,16 +664,36 @@
 		ZB.status.notionWritten(opts.status);
 		// Image annotations are uploaded just before the blocks that show them are written
 		let uploaded = await ZB.images.uploadToNotion(client, data, opts.images, ctx, opts.messages || []);
-		let md = ZB.core.buildManagedSection(uploaded.data, {
+		// 「重點」 open at the top of the container, every other part a folded toggle (DESIGN.md "Literature note")
+		let notionPage = !!(opts.fullText && opts.fullText.notionPage);
+		let { keyPoints, sections } = ZB.core.buildNoteSections(uploaded.data, {
 			aiMarkdown: opts.ai && opts.ai.md,
+			aiModel: opts.ai && opts.ai.model,
+			aiGeneratedAt: opts.ai && opts.ai.at,
+			study,
 			notesMarkdown: opts.notesMarkdown,
 			searchCallout: ZB.searchLinks.calloutFor(data, study),
 			appraisalMarkdown: opts.appraisal && opts.appraisal.notionMarkdown,
+			appraisal: opts.appraisal && opts.appraisal.values,
+			colorMeanings: pref("annotations.colorMeanings") || "",
+			aiHighlights: opts.aiHighlights,
+			target: "notion",
+			fullTextNote: notionPage,
 		});
-		let blocks = ZB.markdown.mdToNotionBlocks(md, { images: uploaded.ids });
-		let containerId = await client.replaceManagedContainer(page.id, "自動同步區（重新同步會覆寫，個人筆記請寫在此區塊外）", blocks);
-		// The form's table as a real Notion table (a table can't be nested inside the container in one request)
-		if (opts.appraisal) await ZB.appraisalForm.insertNotionTable(client, containerId, opts.appraisal, opts.messages);
+		let toggles = sections.map(sec => ({
+			title: sec.title,
+			color: sec.color || "default",
+			children: ZB.markdown.mdToNotionBlocks(sec.md, { images: uploaded.ids }),
+		}));
+		let { containerId, sectionIds } = await client.replaceManagedSections(page.id, "自動同步區（重新同步會覆寫，個人筆記請寫在此區塊外）",
+			ZB.markdown.mdToNotionBlocks(keyPoints), toggles);
+		// The form's table as a real Notion table, inside the 文獻評讀表 toggle (it can't go in with the toggle's children)
+		if (opts.appraisal) {
+			let at = sections.findIndex(sec => sec.id === "appraisal");
+			await ZB.appraisalForm.insertNotionTable(client, at >= 0 && sectionIds[at] ? sectionIds[at] : containerId, opts.appraisal, opts.messages);
+		}
+		// 「全文筆記」 with the Notion option: the full text as a child page (fulltext.js; never fails the sync)
+		if (notionPage) await ZB.fulltext.writeNotion(client, page.id, data, opts.fullText.rendered, opts.messages);
 		return page.url;
 	}
 
@@ -799,7 +891,7 @@
 			schemaHints: new Set(),
 			obsidianIndex: settings.vaultPath ? obsidianIndexCache(settings) : null,
 			notion(token) {
-				if (!clients.has(token)) clients.set(token, new ZB.notion.NotionClient({ token, fetch: (u, i) => fetch(u, i) }));
+				if (!clients.has(token)) clients.set(token, notionClient(token));
 				return clients.get(token);
 			},
 			status: () => {},
@@ -809,6 +901,8 @@
 		let ok = 0;
 		let failures = [];
 		let quotes = { total: 0, verified: 0, notFound: 0, unchecked: 0 };
+		// Full text sent to the AI as trimmed Markdown (fulltext.js): characters before and after
+		let trimmed = { items: 0, raw: 0, sent: 0, cut: [] };
 		let cancelled = false;
 		for (let item of items) {
 			if (currentBatch && currentBatch.cancelled) {
@@ -825,6 +919,12 @@
 				ok++;
 				if (result.quoteCheck) {
 					for (let k of Object.keys(quotes)) quotes[k] += result.quoteCheck[k];
+				}
+				if (result.fullTextStats) {
+					trimmed.items++;
+					trimmed.raw += result.fullTextStats.raw;
+					trimmed.sent += result.fullTextStats.sent;
+					trimmed.cut.push(...result.fullTextStats.cut);
 				}
 				if (line) {
 					line.setText(result.messages.length ? `${title} — ${result.messages.join("；")}` : title);
@@ -872,6 +972,8 @@
 			if (batch && pendingCount(batch)) {
 				pw.addDescription(`要接續：工具 → 繼續未完成的 Zotero Bridge 同步（${pendingCount(batch)} 筆${batch.failed.length ? `，含失敗 ${batch.failed.length} 筆` : ""}）`);
 			}
+			let trimLine = fullTextLine(trimmed);
+			if (trimLine) pw.addDescription(trimLine);
 			let usageLine = runUsageLine(ctx.usage);
 			if (usageLine) pw.addDescription(usageLine);
 			pw.startCloseTimer(failures.length || cancelled ? 15000 : 5000);
@@ -899,6 +1001,15 @@
 				Zotero.logError(e);
 			}
 		}
+	}
+
+	/** 「全文：送出 38,900 字（原本 52,300 字，省下 26%：References、Funding）」, or "" when nothing was trimmed. */
+	function fullTextLine(t) {
+		if (!t || !t.items || t.raw <= t.sent) return "";
+		let fmt = n => Number(n).toLocaleString("en-US");
+		let saved = Math.round((1 - t.sent / t.raw) * 100);
+		let cut = ZB.fulltextMd.describeCut(t.cut);
+		return `全文整理成 Markdown 後送給 AI：${fmt(t.sent)} 字（原本 ${fmt(t.raw)} 字，省下 ${saved}%${cut ? `，略過 ${cut}` : ""}）`;
 	}
 
 	/** How many of the items this run would generate an AI note for. */
@@ -1011,7 +1122,7 @@
 	}
 
 	async function trashNotionPages(settings, keys, errors) {
-		let client = new ZB.notion.NotionClient({ token: settings.notionToken, fetch: (u, i) => fetch(u, i) });
+		let client = notionClient(settings.notionToken);
 		// A deleted item's collections (and so its route) are unknown: look in every configured database
 		let databases = new Set([settings.defaults.notionDatabase, ...settings.rules.map(r => r.notionDatabase)].filter(Boolean));
 		let dataSources = new Set();
@@ -1225,23 +1336,104 @@
 
 	// ---------- settings-pane helpers ----------
 
-	/** Check the token and every configured database; add missing columns. Returns report lines. */
-	async function testNotion() {
-		let settings = await readSettings();
-		if (!settings.notionToken) throw new Error("請先填入 Notion integration token");
-		let client = new ZB.notion.NotionClient({ token: settings.notionToken, fetch: (u, i) => fetch(u, i) });
+	// ---------- Notion: clients, column IDs, 「把 Notion 欄位改成中文」 ----------
+
+	const PROPERTY_IDS_PREF = "notion.propertyIds";
+
+	function readPropertyIds() {
+		try {
+			let all = JSON.parse(pref(PROPERTY_IDS_PREF) || "{}");
+			return all && typeof all === "object" && !Array.isArray(all) ? all : {};
+		}
+		catch (e) {
+			return {};
+		}
+	}
+
+	/** Column IDs per data source in a pref (notion.js resolves columns by them first); written only on change. */
+	const propertyIdStore = {
+		get: dsId => readPropertyIds()[dsId] || {},
+		set: (dsId, ids) => {
+			let all = readPropertyIds();
+			let sorted = o => JSON.stringify(Object.keys(o || {}).sort().map(k => [k, o[k]]));
+			if (sorted(all[dsId]) === sorted(ids)) return;
+			all[dsId] = ids;
+			Zotero.Prefs.set(PREF + PROPERTY_IDS_PREF, JSON.stringify(all), true);
+		},
+	};
+
+	function notionClient(token) {
+		return new ZB.notion.NotionClient({ token, fetch: (u, i) => fetch(u, i), propertyIds: propertyIdStore });
+	}
+
+	/** The configured databases: Map input → label. */
+	function notionTargets(settings) {
 		let targets = new Map();
 		if (settings.defaults.notionDatabase) targets.set(settings.defaults.notionDatabase, "預設");
 		for (let rule of settings.rules) {
 			if (rule.notionDatabase && !targets.has(rule.notionDatabase)) targets.set(rule.notionDatabase, rule.name || "規則");
 		}
+		return targets;
+	}
+
+	/**
+	 * Settings pane 「把 Notion 欄位改成中文」: show every database's renames first, then (after the user
+	 * confirms) rename the columns by property ID. The IDs are recorded, so syncs keep finding them.
+	 * Returns report lines.
+	 */
+	async function renameNotionColumns(win) {
+		let settings = await readSettings();
+		if (!settings.notionToken) throw new Error("請先填入 Notion integration token");
+		let targets = notionTargets(settings);
+		if (!targets.size) throw new Error("請先填入至少一個 Notion database 連結");
+		let client = notionClient(settings.notionToken);
+		let plans = [];
+		let lines = [];
+		for (let [db, label] of targets) {
+			try {
+				let dsId = await client.resolveDataSourceId(db);
+				let plan = ZB.notion.renamePlan(await client.getSchema(dsId));
+				plans.push({ dsId, label, plan });
+				if (!plan.length) lines.push(`✅ ${label}：欄位已經是中文`);
+				for (let skip of plan.skipped) lines.push(`⚠️ ${label}：「${skip.from}」沒有改名（已經有叫「${skip.to}」的欄位）`);
+			}
+			catch (e) {
+				lines.push(`❌ ${label}：${e.message || e}`);
+			}
+		}
+		let todo = plans.filter(p => p.plan.length);
+		if (!todo.length) return lines;
+		let text = "以下 Notion 欄位會改成中文名稱（只改名字，欄位裡的資料不變；之後同步照常寫入）：\n\n"
+			+ todo.map(p => `${p.label}\n` + p.plan.map(step => `  ${step.from} → ${step.to}`).join("\n")).join("\n\n")
+			+ "\n\n如果你在 Notion 的公式、篩選或其他整合用到這些欄位名稱，也要跟著改。要改名嗎？";
+		if (!Services.prompt.confirm(win || Zotero.getMainWindow(), "把 Notion 欄位改成中文", text)) {
+			return [...lines, "已取消，沒有改任何欄位。"];
+		}
+		for (let p of todo) {
+			try {
+				await client.renameProperties(p.dsId, p.plan);
+				lines.push(`✅ ${p.label}：已改名 ${p.plan.length} 個欄位（${p.plan.map(step => step.to).join("、")}）`);
+			}
+			catch (e) {
+				lines.push(`❌ ${p.label}：${e.message || e}`);
+			}
+		}
+		return lines;
+	}
+
+	/** Check the token and every configured database; add missing columns. Returns report lines. */
+	async function testNotion() {
+		let settings = await readSettings();
+		if (!settings.notionToken) throw new Error("請先填入 Notion integration token");
+		let client = notionClient(settings.notionToken);
+		let targets = notionTargets(settings);
 		if (!targets.size) throw new Error("請先填入至少一個 Notion database 連結");
 		let lines = [];
 		for (let [db, label] of targets) {
 			try {
 				let dsId = await client.resolveDataSourceId(db);
 				let added = await client.ensureSchema(dsId);
-				lines.push(`✅ ${label}：連線成功${added.length ? `，已新增欄位 ${added.join(", ")}` : "，欄位齊全"}`);
+				lines.push(`✅ ${label}：連線成功${added.length ? `，已新增欄位 ${added.join("、")}` : "，欄位齊全"}`);
 			}
 			catch (e) {
 				lines.push(`❌ ${label}：${e.message || e}`);
@@ -1424,6 +1616,8 @@
 		menuIDs.push(...ZB.progressReport.registerMenus({ pluginID, icon }));
 		// Concept hub notes (concepts.js): Tools menu
 		menuIDs.push(...ZB.concepts.registerMenus({ pluginID, icon }));
+		// 文獻自動分類 into Zotero sub-collections (classify.js): item, collection and Tools menus
+		menuIDs.push(...ZB.classify.registerMenus({ pluginID, icon }));
 		// Claude Message Batches for bulk AI notes (ai-batch.js): Tools menu
 		menuIDs.push(...ZB.aiBatch.registerMenus({ pluginID, icon }));
 	}
@@ -1677,6 +1871,10 @@
 	}
 
 	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime,
+		// Notion columns: clients that remember column IDs, and 「把 Notion 欄位改成中文」
+		notionClient, renameNotionColumns,
+		// for ai-batch.js: the full text as Markdown for the AI (fulltext.js)
+		prepareFullText,
 		// for status.js
 		enqueue, notify, buildObsidianIndex, saveQuietly,
 		// for the modules whose features can be switched off (features.js)

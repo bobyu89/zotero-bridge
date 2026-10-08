@@ -60,7 +60,9 @@
 		</vbox>
 		<hbox align="center" data-zb-feature="sync">
 			<button label="測試連線並補齊資料庫欄位" oncommand="ZoteroBridgePrefs.testNotion()"/>
+			<button data-l10n-id="zotero-bridge-notion-rename" label="把 Notion 欄位改成中文…" oncommand="ZoteroBridgePrefs.renameNotionColumns()"/>
 		</hbox>
+		<html:p class="zb-hint" data-zb-feature="sync" data-l10n-id="zotero-bridge-notion-columns-hint">新的資料庫直接用中文欄位（標題、作者、年份、研究設計…）；舊資料庫的英文欄位照樣能用。按「把 Notion 欄位改成中文」會先列出要改的欄位，確認後才改名。</html:p>
 		<html:pre id="zb-notion-status" class="zb-status"/>
 	</groupbox>
 
@@ -77,6 +79,35 @@
 	<groupbox data-zb-feature="sync">
 		<label><html:h2>自動同步</html:h2></label>
 		<checkbox label="Zotero 條目、註記或筆記變更時自動同步到 Notion 與 Obsidian（不會自動呼叫 AI，沿用既有 AI 筆記）" preference="extensions.zotero-bridge.autoSync"/>
+	</groupbox>
+
+	<groupbox data-zb-feature="sync" class="zb-colors-box">
+		<label><html:h2 data-l10n-id="zotero-bridge-colors-heading">劃線顏色與意義</html:h2></label>
+		<html:p class="zb-lead" data-l10n-id="zotero-bridge-colors-intro">在 Zotero 用不同顏色劃線時，每個顏色代表什麼。文獻筆記依這個順序把劃線分組，排在前面的會優先放進「重點」。</html:p>
+		<html:ol id="zb-colors" class="zb-colors"/>
+		<hbox>
+			<button data-l10n-id="zotero-bridge-colors-reset" label="恢復預設" oncommand="ZoteroBridgePrefs.resetColorMeanings()"/>
+		</hbox>
+	</groupbox>
+
+	<groupbox data-zb-feature="fullTextMarkdown">
+		<label><html:h2 data-l10n-id="zotero-bridge-fulltext-heading">全文筆記</html:h2></label>
+		<html:p class="zb-lead" data-l10n-id="zotero-bridge-fulltext-intro">每篇文獻旁邊多一份全文筆記（文獻筆記資料夾裡的子資料夾），你的劃線依顏色標在原文位置。它每次同步都會重新產生，想法請寫在文獻筆記。</html:p>
+		<html:div class="zb-field">
+			<html:label for="zb-fulltext-folder" data-l10n-id="zotero-bridge-fulltext-folder">全文筆記的子資料夾：</html:label>
+			<html:input id="zb-fulltext-folder" type="text" preference="extensions.zotero-bridge.fullText.folder" placeholder="全文"/>
+		</html:div>
+		<checkbox data-zb-feature="aiNotes" data-l10n-id="zotero-bridge-fulltext-trim" label="送給 AI 前先刪掉參考文獻、誌謝、經費與利益衝突（省 token；同步的進度視窗會顯示省下多少）" preference="extensions.zotero-bridge.llm.trimReferences"/>
+		<checkbox data-l10n-id="zotero-bridge-fulltext-notion" label="Notion：在文獻頁面底下另建「全文」子頁面（每篇多幾次 API 呼叫，同步會變慢）" preference="extensions.zotero-bridge.notion.fullTextPage"/>
+		<html:details class="zb-more">
+			<html:summary data-l10n-id="zotero-bridge-fulltext-markitdown-summary">選用：用 markitdown 轉換 PDF</html:summary>
+			<html:label for="zb-markitdown-path" data-l10n-id="zotero-bridge-fulltext-markitdown-path">markitdown 執行檔（留空 = 只用內建轉換）：</html:label>
+			<hbox align="center">
+				<html:input id="zb-markitdown-path" type="text" preference="extensions.zotero-bridge.fullText.markitdownPath" placeholder="markitdown" style="flex: 1"/>
+				<button data-l10n-id="zotero-bridge-fulltext-markitdown-pick" label="選擇檔案…" oncommand="ZoteroBridgePrefs.pickMarkitdown()"/>
+			</hbox>
+			<html:p class="zb-hint" data-l10n-id="zotero-bridge-fulltext-markitdown-hint">markitdown 是 Microsoft 的開源轉換工具，要自己安裝：pip install 'markitdown[pdf]'。它對表格、表單類的頁面有幫助（保留成 Markdown 表格）；一般論文的段落標題與掃描檔 OCR 它不會做，標題仍由外掛偵測。轉換失敗或超過 2 分鐘時自動改用內建轉換。</html:p>
+		</html:details>
 	</groupbox>
 
 	<groupbox data-zb-feature="status">
@@ -123,6 +154,55 @@
 		<checkbox label="結果指標（研讀資料的 outcomes，以頓號、逗號拆開）也做成概念卡片" preference="extensions.zotero-bridge.concepts.outcomes"/>
 		<label value="同義詞合併（一行一組，第一個是卡片名稱，用 = 分隔）："/>
 		<html:textarea rows="4" preference="extensions.zotero-bridge.concepts.aliases" placeholder="跌倒 = Accidental Falls = falls&#10;自我效能 = Self-efficacy"/>
+	</groupbox>
+
+	<groupbox data-zb-feature="autoClassify" id="zb-classify-box">
+		<label><html:h2>文獻自動分類</html:h2></label>
+		<description>先給建議，你勾選同意的才放進 Zotero 子分類。只會新增子分類、把文獻加進去，不會移出文獻，也不會改名或刪除你原本的分類。從條目或分類按右鍵、或 工具 → 文獻自動分類 開始；工具 → 復原上次分類 可以整批收回最後一次套用。</description>
+		<hbox align="center">
+			<label value="放在哪個分類底下："/>
+			<html:input type="text" id="zb-classify-parent-path" preference="extensions.zotero-bridge.classify.parentPath" placeholder="留空 = 文獻庫最上層；例如 碩論/文獻回顧"/>
+		</hbox>
+		<hbox align="center">
+			<label value="上層子分類的名稱："/>
+			<html:input type="text" preference="extensions.zotero-bridge.classify.parentName" placeholder="自動分類"/>
+		</hbox>
+		<description class="zb-hint">底下會依面向分資料夾：研究設計、證據等級、主題、規則、族群 P、介入 I、結果 O。名稱相同（不分大小寫、全半形）的子分類會沿用，不會重複建立。</description>
+
+		<vbox class="zb-subsection">
+			<label><html:h3>要用哪些面向</html:h3></label>
+			<checkbox label="研究設計與證據等級：有 AI 筆記就用它的結構化資料（不另外花錢）；沒有時從標籤、標題、摘要推測設計，標示「規則推測」，證據等級只取自 AI 筆記" preference="extensions.zotero-bridge.classify.design"/>
+			<checkbox label="自訂主題：依你列的主題，讓 AI 判斷每篇屬於哪些（要打開「AI 主題分類」並設定 API key，會產生費用）" preference="extensions.zotero-bridge.classify.topics"/>
+			<checkbox label="規則：依你寫的條件分類，不用 AI，結果每次都一樣" preference="extensions.zotero-bridge.classify.rules"/>
+			<checkbox label="PICO：族群 P、介入 I、結果 O，取自 AI 筆記；沒有 AI 筆記的文獻不會有 PICO 建議" preference="extensions.zotero-bridge.classify.pico"/>
+			<description class="zb-hint">PICO 的同義詞沿用「概念卡片」的同義詞合併（一行一組，用 = 分隔，例如 跌倒 = Accidental Falls = falls），不同說法會放進同一個子分類。只有一篇用到的說法會先不勾，免得子分類太零碎。</description>
+		</vbox>
+
+		<vbox class="zb-subsection" data-zb-feature="classifyAI">
+			<label><html:h3>主題清單</html:h3></label>
+			<label control="zb-classify-topics" value="一行一個主題；可以在冒號後面寫說明或關鍵字，幫 AI 判斷："/>
+			<html:textarea id="zb-classify-topics" rows="4" preference="extensions.zotero-bridge.classify.topicList" placeholder="跌倒預防: 跌倒、fall prevention、hip protector&#10;壓力性損傷: pressure injury、褥瘡&#10;照顧者負荷" aria-describedby="zb-classify-topics-status"/>
+			<html:p id="zb-classify-topics-status" class="zb-validate" role="status"/>
+			<description class="zb-hint">執行時會先告訴你要送幾篇、分幾次呼叫和預估費用，可以取消或只跳過主題。AI 只看標題、摘要和 AI 筆記的一句話摘要。</description>
+		</vbox>
+
+		<vbox class="zb-subsection">
+			<label><html:h3>規則</html:h3></label>
+			<label control="zb-classify-rules" value="一行一條：子分類名稱 = 條件"/>
+			<html:textarea id="zb-classify-rules" rows="5" preference="extensions.zotero-bridge.classify.ruleList" placeholder="跌倒 = title:falls OR tag:跌倒&#10;近五年 RCT = year&gt;=2021 AND (title:randomized OR tag:&quot;Randomized Controlled Trial&quot;)&#10;中文文獻 = language:zh" aria-describedby="zb-classify-rules-status"/>
+			<html:p id="zb-classify-rules-status" class="zb-validate" role="status"/>
+			<html:details class="zb-more">
+				<html:summary>規則怎麼寫：欄位、AND／OR／NOT、引號與年份</html:summary>
+				<html:ul class="zb-syntax">
+					<html:li><html:code>title:</html:code> 標題、<html:code>abstract:</html:code> 摘要、<html:code>journal:</html:code> 期刊、<html:code>author:</html:code> 作者：包含這個字就算符合，不分大小寫和全半形。</html:li>
+					<html:li><html:code>tag:</html:code> 標籤要完全相同；結尾加 <html:code>*</html:code> 比對開頭，例如 <html:code>tag:篩選/*</html:code>。</html:li>
+					<html:li><html:code>year&gt;=2020</html:code>、<html:code>year&lt;2015</html:code>、<html:code>year:2018-2022</html:code>：年份比較。</html:li>
+					<html:li><html:code>language:zh</html:code>（沒填語言但標題是中文的也算）、<html:code>type:thesis</html:code> 或 <html:code>type:學位論文</html:code>。</html:li>
+					<html:li>不寫欄位的字詞找標題和摘要；有空格的詞用引號：<html:code>"fall prevention"</html:code>。</html:li>
+					<html:li><html:code>NOT</html:code> 先算，再 <html:code>AND</html:code>，最後 <html:code>OR</html:code>；不確定時加括號。兩個條件中間沒寫運算子就是 AND。以 # 開頭的行是註解。</html:li>
+				</html:ul>
+			</html:details>
+		</vbox>
 	</groupbox>
 
 	<groupbox data-zb-feature="searchLinks">

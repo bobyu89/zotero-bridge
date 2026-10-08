@@ -438,7 +438,9 @@ test("AI batch: confirm, one batch with the normal requests, restart while in pr
 		assert.equal(r.params.model, "claude-opus-5-5");
 		assert.equal(r.params.fallbacks, undefined);
 		assert.deepEqual(r.params.system.at(-1).cache_control, { type: "ephemeral", ttl: "1h" });
-		assert.equal(r.params.system.at(-1).text, ZB.llm.STUDY_DATA_PROMPT);
+		// 進階 (an upgraded profile): 「AI 標重點」 asks for the key sentences in the same request
+		assert.equal(r.params.system.at(-2).text, ZB.llm.STUDY_DATA_PROMPT);
+		assert.equal(r.params.system.at(-1).text, ZB.llm.AI_HIGHLIGHTS_PROMPT);
 		assert.deepEqual(r.params.system, requests[0].params.system, "the same cached prefix for every item");
 	}
 	assert.match(requests[2].params.messages[0].content, /標題：Paper c[\s\S]*Abstract c: falls decreased/);

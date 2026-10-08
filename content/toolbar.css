@@ -1,0 +1,28 @@
+/*
+ * Zotero Bridge — the toolbar button (content/toolbar.js; DESIGN.md › Toolbar button).
+ * Size, padding, hover, active/open, disabled, the focus ring and the dropmarker come from Zotero's own
+ * rules for `.zotero-tb-button` in `#zotero-items-toolbar`; this file only adds the icon and the menu's
+ * group labels. No colors of its own: the icon is drawn in the button's text color, so it follows
+ * light, dark and high-contrast themes like Zotero's icons.
+ */
+#zotero-bridge-tb-button {
+	list-style-image: url("icons/bridge.svg");
+	-moz-context-properties: fill, fill-opacity;
+	fill: currentColor;
+}
+
+/* Zotero's toolbar icons are 20px; the plugin's 16px glyph is drawn at the same size */
+#zotero-bridge-tb-button .toolbarbutton-icon {
+	width: 20px;
+	height: 20px;
+}
+
+/* Group labels (同步, 整理, …): the Label weight, in Pencil, never clickable */
+#zotero-bridge-tb-popup > .zotero-bridge-tb-caption {
+	font-weight: 600;
+	color: var(--fill-secondary, GrayText);
+}
+
+#zotero-bridge-tb-popup > .zotero-bridge-tb-caption[disabled] {
+	opacity: 1;
+}

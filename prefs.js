@@ -19,6 +19,16 @@ pref("extensions.zotero-bridge.images.export", true);
 pref("extensions.zotero-bridge.images.sendToAI", false);
 pref("extensions.zotero-bridge.notion.database", "");
 pref("extensions.zotero-bridge.notion.synthesisParent", "");
+// Notion column IDs per data source ({ dsId: { "Zotero Key": "<property id>", … } }), so a renamed column is still found (content/notion.js)
+pref("extensions.zotero-bridge.notion.propertyIds", "{}");
+// Highlight colour → meaning, in display order (JSON array of { color, meaning }; empty = built-in: 黃 重要發現, 紅 限制／疑問…) (content/core.js)
+pref("extensions.zotero-bridge.annotations.colorMeanings", "");
+// Full text as Markdown (content/fulltext.js): subfolder next to each literature note, the markitdown executable
+// (empty = built-in conversion only), References & co. cut before the text goes to the AI, a Notion child page
+pref("extensions.zotero-bridge.fullText.folder", "全文");
+pref("extensions.zotero-bridge.fullText.markitdownPath", "");
+pref("extensions.zotero-bridge.llm.trimReferences", true);
+pref("extensions.zotero-bridge.notion.fullTextPage", false);
 pref("extensions.zotero-bridge.routing.rules", "[]");
 pref("extensions.zotero-bridge.llm.enabled", true);
 pref("extensions.zotero-bridge.llm.provider", "anthropic");
@@ -100,13 +110,15 @@ pref("extensions.zotero-bridge.searchLinks.picoComparison", false);
 pref("extensions.zotero-bridge.searchLinks.meshHelper", true);
 // Feature switches (content/features.js), defaults = the 研究生引導 (guided) preset. Features that had
 // an enable pref before use it instead: llm.enabled, llm.batchAPI, status.enabled, apaZh.enabled,
-// images.export. features.version: the one-time migration that turns everything on for profiles that
-// used the plugin before the switches existed (0 = not run yet)
+// images.export. features.version: the one-time migrations done (0 = none yet; 1 turns everything on for
+// profiles that used the plugin before the switches existed; 2 gives 進階 profiles the v0.10.0 switches:
+// 全文筆記, 文獻自動分類, 工具列按鈕, AI 標重點 and AI 主題分類)
 pref("extensions.zotero-bridge.features.version", 0);
 pref("extensions.zotero-bridge.feature.sync", true);
 pref("extensions.zotero-bridge.feature.bibliography", true);
 pref("extensions.zotero-bridge.feature.dashboard", true);
 pref("extensions.zotero-bridge.feature.concepts", true);
+pref("extensions.zotero-bridge.feature.fullTextMarkdown", true);
 pref("extensions.zotero-bridge.feature.searchLinks", true);
 pref("extensions.zotero-bridge.feature.pubmedWatch", false);
 pref("extensions.zotero-bridge.feature.citationChase", false);
@@ -117,3 +129,19 @@ pref("extensions.zotero-bridge.feature.reviewDraft", false);
 pref("extensions.zotero-bridge.feature.ebhcReport", false);
 pref("extensions.zotero-bridge.feature.progressReport", false);
 pref("extensions.zotero-bridge.feature.conceptsAI", false);
+pref("extensions.zotero-bridge.feature.aiHighlights", false);
+pref("extensions.zotero-bridge.feature.autoClassify", true);
+pref("extensions.zotero-bridge.feature.classifyAI", false);
+pref("extensions.zotero-bridge.feature.toolbarButton", true);
+// 文獻自動分類 (content/classify.js): where the sub-collections go (a collection path like 碩論/文獻回顧;
+// empty = the library's top level) and the parent's name; the four dimensions; topics (one per line,
+// `名稱: 說明`) and rules (one per line, `子分類名稱 = 條件`); the last applied run, for 復原上次分類
+pref("extensions.zotero-bridge.classify.parentPath", "");
+pref("extensions.zotero-bridge.classify.parentName", "自動分類");
+pref("extensions.zotero-bridge.classify.design", true);
+pref("extensions.zotero-bridge.classify.topics", true);
+pref("extensions.zotero-bridge.classify.rules", true);
+pref("extensions.zotero-bridge.classify.pico", true);
+pref("extensions.zotero-bridge.classify.topicList", "");
+pref("extensions.zotero-bridge.classify.ruleList", "");
+pref("extensions.zotero-bridge.classify.lastRun", "");

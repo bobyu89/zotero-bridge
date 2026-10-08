@@ -267,6 +267,8 @@
 			data.fullTextStatus = check.status;
 			data.fullTextSource = check.source && Object.assign({}, check.source, { text: undefined });
 		}
+		// Every text attachment with its text, for the full-text Markdown (fulltext.js)
+		data.fullTextSources = sources;
 
 		for (let note of Zotero.Items.get(item.getNotes())) {
 			if (isAINote(note)) {

@@ -32,6 +32,8 @@
 		"ai_model", "ai_generated", "fulltext_truncated", "date_added", "last_synced",
 		// Full-text status of the PDF (scanned.js): ok / partial / none / no_pdf
 		"full_text",
+		// Link to the plugin-managed full-text note (fulltext.js): "[[<folder>/全文/<name>]]"
+		"fulltext",
 		// Set only while the item is deleted in Zotero (markObsidianNoteDeleted); a re-sync drops them
 		"zotero_deleted", "status_before_delete",
 	];
@@ -311,16 +313,13 @@
 			ai_generated: opts.aiGeneratedAt || "",
 			fulltext_truncated: opts.fullTextTruncated ? true : "",
 			full_text: data.fullTextStatus || "",
+			fulltext: opts.fullTextLink ? `[[${opts.fullTextLink}]]` : "",
 			date_added: data.dateAdded || "",
 			last_synced: opts.now || "",
 		});
 	}
 
 	// ---------- Markdown body ----------
-
-	function quoteLines(text) {
-		return String(text).split(/\r?\n/).map(l => (l ? `> ${l}` : ">")).join("\n");
-	}
 
 	// Nest a document's headings under a section heading: "# A" → "### A" for by=2
 	function demoteHeadings(md, by) {
@@ -332,94 +331,321 @@
 		}).join("\n");
 	}
 
-	function annotationMarkdown(data, attachment, ann) {
-		let color = colorInfo(ann.color);
-		let page = ann.pageLabel ? `p. ${ann.pageLabel}` : "link";
-		let link = `[${page}](${annotationURI(data, attachment, ann)})`;
-		let out = [];
-		if (ann.type === "highlight") {
-			// Obsidian 1.14 colored highlight, one per line (a highlight can't span lines)
-			let lines = String(ann.text || "").split(/\r?\n/).filter(l => l.trim())
-				.map(l => `==${color.highlight}${l.trim().replace(/==/g, "=\\=")}==`);
-			out.push(quoteLines(lines.join("\n") || `${color.emoji} *[劃線]*`));
-			out.push(`> — ${link}`);
-		}
-		else if (ann.type === "underline") {
-			out.push(quoteLines(`${color.emoji} <u>${ann.text || ""}</u>`));
-			out.push(`> — ${link}`);
-		}
-		else if (ann.type === "image" || ann.type === "ink") {
-			out.push(`> ${color.emoji} *[${ann.type === "image" ? "圖片" : "手繪"}註記]* — ${link}`);
-			// The rendered PNG (annotation-images.js), on its own line so it isn't part of the quote
-			if (ann.image && ann.image.embed) {
-				out.push("");
-				out.push(`![[${ann.image.embed}]]`);
+	// ---------- colour meanings ----------
+
+	// What each Zotero highlight colour means, in display order (settings: annotations.colorMeanings)
+	const DEFAULT_COLOR_MEANINGS = [
+		{ color: "#ffd400", meaning: "重要發現" },
+		{ color: "#ff6666", meaning: "限制／疑問" },
+		{ color: "#5fb236", meaning: "研究方法" },
+		{ color: "#2ea8e5", meaning: "可引用句" },
+		{ color: "#a28ae5", meaning: "定義／概念" },
+		{ color: "#f19837", meaning: "待查證" },
+		{ color: "#e56eee", meaning: "我的想法" },
+		{ color: "#aaaaaa", meaning: "其他" },
+	];
+	// Annotations in a colour outside Zotero's eight
+	const OTHER_COLOR_MEANING = "其他顏色";
+
+	/**
+	 * The colour → meaning list in the user's order: every one of Zotero's eight colours exactly once
+	 * (missing ones appended in the default order, empty meanings filled with the default).
+	 * @param {string|object[]} input the pref (JSON array of { color, meaning }) or the parsed array
+	 * @returns {{ color, meaning, info }[]}
+	 */
+	function colorMeanings(input) {
+		let list = input;
+		if (typeof input === "string") {
+			try {
+				list = input.trim() ? JSON.parse(input) : [];
+			}
+			catch (e) {
+				list = [];
 			}
 		}
+		let defaults = new Map(DEFAULT_COLOR_MEANINGS.map(d => [d.color, d.meaning]));
+		let out = [];
+		let seen = new Set();
+		for (let entry of Array.isArray(list) ? list : []) {
+			let color = String((entry && entry.color) || "").toLowerCase();
+			if (!defaults.has(color) || seen.has(color)) continue;
+			seen.add(color);
+			let meaning = String(entry.meaning || "").replace(/\s+/g, " ").trim().slice(0, 40) || defaults.get(color);
+			out.push({ color, meaning, info: colorInfo(color) });
+		}
+		for (let d of DEFAULT_COLOR_MEANINGS) {
+			if (!seen.has(d.color)) out.push({ color: d.color, meaning: d.meaning, info: colorInfo(d.color) });
+		}
+		return out;
+	}
+
+	/** Annotations grouped by colour meaning, in the meanings' order: [{ color, meaning, info, items: [{ att, ann }] }]. */
+	function annotationGroups(data, meanings) {
+		meanings = Array.isArray(meanings) && meanings.length && meanings[0].info ? meanings : colorMeanings(meanings);
+		let groups = meanings.map(m => Object.assign({ items: [] }, m));
+		let byColor = new Map(groups.map(g => [g.color, g]));
+		let other = { color: "", meaning: OTHER_COLOR_MEANING, info: colorInfo(""), items: [] };
+		for (let att of data.attachments || []) {
+			for (let ann of att.annotations || []) {
+				(byColor.get(String(ann.color || "").toLowerCase()) || other).items.push({ att, ann });
+			}
+		}
+		return [...groups, other].filter(g => g.items.length);
+	}
+
+	function oneLine(text) {
+		return String(text || "").replace(/\s+/g, " ").trim();
+	}
+
+	function shorten(text, max) {
+		let s = oneLine(text);
+		if (s.length <= max) return s;
+		let cut = s.slice(0, max - 1);
+		if (/[\ud800-\udbff]$/.test(cut)) cut = cut.slice(0, -1);
+		return cut.replace(/\s+\S*$/, (m) => (m.length < 15 ? "" : m)) + "…";
+	}
+
+	function highlightMark(color, text) {
+		return `==${color.highlight}${oneLine(text).replace(/==/g, "=\\=")}==`;
+	}
+
+	function pageLink(data, att, ann) {
+		return `[${ann.pageLabel ? `p. ${ann.pageLabel}` : "連結"}](${annotationURI(data, att, ann)})`;
+	}
+
+	/** One annotation as a compact list item (plus its comment, tags and image below it). */
+	function annotationMarkdown(data, att, ann) {
+		let color = colorInfo(ann.color);
+		let link = pageLink(data, att, ann);
+		let head;
+		if (ann.type === "highlight") {
+			head = String(ann.text || "").trim() ? highlightMark(color, ann.text) : `${color.emoji} *[劃線]*`;
+		}
+		else if (ann.type === "underline") {
+			head = `${color.emoji} <u>${oneLine(ann.text)}</u>`;
+		}
+		else if (ann.type === "image" || ann.type === "ink") {
+			head = `${color.emoji} *[${ann.type === "image" ? "圖片" : "手繪"}註記]*`;
+		}
 		else {
-			out.push(`> ${color.emoji} *[便利貼]* — ${link}`);
+			head = `${color.emoji} *[便利貼]*`;
 		}
+		let out = [`- ${head} · ${link}`];
+		// The rendered PNG (annotation-images.js), under the caption and before the comment
+		if ((ann.type === "image" || ann.type === "ink") && ann.image && ann.image.embed) out.push(`  ![[${ann.image.embed}]]`);
 		if (ann.comment) {
-			out.push("");
-			out.push(`💬 ${ann.comment.replace(/\r?\n/g, "  \n")}`);
+			for (let [i, line] of String(ann.comment).split(/\r?\n/).filter(l => l.trim()).entries()) {
+				out.push(`  ${i ? "" : "💬 "}${line.trim()}`);
+			}
 		}
-		if (ann.tags && ann.tags.length) {
-			out.push("");
-			out.push(ann.tags.map(t => "#" + tagToObsidian(t)).filter(t => t.length > 1).join(" "));
-		}
+		let tags = (ann.tags || []).map(t => "#" + tagToObsidian(t)).filter(t => t.length > 1);
+		if (tags.length) out.push(`  ${tags.join(" ")}`);
 		return out.join("\n");
 	}
 
-	function annotationsMarkdown(data) {
-		let sections = [];
-		for (let att of data.attachments || []) {
-			if (!att.annotations || !att.annotations.length) continue;
-			let parts = [`### ${att.title || "Attachment"}`];
-			for (let ann of att.annotations) {
-				parts.push(annotationMarkdown(data, att, ann));
-			}
-			sections.push(parts.join("\n\n"));
-		}
-		return sections.join("\n\n");
+	/** One meaning group's items (Markdown without the group title). */
+	function annotationGroupMarkdown(data, group) {
+		return group.items.map(({ att, ann }) => annotationMarkdown(data, att, ann)).join("\n");
 	}
 
-	function infoCallout(data, opts = {}) {
+	/** Every annotation, grouped by meaning: "### 🟡 重要發現（2）" + items (for tools that want plain Markdown). */
+	function annotationsMarkdown(data, meanings) {
+		return annotationGroups(data, meanings)
+			.map(g => `### ${groupTitle(g)}\n\n${annotationGroupMarkdown(data, g)}`).join("\n\n");
+	}
+
+	function groupTitle(g) {
+		return `${g.info.emoji} ${g.meaning}（${g.items.length}）`;
+	}
+
+	/** Up to `max` of the user's highlights for the 「重點」 block: one per meaning first, in the meanings' order. */
+	function topHighlights(groups, max = 3) {
+		let pools = groups.map(g => g.items.filter(({ ann }) => (ann.type === "highlight" || ann.type === "underline") && oneLine(ann.text)));
+		let out = [];
+		for (let round = 0; out.length < max && pools.some(p => p.length > round); round++) {
+			pools.forEach((pool, i) => {
+				if (out.length < max && pool[round]) out.push(Object.assign({ group: groups[i] }, pool[round]));
+			});
+		}
+		return out;
+	}
+
+	// ---------- the AI note's parts ----------
+
+	const SUMMARY_HEADING_RE = /^#{1,6}[ \t]*一句話摘要[ \t]*$/m;
+	const FINDINGS_HEADING_RE = /^#{1,6}[ \t]*主要結果[ \t]*$/m;
+
+	/** The body of the first heading matching `re`, up to the next heading ("" when missing). */
+	function aiSection(md, re) {
+		let m = re.exec(md || "");
+		if (!m) return "";
+		let rest = md.slice(m.index + m[0].length);
+		let next = /^#{1,6}\s/m.exec(rest);
+		return (next ? rest.slice(0, next.index) : rest).trim();
+	}
+
+	/** The AI note's one-sentence take-away ("" without one). */
+	function oneSentence(md) {
+		return oneLine(aiSection(md, SUMMARY_HEADING_RE).split(/\n\s*\n/)[0]);
+	}
+
+	/** 2–3 key findings from 「主要結果」: its top-level bullets, else its first sentences. */
+	function keyFindings(md, max = 3) {
+		let section = aiSection(md, FINDINGS_HEADING_RE);
+		if (!section) return [];
+		let bullets = section.split("\n").map(l => /^[-*+][ \t]+(.+)$/.exec(l) || /^\d+[.)][ \t]+(.+)$/.exec(l)).filter(Boolean).map(m => oneLine(m[1]));
+		if (bullets.length) return bullets.filter(Boolean).slice(0, max);
+		let sentences = oneLine(section).split(/(?<=[。！？])|(?<=[.!?])\s+(?=[A-Z一-鿿])/u).map(oneLine).filter(Boolean);
+		return sentences.slice(0, 2);
+	}
+
+	/** The AI note without its one-sentence summary (shown in 「重點」), headings one level down. */
+	function aiNoteBody(md) {
+		let text = String(md || "").trim();
+		let m = SUMMARY_HEADING_RE.exec(text);
+		if (m && oneSentence(text)) {
+			let rest = text.slice(m.index + m[0].length);
+			let next = /^#{1,6}\s/m.exec(rest);
+			text = (text.slice(0, m.index) + (next ? rest.slice(next.index) : "")).trim();
+		}
+		return demoteHeadings(text, 1);
+	}
+
+	/** "RCT · N = 120 · CEBM 2 · JBI 1.c · 評讀：納入（已核對）" ("" when nothing is known). */
+	function factsLine(study, appraisal) {
+		let s = study || {};
+		let facts = [
+			s.study_design,
+			Number.isFinite(s.sample_size) ? `N = ${s.sample_size}` : "",
+			s.evidence_level ? `CEBM ${s.evidence_level}` : "",
+			s.jbi_level ? `JBI ${s.jbi_level}` : "",
+		];
+		if (appraisal && appraisal.overall) {
+			facts.push(`評讀：${appraisal.overall}（${appraisal.verified ? "已核對" : "待核對"}）`);
+		}
+		else if (s.appraisal_overall) {
+			facts.push(`評讀：${s.appraisal_overall}（AI 初評）`);
+		}
+		return facts.filter(Boolean).join(" · ");
+	}
+
+	// ---------- the literature note: 「重點」 + folded sections ----------
+
+	function infoMarkdown(data) {
 		let rows = [];
 		let authors = authorNames(data);
 		if (authors.length) rows.push(`**Authors**: ${authors.join("; ")}`);
 		if (data.year) rows.push(`**Year**: ${data.year}`);
 		if (data.publication) rows.push(`**Publication**: ${data.publication}`);
 		if (data.doi) rows.push(`**DOI**: [${data.doi}](https://doi.org/${encodeURI(data.doi)})`);
-		rows.push(`**Zotero**: [開啟](${zoteroSelectURI(data)})`);
-		if (opts.notionUrl) rows.push(`**Notion**: [開啟](${opts.notionUrl})`);
 		if (data.apa) rows.push(`**APA 7**: ${data.apaMarkdown || data.apa}`);
-		return "> [!info] 書目資訊\n" + rows.map(r => `> ${r}`).join("  \n");
+		return rows.join("  \n");
+	}
+
+	/** Lines of a callout (`> …`) without its header line. */
+	function unwrapCallout(text) {
+		return String(text || "").split("\n").filter(l => !/^>\s*\[!/.test(l))
+			.map(l => l.replace(/^>[ \t]?/, "")).join("\n").trim();
 	}
 
 	/**
+	 * The literature note as a short 「重點」 block and folded sections in a fixed order (DESIGN.md
+	 * "Literature note"): the user's own highlights by meaning, their Zotero notes and the appraisal
+	 * first, then the AI parts, then reference material.
 	 * @param {object} data item data from the Zotero adapter
-	 * @param {object} opts { aiMarkdown, notesMarkdown: [{title, md}], notionUrl,
-	 *   searchCallout: the 「🔎 延伸搜尋」 callout (search-links.js),
-	 *   appraisalMarkdown: the 「文獻評讀表」 section (appraisal-form.js) }
+	 * @param {object} opts { aiMarkdown, aiModel, aiGeneratedAt, study, appraisal ({ verified, tool, overall }),
+	 *   appraisalMarkdown, notesMarkdown: [{ title, md }], searchCallout, notionUrl, colorMeanings,
+	 *   fullTextLink (vault path of the full-text note, without .md), aiHighlights: [{ quote, why }],
+	 *   target: "obsidian" | "notion", fullTextNote (Notion: a full-text child page exists) }
+	 * @returns {{ keyPoints, sections: [{ id, type, title, md, color }] }} Markdown without callout markup
 	 */
-	function buildManagedSection(data, opts = {}) {
-		let parts = [MARK_START, infoCallout(data, opts)];
-		if (opts.searchCallout) parts.push(opts.searchCallout);
-		if (opts.aiMarkdown) {
-			parts.push("## 🤖 AI 文獻筆記\n\n" + demoteHeadings(opts.aiMarkdown.trim(), 1));
+	function buildNoteSections(data, opts = {}) {
+		let notion = opts.target === "notion";
+		let groups = annotationGroups(data, opts.colorMeanings);
+		let ai = opts.aiMarkdown ? String(opts.aiMarkdown).trim() : "";
+
+		// 「重點」: what you need in a ten-second glance
+		let kp = [];
+		let sentence = oneSentence(ai);
+		if (sentence) kp.push(`**一句話**：${sentence}`);
+		let facts = factsLine(opts.study, opts.appraisal);
+		if (facts) kp.push(facts);
+		let findings = keyFindings(ai);
+		if (findings.length) kp.push("**主要發現**\n" + findings.map(f => `- ${f}`).join("\n"));
+		let top = topHighlights(groups);
+		if (top.length) {
+			kp.push("**我的劃線**\n" + top.map(({ att, ann, group }) => {
+				let text = shorten(ann.text, 140);
+				let mark = ann.type === "underline" ? `${group.info.emoji} <u>${text}</u>` : highlightMark(colorInfo(ann.color), text);
+				return `- ${mark} ${group.meaning} · ${pageLink(data, att, ann)}`;
+			}).join("\n"));
 		}
-		if (opts.appraisalMarkdown) parts.push(opts.appraisalMarkdown.trim());
-		if (data.abstract) {
-			parts.push("## Abstract\n\n" + data.abstract.trim());
+		if (!kp.length) kp.push("還沒有 AI 筆記或劃線。在 Zotero 劃線（顏色代表的意義在設定裡）或產生 AI 筆記後重新同步，重點會整理在這裡。");
+		let links = [];
+		if (!notion) {
+			if (opts.fullTextLink) links.push(`[[${opts.fullTextLink}|全文與劃線]]`);
+			links.push(`[Zotero](${zoteroSelectURI(data)})`);
+			if (opts.notionUrl) links.push(`[Notion](${opts.notionUrl})`);
 		}
-		let ann = annotationsMarkdown(data);
-		if (ann) {
-			parts.push("## Annotations\n\n" + ann);
+		else if (opts.fullTextNote) {
+			links.push("全文與劃線：本頁下方的子頁面");
+		}
+		if (data.doi) links.push(`[DOI](https://doi.org/${encodeURI(data.doi)})`);
+		kp.push(links.join(" · "));
+
+		let sections = [];
+		for (let g of groups) {
+			sections.push({ id: `annotations:${g.color || "other"}`, type: "quote", title: groupTitle(g), md: annotationGroupMarkdown(data, g), color: g.info.notion });
 		}
 		let notes = (opts.notesMarkdown || []).filter(n => n.md && n.md.trim());
 		if (notes.length) {
-			parts.push("## Zotero Notes\n\n" + notes.map(n => demoteHeadings(n.md.trim(), 2)).join("\n\n---\n\n"));
+			sections.push({ id: "notes", type: "note", title: `我的 Zotero 筆記（${notes.length}）`, md: notes.map(n => demoteHeadings(n.md.trim(), 2)).join("\n\n---\n\n") });
 		}
+		if (opts.appraisalMarkdown) {
+			let md = String(opts.appraisalMarkdown).trim();
+			// Obsidian: the callout title names it; Notion keeps the heading (the table goes in after it)
+			if (!notion) md = md.replace(/^#{1,6}[ \t]*文獻評讀表[ \t]*\n+/, "");
+			sections.push({ id: "appraisal", type: "example", title: "文獻評讀表", md });
+		}
+		let aiHighlights = (opts.aiHighlights || []).filter(h => h && oneLine(h.quote));
+		if (aiHighlights.length) {
+			sections.push({
+				id: "aiHighlights", type: "tip", title: "AI 標的重點（僅供參考）",
+				md: "AI 從原文挑出、已核對確實在全文裡的句子；跟你自己的劃線分開，判斷還是你來做。"
+					+ (opts.fullTextLink ? "在全文裡以 🤖 加底線標出。" : "") + "\n\n"
+					+ aiHighlights.map(h => `- 🤖 "${oneLine(h.quote)}"${oneLine(h.why) ? ` — ${oneLine(h.why)}` : ""}`).join("\n"),
+			});
+		}
+		if (ai) {
+			let meta = [opts.aiModel, opts.aiGeneratedAt && String(opts.aiGeneratedAt).slice(0, 10)].filter(Boolean).join(" · ");
+			sections.push({ id: "ai", type: "note", title: `AI 文獻筆記${meta ? `（${meta}）` : ""}`, md: aiNoteBody(ai) });
+		}
+		if (data.abstract && String(data.abstract).trim()) {
+			sections.push({ id: "abstract", type: "info", title: "摘要（Abstract）", md: String(data.abstract).trim() });
+		}
+		if (opts.searchCallout) {
+			let md = unwrapCallout(opts.searchCallout);
+			sections.push({ id: "search", type: "search", title: "🔎 延伸搜尋", md: notion ? md.replace(/ {2}\n/g, "\n\n") : md });
+		}
+		sections.push({ id: "info", type: "info", title: "書目資訊", md: infoMarkdown(data) });
+		return { keyPoints: kp.join("\n\n"), sections: sections.filter(s => s.md && s.md.trim()) };
+	}
+
+	/** An Obsidian callout; `folded` adds "-" so it opens closed. */
+	function callout(type, title, md, folded) {
+		let body = String(md || "").trim().split("\n").map(l => (l.trim() ? `> ${l}` : ">")).join("\n");
+		return `> [!${type}]${folded ? "-" : ""} ${title}` + (body ? "\n" + body : "");
+	}
+
+	/**
+	 * The managed block of an Obsidian literature note: 「重點」 open at the top, everything long folded below.
+	 * @param {object} data item data from the Zotero adapter
+	 * @param {object} opts see buildNoteSections
+	 */
+	function buildManagedSection(data, opts = {}) {
+		let { keyPoints, sections } = buildNoteSections(data, Object.assign({}, opts, { target: "obsidian" }));
+		let parts = [MARK_START, callout("abstract", "重點", keyPoints, false)];
+		for (let s of sections) parts.push(callout(s.type, s.title, s.md, true));
 		parts.push(MARK_END);
 		return parts.join("\n\n");
 	}
@@ -594,7 +820,8 @@
 		colorInfo, sanitizeFilename, creatorName, authorNames, firstAuthorLastName,
 		noteBasename, splitFolder, demoteHeadings, zoteroSelectURI, annotationURI, obsidianURI, tagToObsidian,
 		yamlScalar, splitFrontmatter, parseFrontmatterBlocks, buildFrontmatter, managedFrontmatter, studyFrontmatter, appraisalFrontmatter,
-		annotationsMarkdown, buildManagedSection, buildObsidianNote,
+		annotationsMarkdown, buildManagedSection, buildObsidianNote, buildNoteSections, callout,
+		DEFAULT_COLOR_MEANINGS, colorMeanings, annotationGroups, topHighlights, oneSentence, keyFindings, aiNoteBody, factsLine,
 		resolveRoute, parseRules, truncate, buildBaseFile, STATUSES, DELETED_STATUS,
 		frontmatterScalar, setFrontmatterValue, zoteroKeyFromHead, markObsidianNoteDeleted,
 	};

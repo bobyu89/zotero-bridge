@@ -106,6 +106,34 @@ zotero-bridge-appraisal-summary =
     .label = Zotero Bridge: Export appraisal summary
 zotero-bridge-appraisal-tools-summary =
     .label = Export appraisal summary (current collection)
+zotero-bridge-classify-items =
+    .label = Zotero Bridge: Auto-classify Selected Items…
+zotero-bridge-classify-collection =
+    .label = Zotero Bridge: Auto-classify Items in This Collection…
+zotero-bridge-classify-tools =
+    .label = Auto-classify Items (Selected Items or Collection)…
+zotero-bridge-classify-undo =
+    .label = Undo Last Classification
+
+## Toolbar button in the main window (content/toolbar.js)
+zotero-bridge-toolbar-group-sync =
+    .label = Sync
+zotero-bridge-toolbar-group-organize =
+    .label = Organize
+zotero-bridge-toolbar-group-search =
+    .label = Find literature
+zotero-bridge-toolbar-group-appraise =
+    .label = Screening and appraisal
+zotero-bridge-toolbar-group-ai =
+    .label = AI assistance and writing
+zotero-bridge-toolbar-sync =
+    .label = Sync Selected Items (Notion + Obsidian)
+zotero-bridge-toolbar-chase-items =
+    .label = Chase Citations of Selected Items (OpenAlex)
+zotero-bridge-toolbar-screen =
+    .label = Screen Selected Items
+zotero-bridge-toolbar-settings =
+    .label = Settings…
 
 ## Settings → 功能: presets and feature switches (content/features.js, preferences.js)
 zotero-bridge-features-heading = Features
@@ -140,6 +168,7 @@ zotero-bridge-feature-requires =
     { $req ->
         [sync] Turn on “Sync to Obsidian / Notion” first.
         [aiNotes] Turn on “AI literature notes” first.
+        [autoClassify] Turn on “Auto-classification” first.
        *[concepts] Turn on “Concept cards” first.
     }
 zotero-bridge-feature-sync = Sync to Obsidian / Notion
@@ -156,6 +185,12 @@ zotero-bridge-feature-dashboard = Research dashboard
 zotero-bridge-feature-dashboard-desc = Reading progress, the to-read list and data gaps in Obsidian. Reads only the vault; works offline.
 zotero-bridge-feature-concepts = Concept cards
 zotero-bridge-feature-concepts-desc = Turns the [[concepts]] in your notes into cards and an index, so you can see which papers talk about the same thing. No AI.
+zotero-bridge-feature-full-text-markdown = Full-text notes
+zotero-bridge-feature-full-text-markdown-desc = Saves each PDF's full text as a Markdown note with your highlights coloured in place; the AI also gets this text, without the reference list, which saves tokens. No AI.
+zotero-bridge-feature-auto-classify = Auto-classification
+zotero-bridge-feature-auto-classify-desc = Suggests Zotero sub-collections by study design, PICO and your own rules; only what you tick is added, and a whole run can be undone.
+zotero-bridge-feature-toolbar-button = Toolbar button
+zotero-bridge-feature-toolbar-button-desc = A Zotero Bridge button in the toolbar above the item list, with the main commands grouped by research workflow instead of spread over the context and Tools menus.
 zotero-bridge-feature-search-links = Medical database search links
 zotero-bridge-feature-search-links-desc = Takes the title, MeSH terms and PICO to PubMed, CINAHL, Cochrane, Airiti and more. The search strategy is still yours.
 zotero-bridge-feature-pubmed-watch = PubMed new-literature watch
@@ -170,6 +205,8 @@ zotero-bridge-feature-ai-notes = AI literature notes
 zotero-bridge-feature-ai-notes-desc = While syncing, an AI drafts a study note (design, sample, PICO, a first appraisal); quotes are checked against the source. Bring your own API key.
 zotero-bridge-feature-ai-batch = Batch API
 zotero-bridge-feature-ai-batch-desc = Many AI notes at once go through the Claude Batch API: about half price, but it can take up to 24 hours.
+zotero-bridge-feature-ai-highlights = AI key sentences
+zotero-bridge-feature-ai-highlights-desc = While writing the AI note, the AI also picks a few key sentences; the ones found in the text are marked differently from your highlights. For reference only; no extra AI call.
 zotero-bridge-feature-synthesis = Comparison table
 zotero-bridge-feature-synthesis-desc = Pick several papers and let an AI build a comparison table, themes and research gaps.
 zotero-bridge-feature-review-draft = Literature review draft
@@ -180,3 +217,39 @@ zotero-bridge-feature-progress-report = Progress report
 zotero-bridge-feature-progress-report-desc = What you read, how far screening got and what is next, for your advisor; an AI summary is optional.
 zotero-bridge-feature-concepts-ai = AI synthesis for concept cards
 zotero-bridge-feature-concepts-ai-desc = Let an AI draft a synthesis for one concept card, with a checklist of numbers to verify.
+zotero-bridge-feature-classify-ai = AI topic classification
+zotero-bridge-feature-classify-ai-desc = Lets an AI decide which of your topics each item belongs to, from title and abstract; you see the item count and estimated cost first.
+
+## Settings → highlight colours, full-text notes, Notion columns (preferences.xhtml, preferences.js)
+zotero-bridge-colors-heading = Highlight colours and their meaning
+zotero-bridge-colors-intro = What each colour means when you highlight in Zotero. Literature notes group your highlights in this order, and the first meanings go into “Key points” first.
+zotero-bridge-color-name =
+    { $color ->
+        [yellow] Yellow
+        [red] Red
+        [green] Green
+        [blue] Blue
+        [purple] Purple
+        [magenta] Magenta
+        [orange] Orange
+       *[gray] Gray
+    }
+zotero-bridge-color-up = Move up
+zotero-bridge-color-down = Move down
+zotero-bridge-colors-reset =
+    .label = Restore defaults
+zotero-bridge-fulltext-heading = Full-text notes
+zotero-bridge-fulltext-intro = Each paper gets a full-text note next to its literature note (in a subfolder), with your highlights coloured in place. It is rebuilt on every sync, so write your thoughts in the literature note.
+zotero-bridge-fulltext-folder = Subfolder for full-text notes:
+zotero-bridge-fulltext-trim =
+    .label = Cut references, acknowledgements, funding and conflicts of interest before the text goes to the AI (saves tokens; the progress window shows how much)
+zotero-bridge-fulltext-notion =
+    .label = Notion: add a “full text” child page under each literature page (a few more API calls per paper; syncing gets slower)
+zotero-bridge-fulltext-markitdown-summary = Optional: convert PDFs with markitdown
+zotero-bridge-fulltext-markitdown-path = markitdown executable (empty = built-in conversion only):
+zotero-bridge-fulltext-markitdown-pick =
+    .label = Choose file…
+zotero-bridge-fulltext-markitdown-hint = markitdown is Microsoft's open-source converter; install it yourself with pip install 'markitdown[pdf]'. It helps with tables and form-like pages (kept as Markdown tables); it does not find the section headings of an ordinary paper or OCR scans, so the plugin still detects headings. If it fails or takes longer than 2 minutes, the built-in conversion is used.
+zotero-bridge-notion-rename =
+    .label = Rename Notion columns to Chinese…
+zotero-bridge-notion-columns-hint = New databases get Chinese column names (標題, 作者, 年份, 研究設計…); the English columns of older databases keep working. “Rename Notion columns to Chinese” lists the changes first and renames only after you confirm.
