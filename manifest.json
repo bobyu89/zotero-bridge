@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Zotero Bridge",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Generate structured literature notes with Claude or OpenAI and sync Zotero items, annotations and notes to Notion and Obsidian, routed per library/collection.",
   "homepage_url": "https://github.com/bobyu89/zotero-bridge",
   "author": "BOB",
