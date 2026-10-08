@@ -460,6 +460,8 @@
 			fullTextTruncated: data.fullTextTruncated,
 			notesMarkdown: opts.notesMarkdown,
 			notionUrl,
+			// 「🔎 延伸搜尋」 links (search-links.js)
+			searchCallout: ZB.searchLinks.calloutFor(data, opts.ai && opts.ai.data),
 			now: nowISO(),
 		});
 		text = ZB.status.applyPlanToNote(text, opts.status);
@@ -545,6 +547,7 @@
 		let md = ZB.core.buildManagedSection(uploaded.data, {
 			aiMarkdown: opts.ai && opts.ai.md,
 			notesMarkdown: opts.notesMarkdown,
+			searchCallout: ZB.searchLinks.calloutFor(data, study),
 		});
 		let blocks = ZB.markdown.mdToNotionBlocks(md, { images: uploaded.ids });
 		await client.replaceManagedContainer(page.id, "自動同步區（重新同步會覆寫，個人筆記請寫在此區塊外）", blocks);
@@ -1258,6 +1261,8 @@
 		menuIDs.push(...ZB.dashboard.registerMenus({ pluginID, icon }));
 		// Citation searching for reviews (citation-chase.js): item, collection and Tools menus
 		menuIDs.push(...ZB.citationChase.registerMenus({ pluginID, icon }));
+		// Medical-literature search links (search-links.js): item and Tools menus
+		menuIDs.push(...ZB.searchLinks.registerMenus({ pluginID, icon }));
 	}
 
 	// ---------- item pane: AI note section ----------
@@ -1269,6 +1274,7 @@
 		body.replaceChildren();
 		ZB.status.renderPaneRow(doc, body, item);
 		ZB.screening.renderPaneRow(doc, body, item);
+		ZB.searchLinks.renderPaneRow(doc, body, item);
 		let el = (tag, text, style) => {
 			let e = doc.createElement(tag);
 			if (text !== undefined) e.textContent = text;

@@ -32,6 +32,7 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 - **PubMed 新文獻追蹤**：儲存 PubMed 檢索式（可用 MeSH），手動或定期把新發表的文獻匯入指定的 Zotero 分類（用 Zotero 內建匯入器，書目完整、不會重複匯入），並在 Obsidian 產生每日新文獻清單（見[PubMed 新文獻追蹤](#pubmed-新文獻追蹤)）。
 - **研究儀表板**：Obsidian 裡的一頁 `研究儀表板.md` 總覽閱讀進度（Mermaid 圓餅圖、各分類完成率）、研究設計與證據等級分布、待讀最久與資料待補的文獻、回顧專案的 PRISMA 納入篇數、AI 用量與本週新增；另有 `研究儀表板.base` 的證據等級表、掃描檔待 OCR、依分類的待讀清單（見[研究儀表板](#研究儀表板)）。
 - **引文追蹤（Citation searching）**：從納入研究用 OpenAlex（免費、不需 API key）查參考文獻與引用它的文獻，和文獻庫比對去重後列成 Obsidian 勾選清單與 CSV；勾選的再一鍵匯入 Zotero，PRISMA 流程圖自動加上「其他方法」欄（見[引文追蹤](#引文追蹤citation-searching)）。
+- **醫學文獻快速搜尋**：內建 PubMed、Cochrane、CINAHL、Embase、Google Scholar、華藝、臺灣博碩士論文等 21 個資料庫（可自訂）。條目右鍵「在醫學資料庫搜尋」一鍵找這篇（有 PMID 直接開啟、PubMed 相似文獻）；右側面板與 Obsidian／Notion 筆記附上搜尋連結、MeSH 連結和由 AI 筆記 PICO 組成的檢索式；工具選單輸入關鍵字即可選資料庫開啟，英文關鍵字會建議 MeSH 主題詞，檢索式可存成 PubMed 追蹤。可設定學校的 EZproxy 前綴（見[醫學文獻快速搜尋](#醫學文獻快速搜尋)）。
 - **Zotero 內直接看 AI 筆記**：條目右側面板新增「AI 文獻筆記」區塊，顯示摘要與重點，並有「同步」「重新產生」按鈕。
 - **批次同步可中途停止、之後接續**：同步很多篇時可以從工具選單停止；Zotero 關閉或當掉也不會從頭來過，失敗的文獻可以一鍵重試。
 - **閱讀狀態三邊同步**：在 Zotero（標籤）、Notion（`Status` 欄位）或 Obsidian（看板拖曳）任一邊改閱讀狀態，下次同步時另外兩邊會跟著改（見[閱讀狀態同步](#閱讀狀態同步)）。
@@ -307,6 +308,85 @@ PRISMA 2020 要求報告「其他方法」找到的文獻，最常見的是引�
 
 注意：OpenAlex 的資料並不完整（尤其是中文期刊與較舊的文獻），引文追蹤的結果請搭配原文參考文獻列表確認。
 
+### 醫學文獻快速搜尋
+
+把常用的醫學資料庫做成一鍵搜尋連結，不用每次開資料庫、貼題名或重打關鍵字。連結出現在四個地方：
+
+**1. 條目右鍵 → 在醫學資料庫搜尋**：用這篇文獻找它在各資料庫的紀錄（找全文、看被引用、確認收錄）。
+- PubMed：有 PMID（Extra 欄的 `PMID: …`）直接開啟該篇；沒有時用 DOI（`10.xxxx/…[doi]`），再沒有就用題名（`"題名"[ti]`）。
+- Europe PMC 用 PMID／DOI／題名；CINAHL 用 `TI "題名"`；其他資料庫用加引號的題名。
+- **PubMed 相似文獻**（有 PMID 時）：PubMed 的 Similar articles。
+- 選單只列前 8 個（可在設定改成更少）；其他在「**更多資料庫…**」清單，選一個開啟後會回到清單，可以連續開好幾個，按取消結束。
+- 中文題名只找中文與跨語言的資料庫（華藝、博碩士論文、國圖期刊、Google Scholar），排在前面。
+
+**2. 條目右側面板**：「AI 文獻筆記」區塊最上方有一列搜尋連結（PubMed、Cochrane、CINAHL、Google Scholar…，以及相似文獻）。這篇有 AI 筆記且有 PICO 資料時，下一列是 **PICO 檢索連結**（PubMed、CINAHL、Google Scholar）和「複製檢索式」按鈕。
+
+**3. Obsidian／Notion 文獻筆記**：自動同步區塊的書目資訊下方多一個收合的 `> [!search]- 🔎 延伸搜尋`：
+- **找這篇**：PubMed、Cochrane、CINAHL、Google Scholar、Europe PMC 等連結（只放能直接帶入檢索詞的資料庫）
+- **相似文獻**：PubMed Similar articles（有 PMID 時）
+- **MeSH**：從 PubMed 匯入的條目會帶 MeSH 標籤（例如 `Accidental Falls`），每個主題詞連到 MeSH Database 與 PubMed 的 `"主題詞"[Mesh]` 搜尋（`Humans`、`Aged` 這類檢查標籤會略過）
+- **PICO 檢索式**：由 AI 筆記的研讀欄位組成 `P AND I AND O`（設定可加入 C），同一欄的多個詞用 OR。檢索式以文字顯示（可直接複製），並附 PubMed、CINAHL、Google Scholar 連結。AI 筆記的 PICO 欄位是中文（術語保留英文），所以英文檢索式只取各欄裡的英文詞；沒有英文詞的欄位會列出來提醒你補（可以用下面的快速搜尋查 MeSH）。另有「原文詞彙」版本（中文照原樣），連到 Google Scholar。
+
+  Notion 頁面也有這一段（顯示成引言區塊，連結可以點）。不想要時在設定取消勾選，下次同步就會移除。
+
+**4. 工具 → 醫學文獻快速搜尋…**：輸入關鍵字（中文或英文；不同概念用逗號分隔，例如 `fall prevention, older adults`），出現資料庫清單，選一個就開啟，開啟後會回到清單。
+- **英文關鍵字**：先向 NCBI 查 MeSH 主題詞建議（每個概念一次），組成 `("Accidental Falls"[Mesh] OR "fall prevention"[tiab]) AND ("Aged"[Mesh] OR "older adults"[tiab])`，清單第一項就是用這個檢索式開 PubMed；也可以「複製 PubMed 檢索式」，或「**存成 PubMed 新文獻追蹤**」（輸入名稱後加進[PubMed 新文獻追蹤](#pubmed-新文獻追蹤)，之後自動匯入新文獻）。MeSH 查詢使用 PubMed 新文獻追蹤設定的 Email 與 NCBI API key，速率限制相同；查不到時改用原本的關鍵字。
+- **中文關鍵字**：華藝、博碩士論文、國圖期刊、衛福部／國健署排在前面，英文資料庫在後（建議改用英文關鍵字）。
+- MeSH 建議只是起點：請到 MeSH Database 看定義（Scope Note）與樹狀結構，確認主題詞真的符合你的概念。
+
+#### 資料庫清單
+
+「網址格式」說明這個連結的可靠程度。開發時的環境無法連到這些網站，**以下格式都沒有在開發時實際連線測試**；「常見公開格式」是網站長期使用、廣為引用的搜尋網址，「推測格式」是依記憶寫的、最可能失效。沒有公開搜尋網址的資料庫會開啟首頁，並把檢索詞（或題名）複製到剪貼簿，貼上即可。
+
+| ID | 資料庫 | 需機構權限 | 網址格式 | 搜尋網址 |
+|---|---|---|---|---|
+| `pubmed` | PubMed（預設 Best Match 排序） | 否 | 常見公開格式 | `https://pubmed.ncbi.nlm.nih.gov/?term={q}`；單篇 `…/<PMID>/`；相似文獻 `…/?linkname=pubmed_pubmed&from_uid=<PMID>` |
+| `pubmed-cq` | PubMed Clinical Queries | 否 | 推測格式，未驗證 | `https://pubmed.ncbi.nlm.nih.gov/clinical/?term={q}` |
+| `mesh` | MeSH Database | 否 | 常見公開格式 | `https://www.ncbi.nlm.nih.gov/mesh/?term={q}` |
+| `cochrane` | Cochrane Library | 否（全文部分需訂閱） | 推測格式，未驗證 | `https://www.cochranelibrary.com/search?…searchText={q}`（Liferay 搜尋參數） |
+| `cinahl` | CINAHL（EBSCOhost） | 是 | 依圖書館指南範例格式 | `https://search.ebscohost.com/login.aspx?direct=true&db=rzh&bquery={q}&type=1&searchMode=And&site=ehost-live` |
+| `embase` | Embase | 是 | 開首頁＋複製檢索詞 | `https://www.embase.com/` |
+| `scholar` | Google Scholar | 否 | 常見公開格式 | `https://scholar.google.com/scholar?hl=zh-TW&q={q}` |
+| `europepmc` | Europe PMC | 否 | 常見公開格式 | `https://europepmc.org/search?query={q}` |
+| `semantic` | Semantic Scholar | 否 | 常見公開格式 | `https://www.semanticscholar.org/search?q={q}` |
+| `trip` | TRIP Database | 否（Pro 功能需註冊） | 推測格式，未驗證 | `https://www.tripdatabase.com/Searchresult?criteria={q}` |
+| `jbi` | JBI EBP Database（Ovid） | 是 | 開首頁＋複製檢索詞 | `https://ovidsp.ovid.com/ovidweb.cgi?T=JS&NEWS=N&PAGE=main&D=jbi` |
+| `clinicaltrials` | ClinicalTrials.gov | 否 | 常見公開格式 | `https://clinicaltrials.gov/search?term={q}` |
+| `ictrp` | WHO ICTRP | 否 | 開首頁＋複製檢索詞 | `https://trialsearch.who.int/` |
+| `uptodate` | UpToDate | 是 | 推測格式，未驗證 | `https://www.uptodate.com/contents/search?search={q}` |
+| `airiti` | 華藝線上圖書館 | 否（全文多需訂閱） | 開首頁＋複製檢索詞 | `https://www.airitilibrary.com/` |
+| `ndltd` | 臺灣博碩士論文知識加值系統 | 否 | 開首頁＋複製檢索詞（網址含連線代碼，沒有固定的搜尋網址） | `https://ndltd.ncl.edu.tw/` |
+| `ncl-periodicals` | 國家圖書館期刊文獻資訊網 | 否 | 開首頁＋複製檢索詞 | `https://tpl.ncl.edu.tw/` |
+| `guideline-pdf` | Google 指引 PDF | 否 | 常見公開格式 | `https://www.google.com/search?q={q} (guideline OR 指引 OR 指南) filetype:pdf` |
+| `tw-gov` | 衛福部／國健署（Google 站內搜尋） | 否 | 常見公開格式 | `https://www.google.com/search?q={q} site:mohw.gov.tw OR site:hpa.gov.tw` |
+| `nice` | NICE | 否 | 常見公開格式 | `https://www.nice.org.uk/search?q={q}` |
+| `cdc` | CDC | 否 | 推測格式，未驗證 | `https://search.cdc.gov/search/?query={q}` |
+
+`{q}` 是 URL 編碼後的檢索詞（中文、引號、括號、`[Mesh]` 都會編碼）。連結裡只有檢索詞，不會帶入你的 email、API key 或其他資料。CINAHL 預設是 CINAHL Plus with Full Text（資料庫代碼 `rzh`）；學校訂的是 CINAHL Complete 時，用下面的自訂資料庫把 `cinahl` 改成 `db=ccm`。學校改用新版 EBSCO 介面（research.ebsco.com）時，這個舊介面連結可能會轉到登入頁；最穩的作法是在 EBSCO 搜尋一次後用「分享 → 永久連結」複製網址，把檢索詞換成 `{q}` 存成自訂資料庫。
+
+#### 設定（設定 → Zotero Bridge → 醫學文獻快速搜尋）
+
+- **資料庫順序**：ID 以逗號分隔，列在前面的優先（右鍵選單、面板、筆記都依此順序），例如 `pubmed, cinahl, cochrane, airiti, scholar`。
+- **隱藏的資料庫**：例如 `embase, uptodate`（學校沒有訂閱的可以隱藏）。設定頁下方會列出所有 ID 與目前狀態，設定有錯時也會顯示在那裡。
+- **自訂資料庫**（JSON 陣列）：`name` 名稱、`url` 網址（`{q}` 會換成檢索詞；沒有 `{q}` 的網址會開啟並複製檢索詞）、`needsAccess` 是否需要機構權限（`true` 才會套用代理）。選填：`id`（用內建 ID 可以改內建資料庫，例如換 CINAHL 的資料庫代碼）、`query`（檢索詞的外框，例如 `"{q} AND nursing"`）、`find: true`（也用來「找這篇」）、`lang`（`zh`／`en`／`any`）。
+
+  ```json
+  [
+    { "name": "學校館藏查詢", "url": "https://<學校的館藏系統>/search?q={q}", "needsAccess": false },
+    { "id": "cinahl", "url": "https://search.ebscohost.com/login.aspx?direct=true&db=ccm&bquery={q}&type=1&site=ehost-live" }
+  ]
+  ```
+- **圖書館代理伺服器前綴（EZproxy）**：預設空白。填了之後，**只有需要機構權限的資料庫**（CINAHL、Embase、JBI、UpToDate 與 `needsAccess: true` 的自訂資料庫）會經由代理開啟，在校外也能用學校帳號登入；不想經代理的資料庫填在「不套用代理的資料庫 ID」。前綴的形式通常是 `https://<代理伺服器>/login?url=`（也支援 `…?qurl=` 與含 `{url}` 的前綴）。怎麼找自己學校的前綴：
+  1. 到學校圖書館網站找「校外連線」「遠端存取」「校外使用電子資源」的說明頁，通常會寫代理伺服器的網址；
+  2. 或在校外從圖書館的「電子資料庫」清單點一個資料庫（例如 CINAHL），看網址列：若是 `https://xxx.yyy.edu.tw/login?url=https://search.ebscohost.com/…`，前綴就是 `https://xxx.yyy.edu.tw/login?url=`；
+  3. 學校若用 VPN 或 OpenAthens 等其他方式（網址裡沒有 `login?url=`），這欄留空，連上 VPN 後直接用連結即可。不確定時請問圖書館。
+- **右鍵選單最多列出幾個**（1–8）、**右側面板的搜尋連結**、**筆記的「🔎 延伸搜尋」**、**PICO 包含對照組（C）**（預設不含：C 常是「常規照護」，加進檢索式會漏掉很多文獻）、**MeSH 建議**（預設開啟；關掉就不會連 NCBI）。
+
+範例：
+- 寫實證報告找證據：工具 → 醫學文獻快速搜尋… → `pressure injury, repositioning` → 先開 PubMed（MeSH 檢索式），再從清單開 Cochrane、CINAHL、TRIP，最後把檢索式存成 PubMed 追蹤。
+- 中文文獻：工具 → 醫學文獻快速搜尋… → `壓力性損傷 翻身` → 選「華藝線上圖書館」，在開啟的頁面貼上（Ctrl+V／⌘V）；再選「臺灣博碩士論文知識加值系統」。
+- 讀到一篇好研究：在 Obsidian 筆記展開「🔎 延伸搜尋」→ 點 PICO 的 PubMed 連結找同主題的研究，或點「相似文獻」。
+
 ### 在 Zotero 裡看 AI 筆記
 
 選取一篇文獻，右側面板的「AI 文獻筆記」區塊會顯示一句話摘要與各段重點；收合時標題列會顯示摘要。還沒有 AI 筆記時，可以直接按「產生 AI 筆記並同步」。區塊最上方的「閱讀狀態」選單可以直接改這篇的閱讀狀態。
@@ -544,6 +624,7 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi
 | `content/screening.js` | 系統性／範圍回顧篩選：篩選標籤、找重複、PRISMA 2020 計數與一致性檢查、Mermaid 流程圖、證據表（Obsidian／CSV／Notion） |
 | `content/pubmed-watch.js` | PubMed 新文獻追蹤：E-utilities 查詢（速率限制）、去重、用 Zotero 匯入器匯入、自動檢查、Obsidian 每日清單 |
 | `content/citation-chase.js` | 引文追蹤：OpenAlex 往回／往前查詢（節流、請求上限、分頁）、與文獻庫比對去重、Obsidian 勾選清單與 CSV、依 DOI／PMID 匯入勾選的文獻 |
+| `content/search-links.js` | 醫學文獻快速搜尋：資料庫目錄與搜尋網址、EZproxy、找這篇／相似文獻、PICO 與 MeSH 檢索式、筆記的「🔎 延伸搜尋」、MeSH 建議（經 pubmed-watch.js 的 NCBI 連線） |
 | `content/annotation-images.js` | 圖片劃線與手繪註記：取得 Zotero 截圖、複製到 vault、上傳到 Notion、傳給 Claude |
 | `research-brain/` | Claude Code／Codex 研究大腦設定檔 |
 | `site/index.html` | 安裝精靈網頁（GitHub Pages） |

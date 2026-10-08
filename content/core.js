@@ -382,10 +382,12 @@
 
 	/**
 	 * @param {object} data item data from the Zotero adapter
-	 * @param {object} opts { aiMarkdown, notesMarkdown: [{title, md}], notionUrl }
+	 * @param {object} opts { aiMarkdown, notesMarkdown: [{title, md}], notionUrl,
+	 *   searchCallout: the 「🔎 延伸搜尋」 callout (search-links.js) }
 	 */
 	function buildManagedSection(data, opts = {}) {
 		let parts = [MARK_START, infoCallout(data, opts)];
+		if (opts.searchCallout) parts.push(opts.searchCallout);
 		if (opts.aiMarkdown) {
 			parts.push("## 🤖 AI 文獻筆記\n\n" + demoteHeadings(opts.aiMarkdown.trim(), 1));
 		}
