@@ -167,9 +167,9 @@
 	}
 
 	/**
-	 * The login manager calls createStore uses. removeLoginAsync() and modifyLoginAsync() only exist
-	 * from Gecko 141 on; Zotero 10.0 runs on Firefox 140 ESR, whose nsILoginManager has the
-	 * synchronous removeLogin() and modifyLogin() instead.
+	 * The login manager calls createStore uses. Zotero 10.0 runs on Firefox 140 ESR, whose
+	 * nsILoginManager has no removeLoginAsync()/modifyLoginAsync(), only the synchronous
+	 * removeLogin() and modifyLogin(); newer Gecko versions (Zotero's development builds) add the async ones.
 	 */
 	function loginManager(lm) {
 		return {
