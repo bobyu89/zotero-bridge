@@ -5,14 +5,13 @@
  * never has to (and cannot) invent references.
  */
 (function (root, factory) {
-	const api = factory();
 	if (typeof module === "object" && module.exports) {
-		module.exports = api;
+		module.exports = factory(require("./apa-zh.js"));
 	}
 	else {
-		(root.ZB = root.ZB || {}).synthesis = api;
+		(root.ZB = root.ZB || {}).synthesis = factory(root.ZB.apaZh);
 	}
-})(this, function () {
+})(this, function (apaZh) {
 	const MAX_CHARS_PER_SOURCE = 8000;
 
 	const DEFAULT_SYNTHESIS_PROMPT = `你是護理與醫學領域的研究助理，負責把多篇文獻整理成「文獻比較與綜合分析」，供研究生撰寫碩士論文的文獻探討。
@@ -44,6 +43,8 @@
 
 	/** APA-style in-text author/year: "Chen, 2024", "Chen & Smith, 2024", "Chen et al., 2024". */
 	function shortCitation(data) {
+		// Chinese-language items: 陳美玲，2024 / 陳美玲、林小華，2024 / 陳美玲等，2024 (apa-zh.js)
+		if (apaZh && apaZh.options().enabled && apaZh.isChineseItem(data)) return apaZh.shortCitation(data);
 		let creators = (data.creators || []).filter(c => c.creatorType === "author");
 		if (!creators.length) creators = data.creators || [];
 		let names = creators.map(c => c.lastName || c.name || "").filter(Boolean);
@@ -162,10 +163,13 @@
 		}).join("\n");
 	}
 
-	/** APA reference list from Zotero's citeproc output, sorted alphabetically as APA requires. */
+	/**
+	 * APA reference list from Zotero's citeproc output (Chinese APA for Chinese items), sorted
+	 * alphabetically as APA requires; Chinese references first (by stroke count) when 「中文文獻排在英文前」.
+	 */
 	function referenceList(entries) {
-		let refs = entries.map(e => e.data.apa || `${e.citation}. ${e.data.title || ""}`.trim());
-		refs.sort((a, b) => a.localeCompare(b, "en"));
+		let refs = entries.map(e => e.data.apaMarkdown || e.data.apa || `${e.citation}. ${e.data.title || ""}`.trim());
+		refs = apaZh ? apaZh.sortReferences(refs, entries.map(e => e.data)) : refs.sort((a, b) => a.localeCompare(b, "en"));
 		return "## 參考文獻\n\n" + refs.map(r => `- ${r}`).join("\n");
 	}
 

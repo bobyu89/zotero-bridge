@@ -13,12 +13,12 @@
  */
 (function (root, factory) {
 	if (typeof module === "object" && module.exports) {
-		module.exports = factory(require("./core.js"), globalThis);
+		module.exports = factory(require("./core.js"), globalThis, require("./apa-zh.js"));
 	}
 	else {
-		(root.ZB = root.ZB || {}).bibliography = factory(root.ZB.core, root);
+		(root.ZB = root.ZB || {}).bibliography = factory(root.ZB.core, root, root.ZB.apaZh);
 	}
-})(this, function (core, scope) {
+})(this, function (core, scope, apaZh) {
 	const PREF = "extensions.zotero-bridge.";
 	const MAIN_FILE = "references";
 	// Built-in translator from zotero/translators (BibTeX.js header)
@@ -166,9 +166,11 @@
 	 * Turn Zotero's CSL item into the exported entry: `id` is the citekey.
 	 * Like Zotero's own citation processor (Zotero.Cite.System.retrieveItem), drop the URL of
 	 * journal/newspaper/magazine articles that have pages unless `keepArticleURL`.
+	 * Chinese names become full literal names and Chinese items get `language: "zh-TW"` (apa-zh.js).
 	 */
 	function toExportEntry(cslItem, citekey, opts = {}) {
 		let entry = Object.assign({ id: citekey }, cslItem, { id: citekey, "citation-key": citekey });
+		if (apaZh) entry = apaZh.adjustCSL(entry, opts.zh);
 		let article = ["article-journal", "article-newspaper", "article-magazine"].includes(entry.type);
 		if (!opts.keepArticleURL && article && entry.page) {
 			delete entry.URL;

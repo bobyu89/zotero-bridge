@@ -34,6 +34,10 @@ pref("extensions.zotero-bridge.usage.ledger", "{}");
 pref("extensions.zotero-bridge.usage.prices", "");
 pref("extensions.zotero-bridge.export.autoUpdate", false);
 pref("extensions.zotero-bridge.export.bibtex", false);
+// Chinese-language items in Chinese APA 7 (content/apa-zh.js); style "thesis" (。) or "twna" (．)
+pref("extensions.zotero-bridge.apaZh.enabled", true);
+pref("extensions.zotero-bridge.apaZh.style", "thesis");
+pref("extensions.zotero-bridge.apaZh.chineseFirst", true);
 pref("extensions.zotero-bridge.batch.pending", "");
 // Systematic/scoping review screening (content/screening.js): Zotero tag prefixes, exclusion
 // reasons (one per line; empty = built-in list) and the Notion parent page for review pages

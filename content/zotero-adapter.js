@@ -78,6 +78,31 @@
 		}
 	}
 
+	/**
+	 * Chinese-language items: Chinese APA 7 (apa-zh.js) in place of Zotero's English APA.
+	 * `apa` is plain text (Notion); `apaMarkdown` has the italics (Obsidian, synthesis lists).
+	 * Returns false when Zotero's APA should be used.
+	 */
+	function chineseAPA(item, data) {
+		let zh = ZB.apaZh;
+		try {
+			if (!zh || !zh.options().enabled || !zh.isChineseItem(data)) return false;
+			let fields = Object.assign({}, data, {
+				thesisType: safeField(item, "type"),
+				edition: safeField(item, "edition"),
+				extra: safeField(item, "extra"),
+				libraryCatalog: safeField(item, "libraryCatalog"),
+			});
+			data.apa = zh.formatReference(fields, { format: "text" });
+			data.apaMarkdown = zh.formatReference(fields, { format: "markdown" });
+			return true;
+		}
+		catch (e) {
+			Zotero.logError(e);
+			return false;
+		}
+	}
+
 	function isAINote(note) {
 		return note.getTags().some(t => t.tag === AI_NOTE_TAG);
 	}
@@ -174,18 +199,20 @@
 			publisher: safeField(item, "publisher"),
 			doi: safeField(item, "DOI"),
 			url: safeField(item, "url"),
+			language: safeField(item, "language"),
 			abstract: safeField(item, "abstractNote"),
 			citationKey: citationKey(item),
 			tags: item.getTags().map(t => t.tag).filter(t => t !== AI_NOTE_TAG && t !== AI_HISTORY_TAG),
 			collections: Zotero.Collections.get(item.getCollections()).map(collectionPath),
 			// dateAdded is "YYYY-MM-DD HH:MM:SS" in UTC
 			dateAdded: item.dateAdded ? item.dateAdded.replace(" ", "T") + "Z" : "",
-			apa: apaReference(item),
+			apa: "",
 			attachments: [],
 			notes: [],
 			aiNote: null,
 			fullText: null,
 		};
+		if (!chineseAPA(item, data)) data.apa = apaReference(item);
 		if (!data.citationKey && ZB.bibliography) {
 			// The key the bibliography export (export.js) uses, shown as the note's `citekey`
 			try {
