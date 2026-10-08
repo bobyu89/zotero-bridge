@@ -42,6 +42,8 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 ## 安裝（從 GitHub 下載）
 
 > 🧭 **第一次安裝？用 [安裝精靈](https://bobyu89.github.io/zotero-bridge/) 一步一步完成**：依你的電腦、AI 服務商、同步目的地（Notion／Obsidian）調整步驟，每步打勾確認，進度會記住。
+>
+> 🔎 要找文獻：[醫學文獻快速搜尋](https://bobyu89.github.io/zotero-bridge/search.html)（PubMed、CINAHL、Cochrane、華藝、臺灣博碩士論文…一次開啟，含 PICO 檢索式產生器）。
 
 1. 到 GitHub 的 **[Releases 頁面](https://github.com/bobyu89/zotero-bridge/releases)**，下載最新版 `zotero-bridge-x.y.z.xpi`
    - 用 Firefox 下載時，請在連結上按右鍵 →「另存連結」，不要直接點開，否則 Firefox 會嘗試把它當成自己的擴充功能安裝
@@ -494,6 +496,34 @@ citekey 和筆記檔名不受影響：自動產生的 citekey 仍然用 Zotero �
 - 重新產生前的舊版 AI 筆記存成另一則子筆記（標籤 `zotero-bridge-ai-history`），只留在 Zotero：不會同步到 Notion／Obsidian，也不會送給 AI。不需要時可以直接刪除。
 - Notion 的 API 速率限制約每秒 3 次，同步大量文獻時會比較慢。
 
+## 🔎 醫學文獻快速搜尋（網頁）
+
+**[bobyu89.github.io/zotero-bridge/search.html](https://bobyu89.github.io/zotero-bridge/search.html)**：不用安裝，手機也能用。輸入一次檢索詞，按資料庫就在新分頁開啟搜尋結果；「全部開啟」一次開一組（護理實證常用、免費資源、中文文獻、臨床指引、臨床試驗登錄）。
+
+- **PICO 檢索式產生器**：P、I、C（選填）、O 各填同義詞（逗號或換行分隔）與 MeSH 主題詞，產生 PubMed 版（`[tiab]`／`[Mesh]`，可加出版年、語言、RCT／系統性回顧／指引、排除只有動物的研究）、CINAHL 版（`TI`／`AB`／`MH "…+"`）和一般版（Google Scholar、中文資料庫），一鍵複製或「在 PubMed 執行」。
+- **中文檢索詞**：偵測到中文時，中文資料庫排到最前面，並提示常見護理詞的英文關鍵字（只是對照提示，不是翻譯）。
+- **校外連線（EZproxy）**：填入學校圖書館的前綴（例如 `https://（學校的 EZproxy 網址）/login?url=`），標示 🔒 需權限的資料庫（CINAHL、Embase、JBI EBP、UpToDate）會經由學校登入開啟。不知道前綴請問圖書館，或從圖書館網站進入資料庫後看網址列。
+- **已存檢索**：檢索詞與 PICO 存在這台裝置的瀏覽器，可匯出／匯入 JSON 換電腦使用。無痕視窗不能儲存時會提醒你先匯出。
+- 本頁不會把檢索詞送到任何伺服器，只是開啟各資料庫的搜尋網址。
+
+各資料庫的搜尋網址：開發時無法逐一連線實測。**確定**＝網站公開或長期通用的搜尋網址；**推測**＝依網站目前的網址推測，開啟時也會複製檢索詞，網址失效就直接貼上；**首頁**＝網站沒有可靠的搜尋網址（需要登入、學校代碼或 session），開首頁並複製檢索詞。打不開或沒帶入檢索詞，請到 [Issues](https://github.com/bobyu89/zotero-bridge/issues) 回報。
+
+| 分組 | 資料庫 | 狀態 | 權限 |
+|---|---|---|---|
+| 英文資料庫 | PubMed、MeSH Database、Google Scholar、Europe PMC、Semantic Scholar | 確定 | 免費 |
+| | CINAHL（EBSCO）、Embase | 首頁 | 需機構權限 |
+| 實證與指引 | Google 指引 PDF（加上 `guideline filetype:pdf`） | 確定 | 免費 |
+| | TRIP Database、NICE、CDC | 推測 | 免費 |
+| | UpToDate | 推測 | 需機構權限 |
+| | Cochrane Library（開進階搜尋） | 首頁 | 摘要免費、全文需訂閱 |
+| | JBI EBP Database（Ovid） | 首頁 | 需機構權限 |
+| 中文資料庫 | 華藝線上圖書館 | 首頁 | 摘要免費、全文需訂閱 |
+| | 臺灣博碩士論文知識加值系統、國家圖書館期刊文獻資訊網 | 首頁 | 免費 |
+| 臨床試驗登錄 | ClinicalTrials.gov | 確定 | 免費 |
+| | WHO ICTRP | 首頁 | 免費 |
+
+完整網址列在頁面最下方的「網址格式與狀態」。
+
 ## 🧠 研究大腦（Claude Code／Codex）
 
 [`research-brain/`](research-brain/) 是給 Obsidian vault 用的 Claude Code／Codex 設定檔：接上 Zotero 與 Notion，用斜線指令完成跨文獻的工作。插件負責「每一篇」的固定流程，大腦負責「跨文獻」的思考。
@@ -547,6 +577,7 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi
 | `content/annotation-images.js` | 圖片劃線與手繪註記：取得 Zotero 截圖、複製到 vault、上傳到 Notion、傳給 Claude |
 | `research-brain/` | Claude Code／Codex 研究大腦設定檔 |
 | `site/index.html` | 安裝精靈網頁（GitHub Pages） |
+| `site/search.html` | 醫學文獻快速搜尋網頁（GitHub Pages） |
 
 ### 真實 Zotero 測試（e2e）
 

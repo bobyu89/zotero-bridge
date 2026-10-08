@@ -1,0 +1,1115 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>醫學文獻快速搜尋</title>
+<meta name="description" content="一個檢索詞同時查 PubMed、CINAHL、Cochrane、華藝、臺灣博碩士論文等資料庫；PICO 檢索式產生器、EZproxy 校外連線、儲存檢索。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&display=swap">
+<style>
+/* 與安裝精靈（index.html）共用色彩與字體；版面：上方整寬的搜尋卡，下方 PICO（左）＋已存檢索與校外連線（右） */
+:root {
+  --bg: #F3F4F7;
+  --surface: #FFFFFF;
+  --ink: #1B1D22;
+  --muted: #5B6270;
+  --line: #DCDFE6;
+  --accent: #B3243A;      /* Zotero 紅 */
+  --accent-ink: #FFFFFF;
+  --accent-soft: #F7E4E7;
+  --ok: #1E7449;
+  --ok-soft: #E1F1E8;
+  --warn: #7E5300;
+  --warn-soft: #FFF2D1;
+  --chip: #ECEEF2;
+  --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111317; --surface: #1A1D23; --ink: #E8EAEE; --muted: #9AA1AD; --line: #2B3038;
+    --accent: #EF6A7D; --accent-ink: #1A0B0E; --accent-soft: #3A1D23;
+    --ok: #5DC690; --ok-soft: #142D20; --warn: #E9B54E; --warn-soft: #30270F; --chip: #252931;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111317; --surface: #1A1D23; --ink: #E8EAEE; --muted: #9AA1AD; --line: #2B3038;
+  --accent: #EF6A7D; --accent-ink: #1A0B0E; --accent-soft: #3A1D23;
+  --ok: #5DC690; --ok-soft: #142D20; --warn: #E9B54E; --warn-soft: #30270F; --chip: #252931;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.75;
+  padding-inline: 16px;
+  padding-block: 24px 64px;
+}
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, select:focus-visible, summary:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 24px; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+header.top h1 {
+  font-family: var(--font-display); font-weight: 900; font-size: clamp(28px, 5vw, 40px);
+  line-height: 1.2; margin: 0; text-wrap: balance; letter-spacing: 0.02em;
+}
+header.top h1 span { color: var(--accent); }
+header.top p { margin: 4px 0 0; color: var(--muted); max-width: 52ch; }
+.meta { font-size: 13px; color: var(--muted); text-align: right; display: grid; gap: 2px; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 24px; align-items: start; }
+.side { display: grid; gap: 24px; min-width: 0; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: clamp(20px, 4vw, 32px); min-width: 0; display: grid; gap: 18px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0; }
+.card h2 { font-family: var(--font-display); font-size: clamp(22px, 3.2vw, 26px); line-height: 1.3; margin: 0; text-wrap: balance; }
+.card h3 { font-size: 15px; margin: 0; }
+.card p { margin: 0; }
+.head { display: grid; gap: 4px; }
+.lead { color: var(--muted); font-size: 15px; max-width: 70ch; }
+.small { font-size: 13px; color: var(--muted); }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; background: var(--chip); padding: 1px 6px; border-radius: 5px; overflow-wrap: anywhere; }
+
+/* 表單元件 */
+input[type=search], input[type=text], input[type=url], input[type=number], textarea, select {
+  font: inherit; font-size: 16px; color: var(--ink); background: var(--surface);
+  border: 1.5px solid var(--line); border-radius: 9px; padding: 9px 12px; min-width: 0; width: 100%;
+}
+textarea { resize: vertical; line-height: 1.5; min-height: 64px; }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: .75; }
+input:focus, textarea:focus, select:focus { border-color: var(--accent); outline: none; }
+label.lbl { font-size: 14px; font-weight: 700; display: block; margin-bottom: 6px; }
+
+.btn {
+  font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; border-radius: 9px; padding: 9px 16px;
+  border: 1.5px solid var(--accent); background: var(--accent); color: var(--accent-ink); text-decoration: none;
+  display: inline-flex; gap: 6px; align-items: center; justify-content: center; white-space: nowrap;
+}
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn.ghost:hover { border-color: var(--muted); }
+.btn.small { font-size: 13px; padding: 4px 10px; font-weight: 500; border-radius: 7px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* 搜尋列 */
+.qrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+#q { font-size: 18px; padding: 12px 14px; border-radius: 11px; }
+.openall { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+.openall select { width: auto; max-width: 100%; font-size: 15px; padding: 7px 10px; }
+#qhint { flex-basis: 100%; }
+
+/* 資料庫按鈕 */
+.groups { display: grid; gap: 18px; }
+.group { display: grid; gap: 8px; border-radius: 12px; }
+.group h3 { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.group h3 .small { font-weight: 400; }
+.group.hl { background: var(--accent-soft); padding: 12px; margin: -4px; }
+.group .hl-tag { display: none; font-size: 12px; font-weight: 700; color: var(--accent); }
+.group.hl .hl-tag { display: inline; }
+.dbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+a.db {
+  display: grid; gap: 1px; align-content: start; padding: 9px 12px 8px; border: 1.5px solid var(--line); border-radius: 10px;
+  background: var(--surface); color: var(--ink); text-decoration: none; line-height: 1.35; position: relative;
+}
+a.db:hover { border-color: var(--accent); }
+a.db b { font-size: 15px; }
+a.db .m { font-size: 12px; color: var(--muted); }
+a.db .m .lock { color: var(--warn); font-weight: 700; }
+a.db.in-preset { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+a.db .cp { position: absolute; top: 7px; right: 9px; font-size: 12px; color: var(--muted); }
+a.db b { padding-right: 14px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--muted); }
+.legend .lock { color: var(--warn); font-weight: 700; }
+
+/* 提示框 */
+.note { border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; font-size: 14px; }
+.note.tip { background: var(--ok-soft); }
+.note.tip strong { color: var(--ok); }
+.note.warn { background: var(--warn-soft); }
+.note.warn strong { color: var(--warn); }
+.note.info { background: var(--chip); }
+.gloss { display: flex; flex-wrap: wrap; gap: 6px; }
+.gloss span { background: var(--surface); border: 1px solid var(--line); border-radius: 99px; padding: 1px 10px; font-size: 13px; }
+.gloss span i { font-style: normal; color: var(--muted); }
+
+/* PICO */
+.pico { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.concept { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 8px; align-content: start; }
+.concept .ct { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: center; }
+.concept .letter {
+  width: 30px; height: 30px; border-radius: 8px; background: var(--accent-soft); color: var(--accent);
+  display: grid; place-items: center; font-family: var(--font-mono); font-weight: 500; font-size: 15px;
+}
+.concept .ct b { font-size: 15px; line-height: 1.3; display: block; }
+.concept .ct > div span { font-size: 12px; color: var(--muted); display: block; line-height: 1.3; }
+.concept .meshrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.concept .meshrow input { font-size: 14px; padding: 7px 10px; }
+.concept .meshrow a { font-size: 13px; white-space: nowrap; }
+.concept textarea { font-size: 15px; }
+.concept .inc { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+
+fieldset.filters { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px 14px; margin: 0; display: grid; gap: 10px; min-width: 0; }
+fieldset.filters legend { font-size: 14px; font-weight: 700; padding: 0 6px; }
+.frow { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; align-items: center; }
+.frow > span:first-child { font-size: 13px; color: var(--muted); }
+.checks { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.checks label { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; cursor: pointer; }
+input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); margin: 0; }
+.years { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.years input { width: 92px; font-size: 15px; padding: 6px 10px; }
+
+.outs { display: grid; gap: 14px; }
+.out { display: grid; gap: 6px; }
+.out .oh { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: space-between; }
+.out .oh h3 { font-size: 14px; }
+pre.q {
+  margin: 0; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; background: var(--chip); border-radius: 10px;
+  padding: 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 44px; color: var(--ink);
+}
+pre.q.empty { color: var(--muted); font-family: var(--font-body); }
+.out ul { margin: 0; padding-left: 1.2em; font-size: 13px; color: var(--muted); }
+
+/* 已存檢索 */
+ul.saved { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+ul.saved li { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: grid; gap: 4px; }
+ul.saved .nm { font-weight: 700; font-size: 14px; overflow-wrap: anywhere; }
+ul.saved .sn { font-family: var(--font-mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.empty-list { font-size: 13px; color: var(--muted); }
+
+details.more { border: 1px solid var(--line); border-radius: 10px; }
+details.statuscard { background: var(--surface); border-radius: 14px; }
+details.statuscard summary { padding: 14px 18px; font-size: 15px; }
+details.statuscard .body { padding: 0 18px 18px; }
+details.more summary { cursor: pointer; padding: 10px 14px; font-weight: 500; font-size: 14px; list-style: none; display: flex; gap: 8px; align-items: center; }
+details.more summary::-webkit-details-marker { display: none; }
+details.more summary::before { content: "＋"; color: var(--accent); font-weight: 700; }
+details.more[open] summary::before { content: "－"; }
+details.more .body { padding: 0 14px 14px; display: grid; gap: 10px; font-size: 14px; }
+details.more ol { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
+.pstate { font-size: 13px; }
+.pstate.ok { color: var(--ok); }
+.pstate.bad { color: var(--warn); }
+
+/* 網址格式表 */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { background: var(--chip); font-weight: 700; white-space: nowrap; }
+td:first-child { white-space: nowrap; font-weight: 500; }
+td code { font-size: 12px; }
+tr:last-child td { border-bottom: 0; }
+.st { font-size: 12px; font-weight: 700; padding: 0 6px; border-radius: 4px; white-space: nowrap; }
+.st.sure { background: var(--ok-soft); color: var(--ok); }
+.st.guess { background: var(--warn-soft); color: var(--warn); }
+.st.home { background: var(--chip); color: var(--muted); }
+
+#toast {
+  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); transform: translate(-50%, 16px);
+  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; max-width: calc(100vw - 32px);
+  opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease; box-shadow: 0 6px 24px rgba(0,0,0,.18); z-index: 10;
+}
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .meta { text-align: left; }
+}
+@media (max-width: 560px) {
+  .pico { grid-template-columns: minmax(0, 1fr); }
+  .qrow { grid-template-columns: minmax(0, 1fr); }
+  .frow { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .dbs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  #statusTable thead { display: none; }
+  #statusTable tr { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); align-items: baseline; }
+  #statusTable tr:last-child { border-bottom: 0; }
+  #statusTable td { border: 0; padding: 0; white-space: normal; }
+  #statusTable td:nth-child(3) { font-size: 12px; color: var(--muted); }
+  #statusTable td:nth-child(4) { grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+
+  <header class="top">
+    <div>
+      <h1>醫學文獻 <span>快速搜尋</span></h1>
+      <p>輸入一次檢索詞，按資料庫就在新分頁開啟搜尋結果；用 PICO 組出 PubMed／CINAHL 檢索式。</p>
+    </div>
+    <div class="meta">
+      <a href="./">← Zotero Bridge 安裝精靈</a>
+      <span>設定與已存檢索只存在這台裝置的瀏覽器</span>
+    </div>
+  </header>
+
+  <!-- 1 搜尋 -->
+  <section class="card" id="searchCard" aria-labelledby="h-search">
+    <div class="head">
+      <p class="eyebrow">Search</p>
+      <h2 id="h-search">輸入檢索詞，選資料庫</h2>
+    </div>
+    <div class="qrow">
+      <input type="search" id="q" placeholder="例：falls older adults exercise、跌倒 長者 運動" autocomplete="off" enterkeyhint="search" aria-label="檢索詞" aria-describedby="qhint">
+      <button class="btn" type="button" id="openAllBtn">全部開啟</button>
+    </div>
+    <div class="openall">
+      <label for="preset" class="small">「全部開啟」要開的組合</label>
+      <select id="preset" aria-label="一次開啟的資料庫組合"></select>
+      <span class="small" id="qhint">按 Enter 也會開啟這個組合。紅框的資料庫就是會開的分頁；瀏覽器擋下時，請允許本網站開啟彈出式視窗。</span>
+    </div>
+
+    <div class="note tip" id="cjkNote" hidden>
+      <p><strong>偵測到中文：</strong>中文資料庫已移到最前面。英文資料庫（PubMed、CINAHL、Cochrane…）請改用英文關鍵字，可到 <a href="https://www.ncbi.nlm.nih.gov/mesh/" target="_blank" rel="noopener">MeSH Database</a> 查標準詞。</p>
+      <div id="glossBox" hidden>
+        <p class="small">常見護理詞對照（只是提示，不是翻譯；請依你的主題確認）：</p>
+        <div class="gloss" id="gloss"></div>
+        <div class="row" style="margin-top:8px"><button class="btn small ghost" type="button" id="useEnBtn">改用英文詞搜尋</button><button class="btn small ghost" type="button" id="useZhPresetBtn">「全部開啟」改用中文文獻組合</button></div>
+      </div>
+    </div>
+
+    <div class="groups" id="groups"></div>
+
+    <div class="legend">
+      <span><span class="lock">🔒 需權限</span>：學校訂閱的資料庫；校外請設定 EZproxy 前綴，或在校內網路使用</span>
+      <span>⧉ 會先複製檢索詞：這些網站沒有可靠的搜尋網址，打開後直接貼上（Ctrl／⌘＋V）</span>
+    </div>
+  </section>
+
+  <div class="layout">
+    <!-- 2 PICO -->
+    <section class="card" id="picoCard" aria-labelledby="h-pico">
+      <div class="head">
+        <p class="eyebrow">PICO</p>
+        <h2 id="h-pico">PICO 檢索式產生器</h2>
+        <p class="lead">每個概念填同義詞（逗號或換行分隔），MeSH 主題詞另外填。同一概念內用 OR，概念之間用 AND。片語會自動加引號；可用 <code>*</code> 截字，例如 <code>exercis*</code>。</p>
+      </div>
+
+      <div class="pico">
+        <div class="concept" data-k="p">
+          <div class="ct"><span class="letter">P</span><div><b>族群／問題</b><span>Population / Problem</span></div></div>
+          <textarea id="p-terms" rows="2" placeholder="older adults, elderly, aged" aria-label="P 同義詞"></textarea>
+          <div class="meshrow"><input type="text" id="p-mesh" placeholder="MeSH 主題詞（選填）例：Aged" aria-label="P 的 MeSH 主題詞"><a href="#" class="meshlink" data-k="p" target="_blank" rel="noopener">查 MeSH ↗</a></div>
+        </div>
+        <div class="concept" data-k="i">
+          <div class="ct"><span class="letter">I</span><div><b>介入措施</b><span>Intervention</span></div></div>
+          <textarea id="i-terms" rows="2" placeholder="exercise, physical activity, balance training" aria-label="I 同義詞"></textarea>
+          <div class="meshrow"><input type="text" id="i-mesh" placeholder="MeSH 主題詞（選填）例：Exercise" aria-label="I 的 MeSH 主題詞"><a href="#" class="meshlink" data-k="i" target="_blank" rel="noopener">查 MeSH ↗</a></div>
+        </div>
+        <div class="concept" data-k="c">
+          <div class="ct"><span class="letter">C</span><div><b>對照（選填）</b><span>Comparison</span></div></div>
+          <textarea id="c-terms" rows="2" placeholder="usual care, standard care" aria-label="C 同義詞"></textarea>
+          <div class="meshrow"><input type="text" id="c-mesh" placeholder="MeSH 主題詞（選填）" aria-label="C 的 MeSH 主題詞"><a href="#" class="meshlink" data-k="c" target="_blank" rel="noopener">查 MeSH ↗</a></div>
+          <label class="inc"><input type="checkbox" id="c-include" checked> 放進檢索式（取消會找到更多篇，對照組常寫得不一致）</label>
+        </div>
+        <div class="concept" data-k="o">
+          <div class="ct"><span class="letter">O</span><div><b>結果</b><span>Outcome</span></div></div>
+          <textarea id="o-terms" rows="2" placeholder="falls, accidental falls, fall rate" aria-label="O 同義詞"></textarea>
+          <div class="meshrow"><input type="text" id="o-mesh" placeholder="MeSH 主題詞（選填）例：Accidental Falls" aria-label="O 的 MeSH 主題詞"><a href="#" class="meshlink" data-k="o" target="_blank" rel="noopener">查 MeSH ↗</a></div>
+        </div>
+      </div>
+
+      <fieldset class="filters">
+        <legend>篩選（PubMed）</legend>
+        <div class="frow"><span>出版年</span>
+          <div class="years"><input type="number" id="y-from" inputmode="numeric" min="1800" max="3000" placeholder="2015" aria-label="起始年"> <span>到</span> <input type="number" id="y-to" inputmode="numeric" min="1800" max="3000" placeholder="今年" aria-label="結束年"></div>
+        </div>
+        <div class="frow"><span>語言</span>
+          <div class="checks"><label><input type="checkbox" id="lang-en"> 英文</label><label><input type="checkbox" id="lang-zh"> 中文</label></div>
+        </div>
+        <div class="frow"><span>研究類型</span>
+          <div class="checks"><label><input type="checkbox" id="t-rct"> RCT</label><label><input type="checkbox" id="t-sr"> 系統性回顧／統合分析</label><label><input type="checkbox" id="t-gl"> 臨床指引</label></div>
+        </div>
+        <div class="frow"><span>對象</span>
+          <div class="checks"><label><input type="checkbox" id="humans"> 排除只有動物的研究</label></div>
+        </div>
+      </fieldset>
+
+      <div class="row">
+        <button class="btn small ghost" type="button" id="sampleBtn">載入範例（長者跌倒與運動）</button>
+        <button class="btn small ghost" type="button" id="clearPicoBtn">清空</button>
+      </div>
+
+      <div class="note warn" id="picoCjk" hidden><p><strong>PICO 裡有中文：</strong>PubMed 與 CINAHL 幾乎只收英文標題摘要，請改填英文同義詞；中文詞請用「一般版」到中文資料庫查。</p></div>
+
+      <div class="outs">
+        <div class="out">
+          <div class="oh"><h3>PubMed</h3>
+            <div class="row"><button class="btn small ghost" type="button" data-copy="pubmed">複製</button><button class="btn small" type="button" id="runPubmed">在 PubMed 執行</button></div>
+          </div>
+          <pre class="q empty" id="out-pubmed">填入至少一個概念後，這裡會出現檢索式。</pre>
+          <p class="small">PubMed 的 MeSH 預設會「往下展開」（包含較窄的主題詞）。<code>[tiab]</code>＝標題／摘要。</p>
+        </div>
+        <div class="out">
+          <div class="oh"><h3>CINAHL（EBSCO）</h3>
+            <div class="row"><button class="btn small ghost" type="button" data-copy="cinahl">複製</button><button class="btn small ghost" type="button" id="runCinahl">複製並開啟 CINAHL</button></div>
+          </div>
+          <pre class="q empty" id="out-cinahl">—</pre>
+          <ul id="cinahlNotes"></ul>
+        </div>
+        <div class="out">
+          <div class="oh"><h3>一般版（Google Scholar、Europe PMC、中文資料庫）</h3>
+            <div class="row"><button class="btn small ghost" type="button" data-copy="plain">複製</button><button class="btn small ghost" type="button" id="usePlainBtn">填入上方搜尋框</button></div>
+          </div>
+          <pre class="q empty" id="out-plain">—</pre>
+          <p class="small">沒有欄位標籤，篩選條件請在各網站的介面設定。Google Scholar 會忽略大部分括號，結果僅供探索。</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="side">
+      <!-- 3 已存檢索 -->
+      <section class="card" id="savedCard" aria-labelledby="h-saved">
+        <div class="head">
+          <p class="eyebrow">Saved</p>
+          <h2 id="h-saved">已存檢索</h2>
+          <p class="lead">儲存上方的檢索詞和 PICO，之後一鍵載入。</p>
+        </div>
+        <div class="note warn" id="storeWarn" hidden><p><strong>這個瀏覽器不能儲存資料</strong>（例如無痕視窗或封鎖網站資料）。已存檢索在關閉分頁後會消失，請用「匯出」保存。</p></div>
+        <div class="qrow">
+          <input type="text" id="saveName" placeholder="名稱，例如：碩論 跌倒預防" aria-label="檢索名稱">
+          <button class="btn small" type="button" id="saveBtn">儲存</button>
+        </div>
+        <ul class="saved" id="savedList"></ul>
+        <div class="row">
+          <button class="btn small ghost" type="button" id="exportBtn">匯出 JSON</button>
+          <button class="btn small ghost" type="button" id="importBtn">匯入 JSON</button>
+          <input type="file" id="importFile" accept="application/json,.json" hidden>
+        </div>
+      </section>
+
+      <!-- 4 EZproxy -->
+      <section class="card" id="proxyCard" aria-labelledby="h-proxy">
+        <div class="head">
+          <p class="eyebrow">Off-campus</p>
+          <h2 id="h-proxy">校外連線（EZproxy）</h2>
+          <p class="lead">填入學校圖書館的 EZproxy 前綴後，標示 🔒 的資料庫會透過學校登入開啟。留空就直接連線（在校內網路通常已有權限）。</p>
+        </div>
+        <div>
+          <label for="proxy" class="lbl">EZproxy 前綴</label>
+          <input type="url" id="proxy" placeholder="https://ezproxy.學校網域/login?url=" autocomplete="off" spellcheck="false">
+          <p class="pstate" id="proxyState" aria-live="polite"></p>
+        </div>
+        <details class="more">
+          <summary>怎麼找到前綴？</summary>
+          <div class="body">
+            <ol>
+              <li>最快：問學校圖書館「校外連線資料庫的 EZproxy 前綴是什麼」。</li>
+              <li>自己看：在校外從<b>圖書館網站的資料庫清單</b>點進 CINAHL 或 UpToDate，登入後看網址列。如果長得像 <code>https://（某個網址）/login?url=https://www.uptodate.com/…</code>，就複製開頭到 <code>url=</code> 為止（含 <code>url=</code>）。</li>
+              <li>如果網址變成 <code>www-uptodate-com.（學校網域）</code> 這種改寫網域的形式，代表學校只提供這種方式，這裡的前綴不適用：請從圖書館網站進入資料庫。</li>
+            </ol>
+            <p class="small">本頁不會猜你的學校前綴，也不會把它送到任何地方；只存在這台裝置。</p>
+          </div>
+        </details>
+      </section>
+    </div>
+  </div>
+
+  <details class="more statuscard" id="statusCard">
+    <summary>網址格式與狀態（連結壞了請回報）</summary>
+    <div class="body">
+      <p>這些搜尋網址是依各網站公開的格式寫的，開發時無法逐一連線實測。<span class="st sure">確定</span>＝網站公開或長期通用的搜尋網址；<span class="st guess">推測</span>＝依網站目前的網址推測，同時會複製檢索詞，網址失效時直接貼上即可；<span class="st home">首頁</span>＝網站沒有可靠的搜尋網址，開首頁並複製檢索詞。發現打不開或沒帶入檢索詞，請到 <a href="https://github.com/bobyu89/zotero-bridge/issues" target="_blank" rel="noopener">GitHub Issues</a> 回報。</p>
+      <div class="table-wrap"><table id="statusTable"><thead><tr><th>資料庫</th><th>狀態</th><th>權限</th><th>開啟的網址（{q}＝檢索詞）</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </details>
+
+  <footer>
+    <span>本頁不會把檢索詞送到任何伺服器，只是幫你開啟各資料庫的搜尋網址。各資料庫的檢索語法不同，PubMed 的欄位標籤不能直接用在其他資料庫。</span>
+    <span>Zotero Bridge · <a href="https://github.com/bobyu89/zotero-bridge#readme" target="_blank" rel="noopener">說明</a></span>
+  </footer>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/*
+ * 醫學文獻快速搜尋：資料庫網址格式與狀態
+ * 開發環境無法連到這些網站，所有網址都沒有實際連線測試。
+ *   確定 = 網站公開或長期通用的搜尋網址（GET 參數帶入檢索詞）
+ *   推測 = 依目前網址推測；開啟搜尋網址，同時把檢索詞複製到剪貼簿當備案
+ *   首頁 = 沒有可靠的 GET 搜尋網址（需登入、需學校代碼、或用 session）；開首頁＋複製檢索詞
+ *
+ *   PubMed                 確定  https://pubmed.ncbi.nlm.nih.gov/?term={q}
+ *   MeSH Database          確定  https://www.ncbi.nlm.nih.gov/mesh/?term={q}
+ *   CINAHL (EBSCO)         首頁  https://search.ebscohost.com/                 需機構權限（搜尋連結需要學校的 EBSCO 資料庫代碼）
+ *   Embase                 首頁  https://www.embase.com/                       需機構權限
+ *   Google Scholar         確定  https://scholar.google.com/scholar?q={q}
+ *   Europe PMC             確定  https://europepmc.org/search?query={q}
+ *   Semantic Scholar       確定  https://www.semanticscholar.org/search?q={q}
+ *   Cochrane Library       首頁  https://www.cochranelibrary.com/advanced-search  摘要免費、全文需訂閱
+ *   TRIP Database          推測  https://www.tripdatabase.com/Searchresult?criteria={q}
+ *   JBI EBP Database       首頁  https://ovidsp.ovid.com/                      需機構權限（Ovid 平台）
+ *   UpToDate               推測  https://www.uptodate.com/contents/search?search={q}  需機構權限
+ *   NICE                   推測  https://www.nice.org.uk/search?q={q}
+ *   CDC                    推測  https://search.cdc.gov/search/?query={q}       （CDC 網站搜尋表單以 GET 送出 query 欄位）
+ *   Google 指引 PDF        確定  https://www.google.com/search?q={q} guideline filetype:pdf
+ *   華藝線上圖書館         首頁  https://www.airitilibrary.com/                 摘要免費、全文需訂閱
+ *   臺灣博碩士論文知識加值系統 首頁 https://ndltd.ncl.edu.tw/                  （網址含 session，無固定搜尋網址）
+ *   國家圖書館期刊文獻資訊網 首頁 https://tpl.ncl.edu.tw/
+ *   ClinicalTrials.gov     確定  https://clinicaltrials.gov/search?term={q}
+ *   WHO ICTRP              首頁  https://trialsearch.who.int/                   （搜尋用表單回傳，無 GET 網址）
+ *
+ * EZproxy 前綴只套用到 access === 'inst'（需機構權限）的來源。
+ */
+(function (global) {
+  'use strict';
+
+  var GROUPS = [
+    { id: 'en', name: '英文資料庫', desc: '期刊文獻' },
+    { id: 'ebp', name: '實證與指引', desc: '系統性回顧、臨床指引、臨床決策' },
+    { id: 'zh', name: '中文資料庫', desc: '中文期刊與學位論文' },
+    { id: 'trials', name: '臨床試驗登錄', desc: '進行中與未發表的試驗' }
+  ];
+
+  // access: free 免費／partial 摘要免費、全文需訂閱／inst 需機構權限
+  // status: sure 確定／guess 推測（開搜尋網址＋複製）／home 開首頁＋複製
+  var SOURCES = [
+    { id: 'pubmed', name: 'PubMed', group: 'en', access: 'free', status: 'sure', home: 'https://pubmed.ncbi.nlm.nih.gov/', search: 'https://pubmed.ncbi.nlm.nih.gov/?term={q}' },
+    { id: 'mesh', name: 'MeSH Database', group: 'en', access: 'free', status: 'sure', home: 'https://www.ncbi.nlm.nih.gov/mesh/', search: 'https://www.ncbi.nlm.nih.gov/mesh/?term={q}', meta: '查標準主題詞' },
+    { id: 'cinahl', name: 'CINAHL', group: 'en', access: 'inst', status: 'home', home: 'https://search.ebscohost.com/', meta: 'EBSCO' },
+    { id: 'embase', name: 'Embase', group: 'en', access: 'inst', status: 'home', home: 'https://www.embase.com/' },
+    { id: 'scholar', name: 'Google Scholar', group: 'en', access: 'free', status: 'sure', home: 'https://scholar.google.com/', search: 'https://scholar.google.com/scholar?q={q}' },
+    { id: 'europepmc', name: 'Europe PMC', group: 'en', access: 'free', status: 'sure', home: 'https://europepmc.org/', search: 'https://europepmc.org/search?query={q}', meta: '含免費全文' },
+    { id: 'semantic', name: 'Semantic Scholar', group: 'en', access: 'free', status: 'sure', home: 'https://www.semanticscholar.org/', search: 'https://www.semanticscholar.org/search?q={q}' },
+
+    { id: 'cochrane', name: 'Cochrane Library', group: 'ebp', access: 'partial', status: 'home', home: 'https://www.cochranelibrary.com/advanced-search', meta: '開進階搜尋' },
+    { id: 'trip', name: 'TRIP Database', group: 'ebp', access: 'free', status: 'guess', home: 'https://www.tripdatabase.com/', search: 'https://www.tripdatabase.com/Searchresult?criteria={q}' },
+    { id: 'jbi', name: 'JBI EBP Database', group: 'ebp', access: 'inst', status: 'home', home: 'https://ovidsp.ovid.com/', meta: 'Ovid' },
+    { id: 'uptodate', name: 'UpToDate', group: 'ebp', access: 'inst', status: 'guess', home: 'https://www.uptodate.com/', search: 'https://www.uptodate.com/contents/search?search={q}' },
+    { id: 'nice', name: 'NICE', group: 'ebp', access: 'free', status: 'guess', home: 'https://www.nice.org.uk/', search: 'https://www.nice.org.uk/search?q={q}', meta: '英國臨床指引' },
+    { id: 'cdc', name: 'CDC', group: 'ebp', access: 'free', status: 'guess', home: 'https://www.cdc.gov/', search: 'https://search.cdc.gov/search/?query={q}', meta: '美國疾管署' },
+    { id: 'gguide', name: 'Google 指引 PDF', group: 'ebp', access: 'free', status: 'sure', home: 'https://www.google.com/', search: 'https://www.google.com/search?q={q}', suffix: ' guideline filetype:pdf', meta: '加上 guideline filetype:pdf' },
+
+    { id: 'airiti', name: '華藝線上圖書館', group: 'zh', access: 'partial', status: 'home', home: 'https://www.airitilibrary.com/', meta: 'Airiti Library' },
+    { id: 'ndltd', name: '臺灣博碩士論文知識加值系統', group: 'zh', access: 'free', status: 'home', home: 'https://ndltd.ncl.edu.tw/', meta: '國圖・學位論文' },
+    { id: 'tpi', name: '國家圖書館期刊文獻資訊網', group: 'zh', access: 'free', status: 'home', home: 'https://tpl.ncl.edu.tw/', meta: '國圖・期刊索引' },
+
+    { id: 'ctgov', name: 'ClinicalTrials.gov', group: 'trials', access: 'free', status: 'sure', home: 'https://clinicaltrials.gov/', search: 'https://clinicaltrials.gov/search?term={q}' },
+    { id: 'ictrp', name: 'WHO ICTRP', group: 'trials', access: 'free', status: 'home', home: 'https://trialsearch.who.int/', meta: '各國試驗登錄' }
+  ];
+
+  var PRESETS = [
+    { id: 'nursing', name: '護理實證常用', ids: ['pubmed', 'cinahl', 'cochrane', 'embase', 'airiti'] },
+    { id: 'free', name: '免費資源', ids: ['pubmed', 'europepmc', 'scholar', 'semantic', 'trip'] },
+    { id: 'zh', name: '中文文獻', ids: ['airiti', 'ndltd', 'tpi', 'scholar'] },
+    { id: 'guideline', name: '臨床指引', ids: ['trip', 'nice', 'cdc', 'gguide'] },
+    { id: 'trials', name: '臨床試驗登錄', ids: ['ctgov', 'ictrp'] }
+  ];
+
+  var ACCESS_LABEL = { free: '免費', partial: '摘要免費・全文需訂閱', inst: '🔒 需機構權限' };
+  var CHIP_ACCESS = { free: '免費', partial: '摘要免費', inst: '🔒 需權限' };
+  var STATUS_LABEL = { sure: '確定', guess: '推測', home: '首頁' };
+
+  // 常見護理詞對照：只用來提示英文關鍵字，不是翻譯
+  var GLOSSARY = [
+    ['跌倒', ['falls', 'accidental falls']], ['長者', ['older adults', 'aged']], ['老人', ['older adults', 'aged']], ['高齡', ['older adults', 'aged']],
+    ['運動', ['exercise', 'physical activity']], ['護理師', ['nurses']], ['護理', ['nursing']], ['疼痛', ['pain']], ['焦慮', ['anxiety']],
+    ['憂鬱', ['depression']], ['壓力性損傷', ['pressure injury', 'pressure ulcer']], ['壓瘡', ['pressure ulcer']], ['褥瘡', ['pressure ulcer']],
+    ['失智', ['dementia']], ['糖尿病', ['diabetes mellitus']], ['中風', ['stroke']], ['腦中風', ['stroke']], ['衛教', ['health education', 'patient education']],
+    ['生活品質', ['quality of life']], ['睡眠', ['sleep']], ['照顧者', ['caregivers']], ['癌症', ['cancer', 'neoplasms']], ['化療', ['chemotherapy']],
+    ['安寧', ['palliative care', 'hospice care']], ['譫妄', ['delirium']], ['加護病房', ['intensive care units']], ['疲憊', ['fatigue']], ['疲倦', ['fatigue']],
+    ['自我效能', ['self-efficacy']], ['音樂', ['music therapy']], ['衰弱', ['frailty']], ['感染', ['infection']], ['高血壓', ['hypertension']],
+    ['心衰竭', ['heart failure']], ['血液透析', ['hemodialysis', 'renal dialysis']], ['洗腎', ['hemodialysis', 'renal dialysis']], ['母乳', ['breast feeding']],
+    ['哺乳', ['breast feeding']], ['早產兒', ['premature infant']], ['社會支持', ['social support']], ['認知', ['cognition']], ['手術', ['surgery']],
+    ['術後', ['postoperative']], ['約束', ['physical restraint']], ['用藥', ['medication adherence']], ['戒菸', ['smoking cessation']], ['肥胖', ['obesity']],
+    ['孕婦', ['pregnant women']], ['產後', ['postpartum']], ['兒童', ['child']], ['青少年', ['adolescent']], ['介入', ['intervention']],
+    ['隨機', ['randomized controlled trial']], ['系統性回顧', ['systematic review']], ['統合分析', ['meta-analysis']], ['指引', ['guideline']]
+  ];
+
+  // ---------- 純函式（測試會直接呼叫） ----------
+
+  var CJK_RE = /[㐀-䶿一-鿿豈-﫿]/;
+  function hasCJK(s) { return CJK_RE.test(String(s || '')); }
+
+  function getSource(id) {
+    for (var i = 0; i < SOURCES.length; i++) if (SOURCES[i].id === id) return SOURCES[i];
+    return null;
+  }
+
+  function needsProxy(src) {
+    if (typeof src === 'string') src = getSource(src);
+    return !!src && src.access === 'inst';
+  }
+
+  // EZproxy：login?url= 後面接原始網址（EZproxy 把 url= 之後的全部當成網址）；qurl= 則要編碼
+  function wrapProxy(url, prefix) {
+    prefix = String(prefix || '').trim();
+    if (!prefix || !/^https?:\/\//i.test(prefix)) return url;
+    if (/[?&]qurl=$/i.test(prefix)) return prefix + encodeURIComponent(url);
+    return prefix + url;
+  }
+
+  // 回傳 { url, copy }：copy 為 true 時應先把檢索詞複製到剪貼簿
+  function buildUrl(src, query, proxyPrefix) {
+    if (typeof src === 'string') src = getSource(src);
+    if (!src) throw new Error('unknown source');
+    var q = String(query || '').trim();
+    var url;
+    if (q && src.search && src.status !== 'home') {
+      url = src.search.replace('{q}', encodeURIComponent(q + (src.suffix || '')));
+    } else {
+      url = src.home;
+    }
+    if (needsProxy(src)) url = wrapProxy(url, proxyPrefix);
+    return { url: url, copy: !!q && src.status !== 'sure' };
+  }
+
+  function splitTerms(v) {
+    var arr = Array.isArray(v) ? v : String(v || '').split(/[,，、;；\r\n]+/);
+    var seen = {}, out = [];
+    arr.forEach(function (t) {
+      t = String(t).trim().replace(/^["“”']+|["“”']+$/g, '').trim();
+      if (!t) return;
+      var k = t.toLowerCase();
+      if (seen[k]) return;
+      seen[k] = true; out.push(t);
+    });
+    return out;
+  }
+
+  var TAG_RE = /\s*\[[^\]]+\]$/;
+  function stripTag(t) { return t.replace(TAG_RE, ''); }
+  function phrase(t) { return /\s/.test(t) ? '"' + t + '"' : t; }
+
+  function pubmedTerm(t) { return TAG_RE.test(t) ? t : phrase(t) + '[tiab]'; }
+
+  function conceptParts(c) {
+    c = c || {};
+    return { terms: splitTerms(c.terms), mesh: splitTerms(c.mesh) };
+  }
+
+  function pubmedConcept(c) {
+    var parts = c.terms.map(pubmedTerm).concat(c.mesh.map(function (m) { return '"' + stripTag(m) + '"[Mesh]'; }));
+    return parts.length ? '(' + parts.join(' OR ') + ')' : '';
+  }
+
+  function cinahlConcept(c) {
+    var words = c.terms.map(function (t) { return phrase(stripTag(t)); });
+    var parts = [];
+    if (words.length) {
+      var w = words.length > 1 ? '(' + words.join(' OR ') + ')' : words[0];
+      parts.push('TI ' + w, 'AB ' + w);
+    }
+    c.mesh.forEach(function (m) { parts.push('MH "' + stripTag(m) + '+"'); });
+    return parts.length ? '(' + parts.join(' OR ') + ')' : '';
+  }
+
+  function plainConcept(c) {
+    var words = splitTerms(c.terms.map(stripTag).concat(c.mesh.map(stripTag))).map(phrase);
+    if (!words.length) return '';
+    return words.length > 1 ? '(' + words.join(' OR ') + ')' : words[0];
+  }
+
+  function yearRange(f) {
+    var a = parseInt(f && f.yearFrom, 10), b = parseInt(f && f.yearTo, 10);
+    var ok = function (y) { return y >= 1800 && y <= 3000; };
+    a = ok(a) ? a : null; b = ok(b) ? b : null;
+    if (a === null && b === null) return null;
+    if (a !== null && b !== null && a > b) { var t = a; a = b; b = t; }
+    return { from: a, to: b };
+  }
+
+  // pico: { p:{terms,mesh}, i, c, o, includeC, filters:{ yearFrom, yearTo, lang:{en,zh}, types:{rct,sr,guideline}, humans } }
+  function buildPico(pico) {
+    pico = pico || {};
+    var keys = ['p', 'i', 'c', 'o'].filter(function (k) { return k !== 'c' || pico.includeC !== false; });
+    var concepts = keys.map(function (k) { return conceptParts(pico[k]); })
+      .filter(function (c) { return c.terms.length || c.mesh.length; });
+    var res = { pubmed: '', cinahl: '', plain: '', cinahlLimits: [], concepts: concepts.length };
+    if (!concepts.length) return res;
+
+    var f = pico.filters || {};
+    var pm = concepts.map(pubmedConcept).join(' AND ');
+    var types = [];
+    if (f.types && f.types.rct) types.push('randomized controlled trial[pt]');
+    if (f.types && f.types.sr) types.push('systematic review[pt]', 'meta-analysis[pt]');
+    if (f.types && f.types.guideline) types.push('guideline[pt]', 'practice guideline[pt]');
+    if (types.length) pm += ' AND (' + types.join(' OR ') + ')';
+    var langs = [];
+    if (f.lang && f.lang.en) langs.push('english[la]');
+    if (f.lang && f.lang.zh) langs.push('chinese[la]');
+    if (langs.length) pm += ' AND (' + langs.join(' OR ') + ')';
+    var yr = yearRange(f);
+    if (yr) pm += ' AND ' + (yr.from || 1800) + ':' + (yr.to || 3000) + '[dp]';
+    if (f.humans) pm += ' NOT (animals[mh] NOT humans[mh])';
+    res.pubmed = pm;
+
+    res.cinahl = concepts.map(cinahlConcept).join(' AND ');
+    if (yr) res.cinahlLimits.push('出版日期：' + (yr.from || '不限') + '–' + (yr.to || '今'));
+    if (langs.length) res.cinahlLimits.push('語言：' + [f.lang.en ? 'English' : '', f.lang.zh ? 'Chinese' : ''].filter(Boolean).join('、'));
+    if (types.length) {
+      var t = [];
+      if (f.types.rct) t.push('Randomized Controlled Trial');
+      if (f.types.sr) t.push('Systematic Review', 'Meta Analysis');
+      if (f.types.guideline) t.push('Practice Guidelines');
+      res.cinahlLimits.push('出版類型（Publication Type）：' + t.join('、'));
+    }
+    if (f.humans) res.cinahlLimits.push('Human');
+
+    res.plain = concepts.map(plainConcept).join(' AND ');
+    return res;
+  }
+
+  function glossaryHints(q) {
+    q = String(q || '');
+    var hits = [];
+    // 長詞優先：「腦中風」已命中時略過「中風」；結果依在檢索詞中出現的順序
+    GLOSSARY.slice().sort(function (x, y) { return y[0].length - x[0].length; }).forEach(function (g) {
+      var at = q.indexOf(g[0]);
+      if (at === -1) return;
+      if (hits.some(function (h) { return h.zh.indexOf(g[0]) !== -1; })) return;
+      hits.push({ zh: g[0], en: g[1], at: at });
+    });
+    return hits.sort(function (x, y) { return x.at - y.at; }).map(function (h) { return { zh: h.zh, en: h.en }; });
+  }
+
+  // ---------- 儲存（localStorage 不能用時退回記憶體） ----------
+
+  function makeStore() {
+    var mem = {}, ok = false;
+    try { var k = '__zb_probe'; global.localStorage.setItem(k, '1'); global.localStorage.removeItem(k); ok = true; } catch (e) { ok = false; }
+    return {
+      ok: ok,
+      get: function (key) {
+        if (ok) { try { return global.localStorage.getItem(key); } catch (e) {} }
+        return Object.prototype.hasOwnProperty.call(mem, key) ? mem[key] : null;
+      },
+      set: function (key, val) {
+        mem[key] = val;
+        if (!ok) return false;
+        try { global.localStorage.setItem(key, val); return true; } catch (e) { return false; }
+      }
+    };
+  }
+
+  var KEYS = { proxy: 'zb-search-proxy', saved: 'zb-search-saved-v1', preset: 'zb-search-preset' };
+
+  function normalizeSaved(list) {
+    if (list && !Array.isArray(list) && Array.isArray(list.searches)) list = list.searches;
+    if (!Array.isArray(list)) return [];
+    return list.filter(function (s) { return s && typeof s === 'object' && typeof s.name === 'string' && (typeof s.query === 'string' || (s.pico && typeof s.pico === 'object')); })
+      .map(function (s) {
+        return { id: String(s.id || ('s' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7))), name: s.name.slice(0, 120), query: String(s.query || ''), pico: s.pico && typeof s.pico === 'object' ? s.pico : null, savedAt: String(s.savedAt || new Date().toISOString()) };
+      });
+  }
+
+  function mergeSaved(existing, incoming) {
+    var byId = {}, out = existing.slice(), added = 0;
+    out.forEach(function (s, i) { byId[s.id] = i; });
+    incoming.forEach(function (s) {
+      if (Object.prototype.hasOwnProperty.call(byId, s.id)) { out[byId[s.id]] = s; } else { byId[s.id] = out.length; out.push(s); added++; }
+    });
+    return { list: out, added: added };
+  }
+
+  var api = {
+    GROUPS: GROUPS, SOURCES: SOURCES, PRESETS: PRESETS, GLOSSARY: GLOSSARY, KEYS: KEYS,
+    hasCJK: hasCJK, getSource: getSource, needsProxy: needsProxy, wrapProxy: wrapProxy, buildUrl: buildUrl,
+    splitTerms: splitTerms, buildPico: buildPico, glossaryHints: glossaryHints,
+    normalizeSaved: normalizeSaved, mergeSaved: mergeSaved,
+    // 開新分頁；測試時可替換
+    open: function (url) {
+      var w = null;
+      try { w = global.open(url, '_blank'); } catch (e) { w = null; }
+      if (w) { try { w.opener = null; } catch (e) {} }
+      return w;
+    }
+  };
+  global.ZBSearch = api;
+
+  // ---------- 介面 ----------
+
+  var doc = global.document;
+  if (!doc || !doc.getElementById('groups')) return;
+  var $ = function (id) { return doc.getElementById(id); };
+  var store = makeStore();
+  api.store = store;
+
+  var toastTimer;
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 3200);
+  }
+  api.toast = toast;
+
+  // 同步複製（在使用者點擊當下、開新分頁之前），不行再用 Clipboard API
+  function copyText(text) {
+    var ok = false, active = doc.activeElement;
+    try {
+      var ta = doc.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+      doc.body.appendChild(ta); ta.select();
+      ok = doc.execCommand && doc.execCommand('copy');
+      ta.remove();
+      if (active && active.focus) active.focus({ preventScroll: true });
+    } catch (e) { ok = false; }
+    if (ok) return Promise.resolve(true);
+    if (global.navigator && navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return false; });
+    }
+    return Promise.resolve(false);
+  }
+  api.copyText = copyText;
+
+  var qInput = $('q');
+  function query() { return qInput.value.trim(); }
+  function proxyPrefix() { return $('proxy').value.trim(); }
+
+  // 資料庫按鈕
+  var groupEls = {};
+  GROUPS.forEach(function (g) {
+    var box = doc.createElement('div');
+    box.className = 'group'; box.dataset.group = g.id;
+    var h = doc.createElement('h3');
+    h.innerHTML = '<span></span><span class="small"></span><span class="hl-tag">偵測到中文，建議先查</span>';
+    h.children[0].textContent = g.name; h.children[1].textContent = g.desc;
+    var grid = doc.createElement('div'); grid.className = 'dbs';
+    SOURCES.filter(function (s) { return s.group === g.id; }).forEach(function (s) {
+      var a = doc.createElement('a');
+      a.className = 'db'; a.dataset.id = s.id; a.target = '_blank'; a.rel = 'noopener';
+      var b = doc.createElement('b'); b.textContent = s.name;
+      var m = doc.createElement('span'); m.className = 'm';
+      var acc = doc.createElement('span'); acc.textContent = CHIP_ACCESS[s.access];
+      if (s.access === 'inst') acc.className = 'lock';
+      m.appendChild(acc);
+      if (s.meta) m.appendChild(doc.createTextNode('・' + s.meta));
+      a.append(b, m);
+      if (s.status !== 'sure') {
+        var cp = doc.createElement('span'); cp.className = 'cp'; cp.textContent = '⧉'; cp.setAttribute('aria-hidden', 'true');
+        a.appendChild(cp);
+      }
+      a.title = s.status === 'home' ? '開啟首頁並複製檢索詞' : s.status === 'guess' ? '開啟搜尋（網址為推測），同時複製檢索詞' : '在新分頁搜尋';
+      a.addEventListener('click', function () {
+        var q = query();
+        var r = buildUrl(s, q, proxyPrefix());
+        a.href = r.url;
+        if (r.copy) {
+          copyText(q).then(function (ok) {
+            toast(ok ? '已複製檢索詞，在 ' + s.name + ' 的搜尋框貼上（Ctrl／⌘＋V）' : '無法自動複製，請手動複製檢索詞');
+          });
+        }
+      });
+      grid.appendChild(a);
+    });
+    box.append(h, grid);
+    groupEls[g.id] = box;
+    $('groups').appendChild(box);
+  });
+
+  function refreshLinks() {
+    var q = query(), pre = proxyPrefix();
+    doc.querySelectorAll('a.db').forEach(function (a) {
+      var s = getSource(a.dataset.id);
+      a.href = buildUrl(s, q, pre).url;
+      var on = needsProxy(s) && !!wrapProxyActive(pre);
+      a.classList.toggle('proxied', on);
+      if (needsProxy(s)) a.querySelector('.lock').textContent = on ? '🔒 經 EZproxy' : CHIP_ACCESS.inst;
+    });
+  }
+  function wrapProxyActive(pre) { return pre && /^https?:\/\//i.test(pre); }
+
+  // 一次開啟的組合
+  var presetSel = $('preset');
+  PRESETS.forEach(function (p) {
+    var o = doc.createElement('option'); o.value = p.id; o.textContent = p.name + '（' + p.ids.length + '）';
+    presetSel.appendChild(o);
+  });
+  var savedPreset = store.get(KEYS.preset);
+  if (savedPreset && PRESETS.some(function (p) { return p.id === savedPreset; })) presetSel.value = savedPreset;
+  function currentPreset() { return PRESETS.filter(function (p) { return p.id === presetSel.value; })[0] || PRESETS[0]; }
+  function markPreset() {
+    var ids = currentPreset().ids;
+    doc.querySelectorAll('a.db').forEach(function (a) { a.classList.toggle('in-preset', ids.indexOf(a.dataset.id) !== -1); });
+    $('openAllBtn').textContent = '全部開啟（' + ids.length + '）';
+  }
+  presetSel.addEventListener('change', function () { store.set(KEYS.preset, presetSel.value); markPreset(); });
+
+  function openAll() {
+    var q = query();
+    if (!q) { toast('請先輸入檢索詞'); qInput.focus(); return; }
+    var p = currentPreset(), pre = proxyPrefix(), needCopy = false;
+    var urls = p.ids.map(function (id) { var r = buildUrl(id, q, pre); if (r.copy) needCopy = true; return r.url; });
+    var copied = needCopy ? copyText(q) : Promise.resolve(false);
+    var blocked = 0;
+    urls.forEach(function (u) { if (!api.open(u)) blocked++; });
+    copied.then(function (ok) {
+      if (blocked) toast('瀏覽器擋下了 ' + blocked + ' 個分頁：請在網址列允許本網站開啟彈出式視窗，再按一次。');
+      else if (needCopy) toast(ok ? '已開啟 ' + urls.length + ' 個分頁，已複製檢索詞（部分網站需要貼上）' : '已開啟 ' + urls.length + ' 個分頁；無法自動複製檢索詞');
+      else toast('已開啟 ' + urls.length + ' 個分頁');
+    });
+  }
+  $('openAllBtn').addEventListener('click', openAll);
+  qInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); openAll(); }
+  });
+
+  // 中文檢索詞
+  var groupOrder = GROUPS.map(function (g) { return g.id; });
+  var lastCJK = null;
+  function refreshCJK() {
+    var q = query(), cjk = hasCJK(q);
+    $('cjkNote').hidden = !cjk;
+    if (cjk !== lastCJK) {
+      var order = cjk ? ['zh'].concat(groupOrder.filter(function (g) { return g !== 'zh'; })) : groupOrder;
+      order.forEach(function (g) { $('groups').appendChild(groupEls[g]); });
+      groupEls.zh.classList.toggle('hl', cjk);
+      lastCJK = cjk;
+    }
+    var hits = cjk ? glossaryHints(q) : [];
+    $('glossBox').hidden = !hits.length && !cjk;
+    var gl = $('gloss'); gl.replaceChildren();
+    hits.forEach(function (h) {
+      var s = doc.createElement('span');
+      s.textContent = h.zh + ' ';
+      var i = doc.createElement('i'); i.textContent = '→ ' + h.en.join('・');
+      s.appendChild(i); gl.appendChild(s);
+    });
+    $('useEnBtn').hidden = !hits.length;
+    $('useZhPresetBtn').hidden = presetSel.value === 'zh';
+    $('glossBox').querySelector('.small').hidden = !hits.length;
+  }
+  $('useEnBtn').addEventListener('click', function () {
+    var hits = glossaryHints(query());
+    if (!hits.length) return;
+    qInput.value = hits.map(function (h) { return h.en[0]; }).join(' ');
+    onQuery(); qInput.focus();
+    toast('已改成英文關鍵字，請確認是否符合你的主題');
+  });
+  $('useZhPresetBtn').addEventListener('click', function () {
+    presetSel.value = 'zh'; store.set(KEYS.preset, 'zh'); markPreset(); refreshCJK();
+  });
+
+  function onQuery() { refreshLinks(); refreshCJK(); }
+  qInput.addEventListener('input', onQuery);
+
+  // ---------- PICO ----------
+  var picoIds = ['p-terms', 'p-mesh', 'i-terms', 'i-mesh', 'c-terms', 'c-mesh', 'o-terms', 'o-mesh', 'y-from', 'y-to'];
+  var picoChecks = ['c-include', 'lang-en', 'lang-zh', 't-rct', 't-sr', 't-gl', 'humans'];
+  function readPico() {
+    var v = function (id) { return $(id).value; }, c = function (id) { return $(id).checked; };
+    return {
+      p: { terms: v('p-terms'), mesh: v('p-mesh') }, i: { terms: v('i-terms'), mesh: v('i-mesh') },
+      c: { terms: v('c-terms'), mesh: v('c-mesh') }, o: { terms: v('o-terms'), mesh: v('o-mesh') },
+      includeC: c('c-include'),
+      filters: { yearFrom: v('y-from'), yearTo: v('y-to'), lang: { en: c('lang-en'), zh: c('lang-zh') }, types: { rct: c('t-rct'), sr: c('t-sr'), guideline: c('t-gl') }, humans: c('humans') }
+    };
+  }
+  function writePico(p) {
+    p = p || {};
+    var f = p.filters || {}, lang = f.lang || {}, types = f.types || {};
+    ['p', 'i', 'c', 'o'].forEach(function (k) {
+      var c = p[k] || {};
+      $(k + '-terms').value = Array.isArray(c.terms) ? c.terms.join(', ') : (c.terms || '');
+      $(k + '-mesh').value = Array.isArray(c.mesh) ? c.mesh.join(', ') : (c.mesh || '');
+    });
+    $('c-include').checked = p.includeC !== false;
+    $('y-from').value = f.yearFrom || ''; $('y-to').value = f.yearTo || '';
+    $('lang-en').checked = !!lang.en; $('lang-zh').checked = !!lang.zh;
+    $('t-rct').checked = !!types.rct; $('t-sr').checked = !!types.sr; $('t-gl').checked = !!types.guideline;
+    $('humans').checked = !!f.humans;
+    renderPico();
+  }
+  api.readPico = readPico; api.writePico = writePico;
+
+  var lastPico = buildPico({});
+  function setOut(id, text, emptyText) {
+    var el = $(id);
+    el.textContent = text || emptyText;
+    el.classList.toggle('empty', !text);
+  }
+  function renderPico() {
+    var p = readPico();
+    lastPico = buildPico(p);
+    setOut('out-pubmed', lastPico.pubmed, '填入至少一個概念後，這裡會出現檢索式。');
+    setOut('out-cinahl', lastPico.cinahl, '—');
+    setOut('out-plain', lastPico.plain, '—');
+    var notes = $('cinahlNotes'); notes.replaceChildren();
+    if (lastPico.cinahl) {
+      var items = ['MH 是 CINAHL Subject Headings，不一定和 MeSH 同名，請在 CINAHL Headings 確認；「+」代表往下展開。'];
+      if (lastPico.cinahlLimits.length) items.push('篩選請在 EBSCO 左側的限制條件勾選：' + lastPico.cinahlLimits.join('；'));
+      items.forEach(function (t) { var li = doc.createElement('li'); li.textContent = t; notes.appendChild(li); });
+    }
+    var anyCJK = ['p', 'i', 'c', 'o'].some(function (k) { return hasCJK(p[k].terms) || hasCJK(p[k].mesh); });
+    $('picoCjk').hidden = !anyCJK;
+    ['runPubmed', 'runCinahl', 'usePlainBtn'].forEach(function (id) { $(id).disabled = !lastPico.concepts; });
+    doc.querySelectorAll('[data-copy]').forEach(function (b) { b.disabled = !lastPico.concepts; });
+    doc.querySelectorAll('.meshlink').forEach(function (a) {
+      var t = splitTerms(p[a.dataset.k].terms)[0];
+      a.href = buildUrl('mesh', t ? t.replace(TAG_RE, '') : '').url;
+    });
+  }
+  picoIds.forEach(function (id) { $(id).addEventListener('input', renderPico); });
+  picoChecks.forEach(function (id) { $(id).addEventListener('change', renderPico); });
+
+  doc.querySelectorAll('[data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var text = lastPico[b.dataset.copy];
+      if (!text) return;
+      copyText(text).then(function (ok) { toast(ok ? '已複製檢索式' : '無法自動複製，請手動選取'); });
+    });
+  });
+  $('runPubmed').addEventListener('click', function () {
+    if (!lastPico.pubmed) return;
+    if (!api.open(buildUrl('pubmed', lastPico.pubmed).url)) toast('瀏覽器擋下了新分頁，請允許彈出式視窗');
+  });
+  $('runCinahl').addEventListener('click', function () {
+    if (!lastPico.cinahl) return;
+    var r = buildUrl('cinahl', lastPico.cinahl, proxyPrefix());
+    var copied = copyText(lastPico.cinahl);
+    var w = api.open(r.url);
+    copied.then(function (ok) {
+      toast(!w ? '瀏覽器擋下了新分頁，請允許彈出式視窗' : ok ? '已複製檢索詞，登入 EBSCO 選 CINAHL 後貼上' : '已開啟 EBSCO；無法自動複製，請手動複製檢索式');
+    });
+  });
+  $('usePlainBtn').addEventListener('click', function () {
+    if (!lastPico.plain) return;
+    qInput.value = lastPico.plain; onQuery();
+    $('searchCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    toast('已填入上方搜尋框，選一個資料庫開啟');
+  });
+  $('sampleBtn').addEventListener('click', function () {
+    writePico({
+      p: { terms: 'older adults, elderly, aged', mesh: 'Aged' },
+      i: { terms: 'exercise, physical activity, balance training', mesh: 'Exercise' },
+      c: { terms: 'usual care, standard care', mesh: '' },
+      o: { terms: 'falls, accidental falls', mesh: 'Accidental Falls' },
+      includeC: false,
+      filters: { yearFrom: '2015', lang: { en: true }, types: { rct: true }, humans: true }
+    });
+  });
+  $('clearPicoBtn').addEventListener('click', function () { writePico({}); });
+
+  // ---------- EZproxy ----------
+  var proxyInput = $('proxy');
+  proxyInput.value = store.get(KEYS.proxy) || '';
+  function refreshProxy() {
+    var v = proxyPrefix(), st = $('proxyState');
+    var names = SOURCES.filter(needsProxy).map(function (s) { return s.name; }).join('、');
+    st.className = 'pstate';
+    if (!v) { st.textContent = '未設定：直接連線。會套用的資料庫：' + names + '。'; }
+    else if (!/^https?:\/\//i.test(v)) { st.textContent = '前綴要以 https:// 開頭，目前不會套用。'; st.classList.add('bad'); }
+    else if (!/url=$/i.test(v)) { st.textContent = '已套用到：' + names + '。提醒：EZproxy 前綴通常以 url= 結尾，請再確認。'; st.classList.add('bad'); }
+    else { st.textContent = '✓ 已套用到：' + names + '。'; st.classList.add('ok'); }
+    refreshLinks();
+  }
+  proxyInput.addEventListener('input', function () { store.set(KEYS.proxy, proxyPrefix()); refreshProxy(); });
+
+  // ---------- 已存檢索 ----------
+  var saved = [];
+  try { saved = normalizeSaved(JSON.parse(store.get(KEYS.saved) || '[]')); } catch (e) { saved = []; }
+  $('storeWarn').hidden = store.ok;
+  function persist() { store.set(KEYS.saved, JSON.stringify(saved)); }
+  function snippet(s) {
+    if (s.query) return s.query;
+    var b = s.pico ? buildPico(s.pico) : null;
+    return b && b.pubmed ? b.pubmed : '（空白）';
+  }
+  function renderSaved() {
+    var ul = $('savedList'); ul.replaceChildren();
+    if (!saved.length) {
+      var li = doc.createElement('li'); li.className = 'empty-list'; li.style.border = '0'; li.style.padding = '0';
+      li.textContent = '還沒有已存檢索。'; ul.appendChild(li); return;
+    }
+    saved.forEach(function (s) {
+      var li = doc.createElement('li');
+      var nm = doc.createElement('span'); nm.className = 'nm'; nm.textContent = s.name;
+      var sn = doc.createElement('span'); sn.className = 'sn'; sn.textContent = snippet(s);
+      var row = doc.createElement('div'); row.className = 'row';
+      var load = doc.createElement('button'); load.type = 'button'; load.className = 'btn small ghost'; load.textContent = '載入';
+      var del = doc.createElement('button'); del.type = 'button'; del.className = 'btn small ghost'; del.textContent = '刪除';
+      var when = doc.createElement('span'); when.className = 'small'; when.textContent = (s.savedAt || '').slice(0, 10);
+      load.addEventListener('click', function () {
+        qInput.value = s.query || ''; onQuery();
+        writePico(s.pico || {});
+        toast('已載入「' + s.name + '」');
+      });
+      del.addEventListener('click', function () {
+        if (!global.confirm('刪除「' + s.name + '」？')) return;
+        saved = saved.filter(function (x) { return x.id !== s.id; }); persist(); renderSaved();
+      });
+      row.append(load, del, when);
+      li.append(nm, sn, row); ul.appendChild(li);
+    });
+  }
+  $('saveBtn').addEventListener('click', function () {
+    var q = query(), p = readPico(), b = buildPico(p);
+    if (!q && !b.concepts) { toast('先輸入檢索詞或 PICO 再儲存'); return; }
+    var name = $('saveName').value.trim() || (q || b.plain).slice(0, 40);
+    var existing = saved.filter(function (s) { return s.name === name; })[0];
+    var entry = { id: existing ? existing.id : 's' + Date.now().toString(36), name: name, query: q, pico: b.concepts ? p : null, savedAt: new Date().toISOString() };
+    if (existing) saved = saved.map(function (s) { return s.id === existing.id ? entry : s; }); else saved.unshift(entry);
+    persist(); renderSaved(); $('saveName').value = '';
+    toast(existing ? '已更新「' + name + '」' : '已儲存「' + name + '」');
+  });
+  $('exportBtn').addEventListener('click', function () {
+    var data = JSON.stringify({ app: 'zotero-bridge-search', version: 1, exportedAt: new Date().toISOString(), searches: saved }, null, 2);
+    try {
+      var url = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+      var a = doc.createElement('a');
+      a.href = url; a.download = 'zotero-bridge-searches-' + new Date().toISOString().slice(0, 10) + '.json';
+      doc.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    } catch (e) {
+      copyText(data).then(function (ok) { toast(ok ? '無法下載，已改為複製 JSON' : '無法匯出'); });
+    }
+  });
+  $('importBtn').addEventListener('click', function () { $('importFile').click(); });
+  $('importFile').addEventListener('change', function () {
+    var file = this.files && this.files[0];
+    if (!file) return;
+    var input = this;
+    file.text().then(function (txt) {
+      var incoming = normalizeSaved(JSON.parse(txt));
+      if (!incoming.length) { toast('檔案裡沒有可匯入的檢索'); return; }
+      var m = mergeSaved(saved, incoming);
+      saved = m.list; persist(); renderSaved();
+      toast('已匯入 ' + incoming.length + ' 筆（新增 ' + m.added + ' 筆）');
+    }).catch(function () { toast('匯入失敗：不是有效的 JSON 檔'); })
+      .then(function () { input.value = ''; });
+  });
+
+  // ---------- 網址格式表 ----------
+  var tb = $('statusTable').tBodies[0];
+  SOURCES.forEach(function (s) {
+    var tr = doc.createElement('tr');
+    var td1 = doc.createElement('td'); td1.textContent = s.name;
+    var td2 = doc.createElement('td'); var st = doc.createElement('span'); st.className = 'st ' + s.status; st.textContent = STATUS_LABEL[s.status]; td2.appendChild(st);
+    var td3 = doc.createElement('td'); td3.textContent = CHIP_ACCESS[s.access].replace('🔒 ', '');
+    var td4 = doc.createElement('td'); var c = doc.createElement('code');
+    c.textContent = s.status === 'home' || !s.search ? s.home : s.search + (s.suffix ? '（＋' + s.suffix.trim() + '）' : '');
+    td4.appendChild(c);
+    tr.append(td1, td2, td3, td4); tb.appendChild(tr);
+  });
+
+  // 初始化
+  markPreset();
+  refreshProxy();
+  onQuery();
+  renderPico();
+  renderSaved();
+})(window);
+</script>
+</body>
+</html>
