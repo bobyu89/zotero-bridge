@@ -1135,6 +1135,13 @@
 			onCommand: (ev, context) => {
 				runSynthesis(getItems(context), getScope(context)).catch(e => Zotero.logError(e));
 			},
+		}, {
+			// Literature review draft (review-draft.js)
+			menuType: "menuitem",
+			l10nID: "zotero-bridge-menu-review-draft",
+			onCommand: (ev, context) => {
+				ZB.reviewDraft.run(getItems(context), getScope(context), context).catch(e => Zotero.logError(e));
+			},
 		});
 		return menus;
 	}
@@ -1430,5 +1437,7 @@
 
 	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime,
 		// for status.js
-		enqueue, notify, buildObsidianIndex, saveQuietly };
+		enqueue, notify, buildObsidianIndex, saveQuietly,
+		// for review-draft.js
+		recordAIUsage, runUsageLine, retryStatus };
 })(this);
