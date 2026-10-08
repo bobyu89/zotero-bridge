@@ -96,6 +96,36 @@ test("NotionClient: resolve data source, upsert flow and container replacement",
 	assert.equal(rest.body.children.length, 50);
 });
 
+test("NotionClient finds pages by many Zotero keys in batches and moves them to the trash", async () => {
+	let calls = [];
+	let fetch = async (url, init) => {
+		let path = url.replace("https://api.notion.com/v1/", "");
+		let body = init.body ? JSON.parse(init.body) : undefined;
+		calls.push({ method: init.method, path, body });
+		if (path === "data_sources/ds-1/query") {
+			let keys = body.filter.or.map(f => f.rich_text.equals);
+			// Two result pages for the first batch
+			if (keys[0] === "library/K0" && !body.start_cursor) return response(200, { results: [{ id: "p0" }], has_more: true, next_cursor: "c2" });
+			return response(200, { results: keys.includes("library/K60") ? [{ id: "p60" }] : [{ id: "p1" }], has_more: false });
+		}
+		if (path.startsWith("pages/")) return response(200, { id: path.slice(6), in_trash: body.in_trash });
+		return response(404, { message: path });
+	};
+	let client = new notion.NotionClient({ token: "t", fetch, sleep: noSleep });
+	let keys = Array.from({ length: 70 }, (_, i) => `library/K${i}`);
+	let pages = await client.findPagesByZoteroKeys("ds-1", keys);
+	assert.deepEqual(pages.map(p => p.id), ["p0", "p1", "p60"]);
+	let queries = calls.filter(c => c.path === "data_sources/ds-1/query");
+	assert.equal(queries.length, 3);
+	assert.equal(queries[0].body.filter.or.length, 50);
+	assert.deepEqual(queries[0].body.filter.or[0], { property: "Zotero Key", rich_text: { equals: "library/K0" } });
+	assert.equal(queries[1].body.start_cursor, "c2");
+	assert.equal(queries[2].body.filter.or.length, 20);
+
+	await client.trashPage("p0");
+	assert.deepEqual(calls.at(-1), { method: "PATCH", path: "pages/p0", body: { in_trash: true } });
+});
+
 test("NotionClient retries 429 and reports API errors", async () => {
 	let n = 0;
 	let fetch = async () => {
