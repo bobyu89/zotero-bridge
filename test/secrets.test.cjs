@@ -201,12 +201,58 @@ test("geckoBackend builds nsILoginInfo the way Zotero's sync code does", () => {
 		assert.deepEqual(constructed, [["@mozilla.org/login-manager/loginInfo;1", "nsILoginInfo", "init"]]);
 		assert.deepEqual(b.newLogin("chrome://zotero-bridge", "Zotero Bridge", "notionToken", "t").args,
 			["chrome://zotero-bridge", null, "Zotero Bridge", "notionToken", "t", "", ""]);
-		assert.equal(b.logins, global.Services.logins);
+		assert.equal(typeof b.logins.removeLoginAsync, "function");
 		assert.equal(b.keyStore, global.Zotero.OSKeyStore);
 	}
 	finally {
 		delete global.Components;
 		delete global.Services;
 		delete global.Zotero;
+	}
+});
+
+// Zotero 10.0 runs on Firefox 140 ESR: nsILoginManager has removeLogin()/modifyLogin() but not the
+// async versions (found by the e2e test in a real Zotero 10.0.6)
+test("loginManager works with Gecko 140's synchronous removeLogin/modifyLogin and with the async ones", async () => {
+	function gecko140() {
+		let store = [];
+		return {
+			store,
+			async searchLoginsAsync(m) {
+				return store.filter(l => l.origin === m.origin && l.httpRealm === m.httpRealm);
+			},
+			async addLoginAsync(l) {
+				store.push(l);
+				return l;
+			},
+			removeLogin(l) {
+				store.splice(store.indexOf(l), 1);
+			},
+			modifyLogin(old, l) {
+				store[store.indexOf(old)] = l;
+			},
+		};
+	}
+	function gecko153() {
+		let lm = gecko140();
+		let removeLogin = lm.removeLogin;
+		let modifyLogin = lm.modifyLogin;
+		delete lm.removeLogin;
+		delete lm.modifyLogin;
+		lm.removeLoginAsync = async l => removeLogin(l);
+		lm.modifyLoginAsync = async (o, l) => modifyLogin(o, l);
+		return lm;
+	}
+	for (let lm of [gecko140(), gecko153()]) {
+		let store = secrets.createStore({
+			logins: secrets.loginManager(lm),
+			newLogin: (origin, httpRealm, username, password) => ({ origin, httpRealm, username, password }),
+			prefs: { get: () => "", clear: () => {} },
+		});
+		await store.set("notionToken", "one");
+		await store.set("notionToken", "two");
+		assert.deepEqual(lm.store.map(l => l.password), ["two"]);
+		await store.clear("notionToken");
+		assert.deepEqual(lm.store, []);
 	}
 });

@@ -716,6 +716,8 @@ const TESTS = [
 		needs: ["sync to Obsidian writes notes, frontmatter, .base and Chinese APA (ZB.main.run, ai: none)"],
 		timeout: 60000,
 		async fn(d) {
+			// With a Notion token set, auto-sync would also try Notion (no database configured here)
+			eq(await zb().secrets.get("notionToken"), "", "notionToken left over from an earlier test");
 			setPref("autoSync", true);
 			try {
 				ctx.book.setField("abstractNote", "E2E auto-sync marker 4711.");

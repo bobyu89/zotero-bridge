@@ -60,6 +60,10 @@ let rows = [];
 for (let t of results.tests) {
 	let mark = t.ok ? "PASS" : t.skipped ? "SKIP" : "FAIL";
 	console.log(`${mark}  ${t.name}${t.ms !== undefined ? ` (${t.ms} ms)` : ""}`);
+	if (t.details && Object.keys(t.details).length) {
+		let json = JSON.stringify(t.details);
+		console.log(`      ${json.length > 600 ? json.slice(0, 600) + "…" : json}`);
+	}
 	if (!t.ok) {
 		console.log(String(t.error).split("\n").map(l => "      " + l).join("\n"));
 		for (let m of t.pluginErrors || []) console.log(`      plugin error: ${m.text} (${m.source})${m.stack ? "\n        " + m.stack.split("\n").join("\n        ") : ""}`);
