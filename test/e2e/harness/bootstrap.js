@@ -949,6 +949,14 @@ async function runTest(t, passed) {
 	if (allowed.length) rec.allowedErrors = allowed;
 	let otherErrors = during.filter(m => m.kind === "error" && !isPluginMessage(m));
 	if (otherErrors.length) rec.otherConsoleErrors = otherErrors.slice(0, 10);
+	// An error without a source (a promise rejected with undefined, a failed Fluent translation) can't
+	// be attributed; Zotero without the plugin logs none (baseline), so count it against the test
+	let unattributed = otherErrors.filter(m => !m.source && !m.stack);
+	if (unattributed.length && rec.ok) {
+		rec.ok = false;
+		rec.error = `console error(s) without a source during this test (e.g. a rejected promise or a failed Fluent translation): `
+			+ unattributed.slice(0, 3).map(m => m.text).join(" | ");
+	}
 	rec.ms = Date.now() - start;
 	if (rec.ok) passed.add(t.name);
 	log(`${rec.ok ? "PASS" : "FAIL"} ${t.name} (${rec.ms} ms)${rec.ok ? "" : `\n       ${rec.error.split("\n")[0]}`}`);
