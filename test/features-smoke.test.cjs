@@ -226,7 +226,7 @@ const GATED_IN_GUIDED = {
 test("a fresh profile starts in 研究生引導: the gated menus hide, and come back with 進階 without a restart", async () => {
 	let env = await setup();
 	let F = env.ZB.features;
-	assert.equal(env.prefStore[P + "features.version"], 1, "the migration ran once at startup");
+	assert.equal(env.prefStore[P + "features.version"], F.MIGRATION_VERSION, "the migration ran once at startup");
 	assert.equal(F.currentPreset(), "guided");
 	let registered = env.menus.map(o => o.menuID);
 	for (let [id, feature] of Object.entries(GATED_IN_GUIDED)) {
@@ -234,7 +234,7 @@ test("a fresh profile starts in 研究生引導: the gated menus hide, and come 
 	}
 	for (let id of ["zotero-bridge-menu-sync", "zotero-bridge-menu-regenerate", "zotero-bridge-search-tools", "zotero-bridge-screen-tools-dedup",
 		"zotero-bridge-menu-dashboard", "zotero-bridge-menu-concepts-update", "zotero-bridge-menu-export-library", "zotero-bridge-appraisal-tools-summary",
-		"zotero-bridge-menu-status"]) {
+		"zotero-bridge-menu-status", "zotero-bridge-classify-items", "zotero-bridge-classify-tools"]) {
 		assert.equal(visible(menuEntry(env, id)), true, `${id} in guided`);
 	}
 	// The item submenu shows (sync is on); the separator before the AI writing entries does not

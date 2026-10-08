@@ -260,6 +260,7 @@ const TESTS = [
 				pubmedWatch: ["init", "shutdown", "runAll", "registerMenus"],
 				dashboard: ["update", "afterSync", "registerMenus"],
 				concepts: ["update", "afterSync", "dashboardSection", "synthesizeFromMenu", "registerMenus"],
+				classify: ["parseRules", "evaluate", "parseTopics", "suggest", "defaultPicks", "planApply", "apply", "undoLast", "readLastRun", "review", "renderReview", "run", "registerMenus"],
 				citationChase: ["chaseCollection", "chaseItems", "importChecked", "registerMenus"],
 				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "registerMenus"],
 				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "registerMenus", "batchParams", "parseResults"],
@@ -356,6 +357,9 @@ const TESTS = [
 				"zotero-bridge-appraisal-collection": "main/library/collection",
 				"zotero-bridge-appraisal-tools": "main/menubar/tools",
 				"zotero-bridge-progress-report-tools": "main/menubar/tools",
+				"zotero-bridge-classify-item": "main/library/item",
+				"zotero-bridge-classify-collection": "main/library/collection",
+				"zotero-bridge-classify-tools": "main/menubar/tools",
 			};
 			d.registered = mine.map(o => `${o.menuID} → ${o.target}`);
 			let problems = [];
@@ -874,6 +878,146 @@ const TESTS = [
 		},
 	},
 	{
+		name: "文獻自動分類 by rules and heuristics creates real sub-collections; undo removes exactly them (ZB.classify)",
+		needs: ["create items with PDF attachments in the real library"],
+		async fn(d) {
+			let C = zb().classify;
+			let libraryID = Zotero.Libraries.userLibraryID;
+			// Rules and the study-design guess only: no AI, no network
+			setPref("classify.ruleList", "跌倒 = title:falls OR tag:跌倒\n中文文獻 = language:zh\n近年 = year>=2020");
+			setPref("classify.topics", false);
+			setPref("classify.pico", false);
+			let topLevel = name => Zotero.Collections.getByLibrary(libraryID).filter(c => !c.deleted && c.name === name);
+			let child = (parent, name) => parent && Zotero.Collections.getByParent(parent.id).find(c => !c.deleted && c.name === name);
+			// Members straight from the database (collectionItems), not from the objects' caches
+			let members = async (collection) => {
+				let ids = await Zotero.DB.columnQueryAsync("SELECT itemID FROM collectionItems WHERE collectionID=?", [collection.id]);
+				return Zotero.Items.get(ids || []).map(i => i.key).sort();
+			};
+			let same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+			let reviewBefore = await members(ctx.collection);
+			try {
+				check(!topLevel("自動分類").length, "a collection 自動分類 already exists before the test");
+				let items = [ctx.english, ctx.chinese, ctx.book, ctx.extra1, ctx.extra2];
+				let plan = await C.suggest(items, { ui: { confirmAI: () => "skip", status: () => {} } });
+				check(plan && Array.isArray(plan.items), `suggest() returned ${JSON.stringify(plan)}`);
+				d.notes = plan.notes;
+				let picks = C.defaultPicks(plan);
+				d.picks = picks.map(p => `${p.itemKey} → ${p.dimension}/${p.value}`);
+				let want = [
+					`${ctx.english.key} → rule/跌倒`, `${ctx.english.key} → rule/近年`,
+					`${ctx.chinese.key} → rule/跌倒`, `${ctx.chinese.key} → rule/中文文獻`, `${ctx.chinese.key} → rule/近年`,
+					`${ctx.extra1.key} → rule/近年`, `${ctx.extra2.key} → design/Cohort`,
+				].sort();
+				check(same(d.picks.slice().sort(), want), `pre-checked suggestions ${JSON.stringify(d.picks)}, expected ${JSON.stringify(want)}`);
+
+				let result = await C.apply(plan, picks);
+				d.apply = result;
+				eq(result.errors.length, 0, `apply() errors: ${result.errors.join("; ")}`);
+				eq(result.added, 7, "memberships added");
+				eq(result.created, 7, "collections created (自動分類, 規則, 跌倒, 中文文獻, 近年, 研究設計, Cohort)");
+				let parent = topLevel("自動分類");
+				eq(parent.length, 1, "top-level collections named 自動分類");
+				let rules = child(parent[0], "規則");
+				let design = child(parent[0], "研究設計");
+				check(rules && design, `folders under 自動分類: ${Zotero.Collections.getByParent(parent[0].id).map(c => c.name).join(", ")}`);
+				let expect = {
+					"跌倒": [ctx.english.key, ctx.chinese.key],
+					"中文文獻": [ctx.chinese.key],
+					"近年": [ctx.english.key, ctx.chinese.key, ctx.extra1.key],
+				};
+				let problems = [];
+				for (let [name, keys] of Object.entries(expect)) {
+					let c = child(rules, name);
+					if (!c) {
+						problems.push(`no 自動分類/規則/${name}`);
+						continue;
+					}
+					let got = await members(c);
+					if (!same(got, keys.slice().sort())) problems.push(`規則/${name} holds ${JSON.stringify(got)}, expected ${JSON.stringify(keys.slice().sort())}`);
+				}
+				let cohort = child(design, "Cohort");
+				if (!cohort) problems.push("no 自動分類/研究設計/Cohort");
+				else if (!same(await members(cohort), [ctx.extra2.key])) problems.push(`研究設計/Cohort holds ${JSON.stringify(await members(cohort))}`);
+				check(!problems.length, problems.join("; "));
+				check(same(await members(ctx.collection), reviewBefore), "the user's collection E2E Review changed");
+				let last = C.readLastRun();
+				check(last && last.libraries.length === 1 && last.libraries[0].created.length === 7, `classify.lastRun ${JSON.stringify(last)}`);
+
+				// Again: everything is reused, nothing added, the undo record stays
+				let again = await C.apply(await C.suggest(items, { ui: { confirmAI: () => "skip", status: () => {} } }), picks);
+				d.again = again;
+				eq(again.created, 0, "collections created by a second identical run");
+				eq(again.added, 0, "memberships added by a second identical run");
+				eq(again.already, 7, "picks already in place on the second run");
+				eq(topLevel("自動分類").length, 1, "top-level 自動分類 after the second run");
+				check(same(C.readLastRun(), last), "a run that changed nothing replaced the undo record");
+
+				// 復原上次分類
+				let undo = await C.undoLast({ silent: true });
+				d.undo = undo;
+				check(undo, "undoLast() returned null");
+				eq(undo.removed, 7, "memberships removed by undo");
+				eq(undo.deleted, 7, "collections deleted by undo");
+				eq(undo.kept.length, 0, `collections kept by undo: ${undo.kept.join(", ")}`);
+				eq(topLevel("自動分類").length, 0, "top-level 自動分類 after undo");
+				let left = await Zotero.DB.valueQueryAsync("SELECT COUNT(*) FROM collections WHERE collectionName IN ('自動分類', '規則', '研究設計', '跌倒', '中文文獻', '近年', 'Cohort')");
+				eq(Number(left), 0, "collections with the run's names left in the database");
+				check(same(await members(ctx.collection), reviewBefore), "the user's collection E2E Review changed after undo");
+				for (let name of ["english", "chinese", "extra1", "extra2"]) {
+					check(!ctx[name].deleted, `${name} was deleted`);
+				}
+				eq(C.readLastRun(), null, "classify.lastRun after undo");
+			}
+			finally {
+				if (C.readLastRun()) await C.undoLast({ silent: true });
+				for (let key of ["classify.ruleList", "classify.topics", "classify.pico"]) Zotero.Prefs.clear(ZB_PREF + key, true);
+			}
+		},
+	},
+	{
+		name: "文獻自動分類 review window opens from chrome://zotero-bridge/ and 取消 writes nothing",
+		needs: ["文獻自動分類 by rules and heuristics creates real sub-collections; undo removes exactly them (ZB.classify)"],
+		timeout: 60000,
+		async fn(d) {
+			let C = zb().classify;
+			setPref("classify.ruleList", "跌倒 = title:falls");
+			setPref("classify.topics", false);
+			let win = null;
+			try {
+				let plan = await C.suggest([ctx.english, ctx.extra2], { ui: { confirmAI: () => "skip", status: () => {} } });
+				let opened = null;
+				let result = C.review(plan, { onOpen: (w) => {
+					opened = w;
+				} });
+				win = await waitFor(() => opened, "the review window (chrome://zotero-bridge/content/classify-review.xhtml) to show the plan", 30000);
+				let doc = win.document;
+				d.url = doc.documentURI;
+				eq(doc.documentURI, C.DIALOG_URL, "review window URL");
+				let root = doc.getElementById(C.DIALOG_ROOT);
+				let boxes = root.querySelectorAll("input[type=checkbox]");
+				d.checkboxes = boxes.length;
+				check(boxes.length >= 2, `only ${boxes.length} checkbox(es) in the review window`);
+				d.summary = root.querySelector(".zb-cl-summary").textContent;
+				check(/^已勾選 \d+ 項/.test(d.summary), `summary line: ${d.summary}`);
+				d.titles = [...root.querySelectorAll(".zb-cl-item-title")].map(h => h.textContent);
+				check(d.titles.includes("Exercise and falls"), `item titles: ${JSON.stringify(d.titles)}`);
+				// classify-review.css is applied (registered chrome package)
+				d.rootDisplay = win.getComputedStyle(root).display;
+				eq(d.rootDisplay, "flex", "display of #zb-classify (is classify-review.css loaded?)");
+				root.querySelector(".zb-cl-cancel").click();
+				eq(await result, null, "review() result after 取消");
+				await waitFor(() => win.closed, "the review window to close after 取消", 10000);
+				eq(Zotero.Collections.getByLibrary(Zotero.Libraries.userLibraryID).filter(c => !c.deleted && c.name === "自動分類").length, 0, "collections named 自動分類 after 取消");
+				eq(C.readLastRun(), null, "classify.lastRun after 取消");
+			}
+			finally {
+				if (win && !win.closed) win.close();
+				for (let key of ["classify.ruleList", "classify.topics"]) Zotero.Prefs.clear(ZB_PREF + key, true);
+			}
+		},
+	},
+	{
 		name: "control: Zotero's own preferences window opens and closes cleanly",
 		timeout: 60000,
 		async fn(d) {
@@ -1023,7 +1167,7 @@ const TESTS = [
 			];
 			// On in both presets
 			const ALWAYS = ["zotero-bridge-menu-sync", "zotero-bridge-search-tools", "zotero-bridge-screen-tools-dedup",
-				"zotero-bridge-menu-dashboard", "zotero-bridge-menu-concepts-update"];
+				"zotero-bridge-menu-dashboard", "zotero-bridge-menu-concepts-update", "zotero-bridge-classify-items", "zotero-bridge-classify-tools"];
 			// What a menu's onShowing decides, with the context MenuManager would pass
 			let visibility = (menu) => {
 				let visible = null;

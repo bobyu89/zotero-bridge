@@ -106,6 +106,14 @@ zotero-bridge-appraisal-summary =
     .label = Zotero Bridge：匯出文獻評讀總表
 zotero-bridge-appraisal-tools-summary =
     .label = 匯出文獻評讀總表（目前分類）
+zotero-bridge-classify-items =
+    .label = Zotero Bridge：自動分類所選文獻…
+zotero-bridge-classify-collection =
+    .label = Zotero Bridge：自動分類這個分類的文獻…
+zotero-bridge-classify-tools =
+    .label = 文獻自動分類（所選文獻或目前分類）…
+zotero-bridge-classify-undo =
+    .label = 復原上次分類
 
 ## Settings → 功能: presets and feature switches (content/features.js, preferences.js)
 zotero-bridge-features-heading = 功能
@@ -140,6 +148,7 @@ zotero-bridge-feature-requires =
     { $req ->
         [sync] 要先打開「同步到 Obsidian／Notion」才會生效。
         [aiNotes] 要先打開「AI 文獻筆記」才會生效。
+        [autoClassify] 要先打開「文獻自動分類」才會生效。
        *[concepts] 要先打開「概念卡片」才會生效。
     }
 zotero-bridge-feature-sync = 同步到 Obsidian／Notion
@@ -156,6 +165,8 @@ zotero-bridge-feature-dashboard = 研究儀表板
 zotero-bridge-feature-dashboard-desc = 在 Obsidian 整理閱讀進度、待讀清單和資料缺漏。只讀 vault，不連網。
 zotero-bridge-feature-concepts = 概念卡片
 zotero-bridge-feature-concepts-desc = 把筆記裡的 [[概念]] 整理成卡片和索引，看得出哪些文獻談同一件事。不呼叫 AI。
+zotero-bridge-feature-auto-classify = 文獻自動分類
+zotero-bridge-feature-auto-classify-desc = 依研究設計、PICO 和你寫的規則建議 Zotero 子分類，你勾選後才放進去，也能整批復原。
 zotero-bridge-feature-search-links = 醫學資料庫搜尋連結
 zotero-bridge-feature-search-links-desc = 把題目、MeSH、PICO 帶到 PubMed、CINAHL、Cochrane、華藝等資料庫。檢索式還是你自己決定。
 zotero-bridge-feature-pubmed-watch = PubMed 新文獻追蹤
@@ -180,3 +191,5 @@ zotero-bridge-feature-progress-report = 進度報告
 zotero-bridge-feature-progress-report-desc = 整理這段時間讀了什麼、篩選到哪裡、下一步，給指導教授看；可以選擇加上 AI 摘要。
 zotero-bridge-feature-concepts-ai = 概念卡片 AI 綜整
 zotero-bridge-feature-concepts-ai-desc = 讓 AI 為一張概念卡片寫綜整草稿，附數字查核清單。
+zotero-bridge-feature-classify-ai = AI 主題分類
+zotero-bridge-feature-classify-ai-desc = 自動分類時讓 AI 依標題和摘要判斷文獻屬於你列的哪些主題；執行前先告訴你篇數和預估費用。

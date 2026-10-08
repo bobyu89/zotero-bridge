@@ -15,7 +15,9 @@
  * Existing installs keep their behaviour: migrate() runs once at startup and, when the profile shows
  * earlier use (a vault, a Notion database, AI usage…), turns the new switches on (advanced) while the
  * prefs that existed before keep the values the user gave them (the batch API, off by default, is
- * turned on unless the user set it). A fresh profile stays on the guided defaults.
+ * turned on unless the user set it). A fresh profile stays on the guided defaults. Switches added in a
+ * later version (features.version) are turned on for profiles already on 進階, and stay at their
+ * defaults otherwise.
  *
  * Pure catalog + functions over a prefs accessor, so Node tests can require this file.
  */
@@ -29,9 +31,9 @@
 	}
 })(this, function (scope) {
 	const PREF = "extensions.zotero-bridge.";
-	// Bumped when a later version needs another one-time migration
+	// Bumped when a later version needs another one-time migration (2: 文獻自動分類 and AI 主題分類)
 	const MIGRATION_PREF = "features.version";
-	const MIGRATION_VERSION = 1;
+	const MIGRATION_VERSION = 2;
 
 	const GROUPS = [
 		{ id: "organize", label: "整理與同步", l10n: "zotero-bridge-feature-group-organize" },
@@ -61,7 +63,8 @@
 	/**
 	 * The catalog. pref: key under extensions.zotero-bridge. (reused = it existed before the switches);
 	 * presets: value per preset; usesAI: calls an AI API (costs money); usesNetwork: connects to the
-	 * internet; requires: features that must be on as well.
+	 * internet; requires: features that must be on as well; since: the features.version that added the
+	 * switch (1 when absent), for the migration of profiles that already had the switches.
 	 */
 	const FEATURES = [
 		// 整理與同步
@@ -86,6 +89,9 @@
 		{ id: "concepts", group: "organize", pref: "feature.concepts", presets: { guided: true, advanced: true },
 			label: "概念卡片",
 			desc: "把筆記裡的 [[概念]] 整理成卡片和索引，看得出哪些文獻談同一件事。不呼叫 AI。" },
+		{ id: "autoClassify", group: "organize", pref: "feature.autoClassify", presets: { guided: true, advanced: true }, since: 2,
+			label: "文獻自動分類",
+			desc: "依研究設計、PICO 和你寫的規則建議 Zotero 子分類，你勾選後才放進去，也能整批復原。" },
 		// 找文獻
 		{ id: "searchLinks", group: "search", pref: "feature.searchLinks", presets: { guided: true, advanced: true }, usesNetwork: true,
 			label: "醫學資料庫搜尋連結",
@@ -128,10 +134,15 @@
 			usesAI: true, usesNetwork: true, requires: ["concepts"],
 			label: "概念卡片 AI 綜整",
 			desc: "讓 AI 為一張概念卡片寫綜整草稿，附數字查核清單。" },
+		{ id: "classifyAI", group: "ai", pref: "feature.classifyAI", presets: { guided: false, advanced: true }, since: 2,
+			usesAI: true, usesNetwork: true, requires: ["autoClassify", "aiNotes"],
+			label: "AI 主題分類",
+			desc: "自動分類時讓 AI 依標題和摘要判斷文獻屬於你列的哪些主題；執行前先告訴你篇數和預估費用。" },
 	];
 
 	for (let f of FEATURES) {
 		f.requires = f.requires || [];
+		f.since = f.since || 1;
 		// conceptsAI → concepts-ai, aiNotes → ai-notes
 		let kebab = f.id.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
 		f.l10n = { name: `zotero-bridge-feature-${kebab}`, desc: `zotero-bridge-feature-${kebab}-desc` };
@@ -244,11 +255,6 @@
 		}).map(([key]) => key);
 	}
 
-	/**
-	 * Once per profile, at startup: an install used before the switches existed gets the new switches
-	 * on (advanced), so nothing it did disappears; prefs that existed before keep their values. A fresh
-	 * install keeps the guided defaults. Returns { preset, evidence } the first time, null afterwards.
-	 */
 	function userSet(s, key) {
 		try {
 			return s.hasUserValue ? !!s.hasUserValue(key) : false;
@@ -258,22 +264,47 @@
 		}
 	}
 
+	/**
+	 * Once per profile and version, at startup.
+	 * From 0 (before the switches): an install used before gets the new switches on (advanced), so
+	 * nothing it did disappears; prefs that existed before keep their values. A fresh install keeps the
+	 * guided defaults. Returns { preset, evidence }.
+	 * From a later version (the switches existed): the switches added since then follow the profile's
+	 * preset: a profile on 進階 (every earlier switch at its advanced value) gets them at their advanced
+	 * value, any other profile keeps the defaults. Returns { preset, evidence: [], added }.
+	 * Returns null once the profile is up to date.
+	 */
 	function migrate() {
 		let s = store();
 		let done = Number(s.get(MIGRATION_PREF)) || 0;
 		if (done >= MIGRATION_VERSION) return null;
-		let evidence = priorUse(key => s.get(key));
-		if (evidence.length) {
-			// Written even where the default matches, so a later default change can't switch them off
-			for (let f of FEATURES) {
-				if (!f.reused) setEnabled(f.id, f.presets.advanced);
-				// A reused pref that was off by default (the batch API) is turned on too, unless the
-				// user set it themselves, so an upgrade lands on a clean 進階
-				else if (f.presets.advanced !== f.presets.guided && !userSet(s, f.pref)) setEnabled(f.id, f.presets.advanced);
+		let result;
+		if (done < 1) {
+			let evidence = priorUse(key => s.get(key));
+			if (evidence.length) {
+				// Written even where the default matches, so a later default change can't switch them off
+				for (let f of FEATURES) {
+					if (!f.reused) setEnabled(f.id, f.presets.advanced);
+					// A reused pref that was off by default (the batch API) is turned on too, unless the
+					// user set it themselves, so an upgrade lands on a clean 進階
+					else if (f.presets.advanced !== f.presets.guided && !userSet(s, f.pref)) setEnabled(f.id, f.presets.advanced);
+				}
 			}
+			result = { preset: evidence.length ? "advanced" : "guided", evidence };
+		}
+		else {
+			let earlier = FEATURES.filter(f => f.since <= done);
+			let added = FEATURES.filter(f => f.since > done);
+			let advanced = earlier.every(f => rawValue(f.id) === f.presets.advanced);
+			if (advanced) {
+				for (let f of added) {
+					if (!userSet(s, f.pref)) setEnabled(f.id, f.presets.advanced);
+				}
+			}
+			result = { preset: advanced ? "advanced" : presetOf(snapshot()), evidence: [], added: added.map(f => f.id) };
 		}
 		s.set(MIGRATION_PREF, MIGRATION_VERSION);
-		return { preset: evidence.length ? "advanced" : "guided", evidence };
+		return result;
 	}
 
 	/**

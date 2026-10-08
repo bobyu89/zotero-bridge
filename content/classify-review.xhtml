@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	文獻自動分類: the review window (content/classify.js review() opens it and renderReview() fills it).
+	Layout and tokens: DESIGN.md (Review window). The plugin's own code draws everything inside #zb-classify;
+	this file only provides the window, Zotero's stylesheets (theme variables) and the plugin's stylesheet.
+-->
+<?xml-stylesheet href="chrome://global/skin/global.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero/skin/zotero.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero-bridge/content/classify-review.css" type="text/css"?>
+<window id="zotero-bridge-classify-window"
+	xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+	xmlns:html="http://www.w3.org/1999/xhtml"
+	title="文獻自動分類"
+	width="760"
+	height="640"
+	persist="width height screenX screenY">
+	<html:div id="zb-classify" class="zb-classify"/>
+</window>

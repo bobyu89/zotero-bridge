@@ -1424,6 +1424,8 @@
 		menuIDs.push(...ZB.progressReport.registerMenus({ pluginID, icon }));
 		// Concept hub notes (concepts.js): Tools menu
 		menuIDs.push(...ZB.concepts.registerMenus({ pluginID, icon }));
+		// 文獻自動分類 into Zotero sub-collections (classify.js): item, collection and Tools menus
+		menuIDs.push(...ZB.classify.registerMenus({ pluginID, icon }));
 		// Claude Message Batches for bulk AI notes (ai-batch.js): Tools menu
 		menuIDs.push(...ZB.aiBatch.registerMenus({ pluginID, icon }));
 	}

@@ -78,7 +78,7 @@ The surface is **Operate** mode. A nursing graduate student opens settings to ge
 - Zotero's own CSS variables for every color, so light and dark themes and high contrast follow automatically.
 - Sizes in `em`, so Zotero's font-size setting scales the whole pane.
 - Progressive disclosure twice over: sections of a switched-off feature disappear, and expert options sit behind a closed `<details>`.
-- Standard controls only: native checkboxes, radios, buttons, XUL menulists. No custom switches, no modals.
+- Standard controls only: native checkboxes, radios, buttons, XUL menulists. No custom switches, no modals; the only window of the plugin's own is the 文獻自動分類 review, opened on request.
 - Traditional Chinese copy; method terms (PICO, MeSH, CASP, JBI, PRISMA) stay in English.
 
 ## Colors
@@ -125,7 +125,7 @@ A restrained, borrowed palette: neutral fills from Zotero, its accent for select
 
 Single column, the width of Zotero's settings content area. The 功能 block caps its text and rows at 46em so lines stay readable on wide windows. Spacing runs on a 0.25em step scale (0.25, 0.5, 0.75, 1, 1.5em): tight inside a row (0.25–0.5em), 0.5em between rows with a hairline, 1.5em above each feature group. Preset options sit side by side on wide panes and stack when narrower than about 32em (CSS grid `auto-fit, minmax(16em, 1fr)`).
 
-Section order follows the feature groups: 功能 → Obsidian → Notion → 分流規則 → 自動同步 → 閱讀狀態 → 中文 APA → 參考文獻檔 → 概念卡片 → 醫學文獻快速搜尋 → NCBI → PubMed 追蹤 → 引文追蹤 → 篩選 → AI 服務 → 本月 AI 用量.
+Section order follows the feature groups: 功能 → Obsidian → Notion → 分流規則 → 自動同步 → 閱讀狀態 → 中文 APA → 參考文獻檔 → 概念卡片 → 文獻自動分類 → 醫學文獻快速搜尋 → NCBI → PubMed 追蹤 → 引文追蹤 → 篩選 → AI 服務 → 本月 AI 用量.
 
 In the item pane (no stylesheet available), the same rhythm is applied inline: the per-item tool rows (each with its own 2px/6px margins) sit in one block with a hairline below, then the AI note; actions sit in a wrapping row with a 6px gap.
 
@@ -166,6 +166,17 @@ Gently rounded: 6px on preset options, 4px on markers, the PubMed watch boxes an
 
 ### Section disclosure
 - Every settings section (and sub-block) carries `data-zb-feature="<feature IDs>"`; it shows while any of those features is on and comes back the moment one is turned on. Sections that serve several features list them all (the NCBI block serves PubMed watch and search links).
+
+### Live validation (`.zb-validate`)
+- Under a textarea the plugin parses (文獻自動分類's rules and topics): what the parser makes of it, in Pencil at 0.92em, announced with `role="status"` and wired to the textarea with `aria-describedby`.
+- **Error:** the words carry it (「第 3 行：少了右括號 )」), set in Ink at 600; the textarea gets `aria-invalid="true"` and an Ink border. No red text (it fails contrast on the dark theme), no icons.
+
+### Review window (文獻自動分類, `classify-review.xhtml`)
+The one place the plugin opens a window of its own: a non-modal Zotero dialog, because the user has to look over many items before anything is written. It uses the same borrowed palette and spacing as the settings pane (`classify-review.css`).
+- **Head** (Zotero's sidepane material, Hairline below): a 600 title, one Pencil sentence that says the judgement is the user's and that nothing is removed, the target (「放在：我的文獻庫 › 自動分類」), notes about skipped dimensions as a plain list, then one row per dimension with its name (600), a count and 「全選」「全不選」 buttons.
+- **List** (scrolls): one block per item, Hairline between blocks, the title in 600 and year · journal in Pencil. Suggestions sit in a two-column grid per dimension: the dimension name in Pencil on the left, native checkboxes on the right, each with the value (600 when ticked, Pencil 400 when not) and its source and confidence in Pencil (「規則推測・高｜標題有「randomized」」). Items without suggestions fold into one `<details>`.
+- **Foot** (sidepane material, Hairline above): the live count as a `role="status"` line (「已勾選 12 項：會建立 4 個子分類，加入 10 筆」), then 「取消」 and 「套用」 (600). Esc cancels; a decision disables both buttons.
+- **Focus:** the first checkbox gets focus; 2px Accent outlines on checkboxes, buttons and the folded list's summary.
 
 ### Item pane section
 - **Tools block:** status, screening, search links and appraisal rows, each only when its feature is on, inside a `<section>` with a Hairline below.

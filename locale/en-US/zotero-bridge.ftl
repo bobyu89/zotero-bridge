@@ -106,6 +106,14 @@ zotero-bridge-appraisal-summary =
     .label = Zotero Bridge: Export appraisal summary
 zotero-bridge-appraisal-tools-summary =
     .label = Export appraisal summary (current collection)
+zotero-bridge-classify-items =
+    .label = Zotero Bridge: Auto-classify Selected Items…
+zotero-bridge-classify-collection =
+    .label = Zotero Bridge: Auto-classify Items in This Collection…
+zotero-bridge-classify-tools =
+    .label = Auto-classify Items (Selected Items or Collection)…
+zotero-bridge-classify-undo =
+    .label = Undo Last Classification
 
 ## Settings → 功能: presets and feature switches (content/features.js, preferences.js)
 zotero-bridge-features-heading = Features
@@ -140,6 +148,7 @@ zotero-bridge-feature-requires =
     { $req ->
         [sync] Turn on “Sync to Obsidian / Notion” first.
         [aiNotes] Turn on “AI literature notes” first.
+        [autoClassify] Turn on “Auto-classification” first.
        *[concepts] Turn on “Concept cards” first.
     }
 zotero-bridge-feature-sync = Sync to Obsidian / Notion
@@ -156,6 +165,8 @@ zotero-bridge-feature-dashboard = Research dashboard
 zotero-bridge-feature-dashboard-desc = Reading progress, the to-read list and data gaps in Obsidian. Reads only the vault; works offline.
 zotero-bridge-feature-concepts = Concept cards
 zotero-bridge-feature-concepts-desc = Turns the [[concepts]] in your notes into cards and an index, so you can see which papers talk about the same thing. No AI.
+zotero-bridge-feature-auto-classify = Auto-classification
+zotero-bridge-feature-auto-classify-desc = Suggests Zotero sub-collections by study design, PICO and your own rules; only what you tick is added, and a whole run can be undone.
 zotero-bridge-feature-search-links = Medical database search links
 zotero-bridge-feature-search-links-desc = Takes the title, MeSH terms and PICO to PubMed, CINAHL, Cochrane, Airiti and more. The search strategy is still yours.
 zotero-bridge-feature-pubmed-watch = PubMed new-literature watch
@@ -180,3 +191,5 @@ zotero-bridge-feature-progress-report = Progress report
 zotero-bridge-feature-progress-report-desc = What you read, how far screening got and what is next, for your advisor; an AI summary is optional.
 zotero-bridge-feature-concepts-ai = AI synthesis for concept cards
 zotero-bridge-feature-concepts-ai-desc = Let an AI draft a synthesis for one concept card, with a checklist of numbers to verify.
+zotero-bridge-feature-classify-ai = AI topic classification
+zotero-bridge-feature-classify-ai-desc = Lets an AI decide which of your topics each item belongs to, from title and abstract; you see the item count and estimated cost first.

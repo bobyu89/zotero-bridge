@@ -223,6 +223,55 @@
 		}
 	}
 
+	// ---------- 文獻自動分類: live validation of the rule and topic lists (classify.js) ----------
+
+	/** Show what the parser makes of a textarea under it; errors name the line. */
+	function validateList(textareaID, statusID, parse, describeOK) {
+		let bridge = Zotero.ZoteroBridge;
+		let ta = document.getElementById(textareaID);
+		let status = document.getElementById(statusID);
+		if (!ta || !status || !bridge || !bridge.classify) return;
+		let { errors, ok } = parse(bridge.classify, ta.value);
+		let lines = errors.length ? bridge.classify.describeErrors(errors) : [describeOK(ok)];
+		status.textContent = lines.join("\n");
+		status.classList.toggle("is-error", errors.length > 0);
+		if (errors.length) ta.setAttribute("aria-invalid", "true");
+		else ta.removeAttribute("aria-invalid");
+	}
+
+	const CLASSIFY_LISTS = [
+		["zb-classify-rules", "zb-classify-rules-status", (C, text) => {
+			let r = C.parseRules(text);
+			return { errors: r.errors, ok: r.rules.length };
+		}, n => (n ? `${n} 條規則，格式都正確。` : "還沒有規則。")],
+		["zb-classify-topics", "zb-classify-topics-status", (C, text) => {
+			let r = C.parseTopics(text);
+			return { errors: r.errors, ok: r.topics.length };
+		}, n => (n ? `${n} 個主題。` : "還沒有主題。")],
+	];
+
+	function setupClassify() {
+		for (let [taID, statusID, parse, describeOK] of CLASSIFY_LISTS) {
+			let ta = document.getElementById(taID);
+			if (!ta) continue;
+			let run = () => {
+				try {
+					validateList(taID, statusID, parse, describeOK);
+				}
+				catch (e) {
+					// The pane may already be closed
+				}
+			};
+			if (!ta.dataset.zbBound) {
+				ta.dataset.zbBound = "1";
+				ta.addEventListener("input", run);
+			}
+			// The bound pref fills the textarea after the pane loads: validate again then
+			run();
+			setTimeout(run, 0);
+		}
+	}
+
 	// ---------- 功能: presets and feature switches (features.js) ----------
 
 	const ZB_PREF = "extensions.zotero-bridge.";
@@ -423,6 +472,7 @@
 			renderRules();
 			renderWatches();
 			renderSearchSources();
+			setupClassify();
 			updateProviderBoxes();
 			renderUsage();
 			loadSecrets();
