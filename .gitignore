@@ -1,3 +1,5 @@
 node_modules/
 # Built plugin is committed so it can be downloaded directly
 !dist/
+# Build copy of content/appraisal-tools.js for GitHub Pages (made by .github/workflows/pages.yml)
+site/appraisal-tools.js

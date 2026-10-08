@@ -1,11 +1,13 @@
 name: pages
 
-# Publishes site/ (install wizard index.html + literature search search.html) to GitHub Pages: https://bobyu89.github.io/zotero-bridge/
+# Publishes site/ (install wizard index.html + literature search search.html + appraisal checklists appraisal.html) to GitHub Pages: https://bobyu89.github.io/zotero-bridge/
+# appraisal.html loads the shared checklist catalog, copied from content/appraisal-tools.js at deploy time (site/appraisal-tools.js is git-ignored).
 on:
   push:
     branches: [main]
     paths:
       - "site/**"
+      - "content/appraisal-tools.js"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -26,6 +28,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Copy shared appraisal checklist catalog into site/
+        run: cp content/appraisal-tools.js site/appraisal-tools.js
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
