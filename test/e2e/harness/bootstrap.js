@@ -209,7 +209,7 @@ function fmValue(fm, key) {
 	return m ? m[1].trim().replace(/^"(.*)"$/, "$1") : undefined;
 }
 
-const ctx = {};
+const ctx = { l10nSourceErrors: [] };
 
 // ---------- tests ----------
 
@@ -229,8 +229,8 @@ const TESTS = [
 				+ `softDisabled=${addon.softDisabled}); appDisabled usually means Zotero rejected manifest.json (strict_min_version/strict_max_version)`);
 			eq(addon.version, ctx.expectedVersion, "installed plugin version differs from manifest.json");
 		},
-		// Startup errors are judged by the next tests (after the control)
-		allowUnattributed: ["uncaught exception: undefined"],
+		// Startup errors are judged by "no plugin errors in the console during startup" (against the baseline)
+		allowUnattributed: ["uncaught exception: undefined", "uncaught exception: undefined"],
 	},
 	{
 		name: "Zotero.ZoteroBridge is set and has every module",
@@ -275,132 +275,6 @@ const TESTS = [
 		},
 	},
 	{
-		name: "control: an item pane section registered by the harness itself",
-		async fn(d) {
-			// Zotero's collapsible-section asks document.l10n for "pane-<paneID>" without handling the
-			// rejection; a plugin pane ID (namespaced with the plugin ID) can't be a Fluent ID, so every
-			// registered section may log "uncaught exception: undefined". See what a bare section logs.
-			let from = messages.length;
-			let id = Zotero.ItemPaneManager.registerSection({
-				paneID: "zb-e2e-control",
-				pluginID: "zb-e2e-harness@bobyu89.github.io",
-				header: { l10nID: "zotero-bridge-pane-header", icon: "chrome://zotero/skin/16/universal/info.svg" },
-				sidenav: { l10nID: "zotero-bridge-pane-sidenav", icon: "chrome://zotero/skin/20/universal/info.svg" },
-				onRender: ({ body }) => {
-					body.textContent = "control";
-				},
-			});
-			check(id, "registerSection() for the control section failed");
-			await delay(1500);
-			Zotero.ItemPaneManager.unregisterSection(id);
-			await delay(500);
-			ctx.sectionControlErrors = messages.slice(from).filter(m => m.kind === "error").map(m => m.text);
-			d.errors = ctx.sectionControlErrors;
-		},
-		get allowUnattributed() {
-			return ctx.sectionControlErrors || [];
-		},
-	},
-	{
-		name: "diagnose: which step logs uncaught exception: undefined",
-		async fn(d) {
-			let win = mainWindow();
-			let doc = win.document;
-			let step = async (name, fn) => {
-				let from = messages.length;
-				try {
-					await fn();
-				}
-				catch (e) {
-					d[name] = `threw ${e}`;
-					return;
-				}
-				await delay(1500);
-				d[name] = messages.slice(from).filter(m => m.kind === "error").map(m => m.text);
-			};
-			let mine = (Zotero.ItemPaneManager.customSectionData.options || []).find(o => o.pluginID === PLUGIN_ID);
-			await step("reinsertFTL", () => {
-				doc.querySelector('link[href="zotero-bridge.ftl"]').remove();
-				win.MozXULElement.insertFTLIfNeeded("zotero-bridge.ftl");
-			});
-			let ids = [];
-			await step("sectionCloneAllHooks", () => {
-				ids.push(Zotero.ItemPaneManager.registerSection({
-					paneID: "zb-e2e-clone1", pluginID: "zb-e2e-harness@bobyu89.github.io",
-					header: mine.header, sidenav: mine.sidenav,
-					onInit: mine.onInit, onItemChange: mine.onItemChange, onRender: mine.onRender,
-				}));
-			});
-			await step("sectionItemChangeOnly", () => {
-				ids.push(Zotero.ItemPaneManager.registerSection({
-					paneID: "zb-e2e-clone2", pluginID: "zb-e2e-harness@bobyu89.github.io",
-					header: mine.header, sidenav: mine.sidenav,
-					onItemChange: ({ setEnabled }) => {
-						setEnabled(false);
-						return true;
-					},
-					onRender: () => {},
-				}));
-			});
-			await step("sectionPluginIcon", () => {
-				ids.push(Zotero.ItemPaneManager.registerSection({
-					paneID: "zb-e2e-clone3", pluginID: "zb-e2e-harness@bobyu89.github.io",
-					header: { l10nID: mine.header.l10nID, icon: mine.header.icon },
-					sidenav: { l10nID: mine.sidenav.l10nID, icon: mine.sidenav.icon },
-					onRender: () => {},
-				}));
-				d.icon = mine.header.icon;
-			});
-			await step("unregisterClones", () => {
-				for (let id of ids) Zotero.ItemPaneManager.unregisterSection(id);
-			});
-			await step("failingElements", async () => {
-				let failing = [];
-				let all = [];
-				let walk = (root) => {
-					for (let el of root.querySelectorAll("*")) {
-						if (el.hasAttribute("data-l10n-id")) all.push(el);
-						let sr = el.openOrClosedShadowRoot || el.shadowRoot;
-						if (sr) walk(sr);
-					}
-				};
-				walk(doc);
-				d.l10nElements = all.length;
-				for (let el of all) {
-					try {
-						await doc.l10n.translateElements([el]);
-					}
-					catch (e) {
-						failing.push(`${el.localName}#${el.id || ""}.${el.className || ""} in ${el.getRootNode().host ? el.getRootNode().host.localName : "document"}: ${el.dataset.l10nId} args=${el.dataset.l10nArgs || ""} (${e})`);
-					}
-				}
-				d.failingElements = failing.slice(0, 20);
-			});
-			await step("translateRoots", async () => {
-				try {
-					await doc.l10n.translateRoots();
-				}
-				catch (e) {
-					d.translateRootsRejected = String(e);
-				}
-			});
-			await step("updatePluginSource", () => {
-				let reg = win.L10nRegistry.getInstance();
-				d.sources = reg.getSourceNames();
-				let src = reg.getSource("zotero-plugins");
-				if (src) reg.updateSources([src]);
-			});
-			let menu = Zotero.MenuManager._menuManager.options.find(o => o.pluginID === PLUGIN_ID);
-			await step("menuClone", () => {
-				let id = Zotero.MenuManager.registerMenu({
-					menuID: "zb-e2e-menu", pluginID: "zb-e2e-harness@bobyu89.github.io", target: menu.target,
-					menus: [{ menuType: "menuitem", l10nID: "zotero-bridge-menu-settings" }],
-				});
-				Zotero.MenuManager.unregisterMenu(id);
-			});
-		},
-	},
-	{
 		name: "no plugin errors in the console during startup",
 		async fn(d) {
 			let all = startupMessages();
@@ -414,6 +288,9 @@ const TESTS = [
 			let baseline = null;
 			try {
 				baseline = JSON.parse(await IOUtils.readUTF8(PathUtils.join(workDir, "baseline.json")));
+				let reg = baseline.diag && baseline.diag.registerMockSource;
+				ctx.l10nSourceErrors = Array.isArray(reg) ? reg : [];
+				d.baselineDiagnostics = baseline.diag;
 			}
 			catch (e) {
 				d.baseline = `no baseline.json (${e.message || e})`;
@@ -421,10 +298,19 @@ const TESTS = [
 			if (baseline) {
 				let known = new Set(baseline.errors.map(m => m.text));
 				d.baselineErrors = baseline.errors.map(m => m.text);
-				// Errors a bare item pane section causes as well (control test) are Zotero's
-				let zoteroOwn = new Set(ctx.sectionControlErrors || []);
-				d.explainedBySectionControl = errors.filter(m => !known.has(m.text) && zoteroOwn.has(m.text)).map(m => m.text);
-				let extra = errors.filter(m => !isPluginMessage(m) && !known.has(m.text) && !zoteroOwn.has(m.text));
+				// Zotero without the plugin logs these as soon as any l10n source is registered, which
+				// Zotero.Plugins.registerLocales() does for every plugin with a locale/ folder
+				// (as often as one registration logs them: the plugin's source is registered once at startup)
+				let allowance = ctx.l10nSourceErrors.slice();
+				d.explainedByL10nSourceRegistration = [];
+				let extra = errors.filter((m) => {
+					if (isPluginMessage(m) || known.has(m.text)) return false;
+					let i = allowance.indexOf(m.text);
+					if (i === -1) return true;
+					allowance.splice(i, 1);
+					d.explainedByL10nSourceRegistration.push(m.text);
+					return false;
+				});
 				d.notInBaseline = extra;
 				check(!extra.length, `console error(s) at startup that Zotero without the plugin does not log: `
 					+ extra.slice(0, 3).map(m => `${m.text} (${m.source || "no source"})`).join(" | "));
@@ -1085,8 +971,9 @@ const TESTS = [
 			await waitFor(() => mainWindow().document.querySelector('link[href="zotero-bridge.ftl"]'), "FTL link back in the main window", 10000);
 			d.menus = menus;
 		},
+		// disable() and enable() each rebuild Zotero's plugin l10n source (see the startup test)
 		get allowUnattributed() {
-			return ctx.sectionControlErrors || [];
+			return [...ctx.l10nSourceErrors, ...ctx.l10nSourceErrors];
 		},
 	},
 ];
@@ -1141,7 +1028,15 @@ async function runTest(t, passed) {
 	if (otherErrors.length) rec.otherConsoleErrors = otherErrors.slice(0, 10);
 	// An error without a source (a promise rejected with undefined, a failed Fluent translation) can't
 	// be attributed; Zotero without the plugin logs none (baseline), so count it against the test
-	let unattributed = otherErrors.filter(m => !m.source && !m.stack && !(t.allowUnattributed || []).includes(m.text));
+	// allowUnattributed lists texts that may occur, once per entry
+	let allowance = (t.allowUnattributed || []).slice();
+	let unattributed = otherErrors.filter((m) => {
+		if (m.source || m.stack) return false;
+		let i = allowance.indexOf(m.text);
+		if (i === -1) return true;
+		allowance.splice(i, 1);
+		return false;
+	});
 	if (unattributed.length && rec.ok) {
 		rec.ok = false;
 		rec.error = `console error(s) without a source during this test (e.g. a rejected promise or a failed Fluent translation): `
@@ -1213,8 +1108,8 @@ async function baseline() {
 		await Zotero.uiReadyPromise;
 		await delay(10000);
 		let errors = startupMessages().filter(m => m.kind === "error");
-		// Diagnostics: does the main window's re-translation fail without the plugin too, and does
-		// registering a plugin-like l10n source make it log?
+		// Without the plugin: does the main window's re-translation fail, and what does registering an
+		// l10n source log (Zotero.Plugins.registerLocales does that for every plugin with locale files)?
 		let diag = {};
 		let win = Zotero.getMainWindow();
 		try {
