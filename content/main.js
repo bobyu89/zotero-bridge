@@ -504,6 +504,76 @@
 		return page.url;
 	}
 
+	// ---------- batch state: stop and resume ----------
+
+	// Manual runs of more than one item keep their unfinished items in a pref, so a batch that was
+	// stopped, interrupted (Zotero quit or crashed) or had failures can be resumed later.
+	// { action: { targets, ai }, remaining: ["libraryID/KEY"], failed: [...], total, running, startedAt }
+	const BATCH_PREF = "batch.pending";
+	let currentBatch = null;
+
+	function itemRef(item) {
+		return `${item.libraryID}/${item.key}`;
+	}
+
+	function readPendingBatch() {
+		try {
+			let batch = JSON.parse(pref(BATCH_PREF) || "null");
+			if (!batch || !Array.isArray(batch.remaining) || !Array.isArray(batch.failed)) return null;
+			return batch.remaining.length + batch.failed.length ? batch : null;
+		}
+		catch (e) {
+			return null;
+		}
+	}
+
+	function writePendingBatch(batch) {
+		try {
+			Zotero.Prefs.set(PREF + BATCH_PREF, batch ? JSON.stringify(batch) : "", true);
+		}
+		catch (e) {
+			Zotero.logError(e);
+		}
+	}
+
+	function pendingCount(batch) {
+		return batch ? batch.remaining.length + batch.failed.length : 0;
+	}
+
+	/** Tools menu: stop the running batch after the item in progress. */
+	function cancelBatch() {
+		if (!currentBatch || currentBatch.cancelled) return false;
+		currentBatch.cancelled = true;
+		currentBatch.onCancel();
+		return true;
+	}
+
+	/** Tools menu: sync the items a stopped, interrupted or partly failed batch left over. */
+	function resumeBatch() {
+		let batch = readPendingBatch();
+		if (!batch) {
+			notify("Zotero Bridge", "沒有未完成的同步。");
+			return Promise.resolve();
+		}
+		let items = [];
+		for (let ref of [...batch.remaining, ...batch.failed]) {
+			let slash = ref.indexOf("/");
+			let item = Zotero.Items.getByLibraryAndKey(Number(ref.slice(0, slash)), ref.slice(slash + 1));
+			if (item && !item.deleted) items.push(item);
+		}
+		if (!items.length) {
+			writePendingBatch(null);
+			notify("Zotero Bridge", "未完成的文獻都已刪除，已清除這筆紀錄。");
+			return Promise.resolve();
+		}
+		return run(items, { targets: batch.action.targets, ai: batch.action.ai, resumed: true });
+	}
+
+	/** Tools menu: forget the unfinished batch. */
+	function discardBatch() {
+		writePendingBatch(null);
+	}
+
 	// ---------- batch runner ----------
 
 	/**
@@ -559,9 +629,32 @@
 
 		let pw = action.silent ? null : new Zotero.ProgressWindow({ closeOnClick: true });
 		if (pw) {
-			pw.changeHeadline("Zotero Bridge");
+			pw.changeHeadline(action.resumed ? "Zotero Bridge：繼續未完成的同步" : "Zotero Bridge");
 			pw.show();
 		}
+		// Only manual batches are tracked; auto-sync runs again on the next change anyway
+		let batch = null;
+		if (!action.silent && (items.length > 1 || action.resumed)) {
+			batch = {
+				action: { targets: [...action.targets], ai: action.ai },
+				remaining: items.map(itemRef),
+				failed: [],
+				total: items.length,
+				running: true,
+				startedAt: nowISO(),
+			};
+			writePendingBatch(batch);
+			if (pw) pw.addDescription("要中途停止：工具 → 停止 Zotero Bridge 同步（處理中的這篇完成後停止）");
+		}
+		let stopLine = null;
+		currentBatch = batch && {
+			cancelled: false,
+			onCancel() {
+				if (pw && !stopLine) {
+					stopLine = new pw.ItemProgress("", "正在停止…（處理中的這篇完成後停止）");
+				}
+			},
+		};
 		let clients = new Map();
 		let ctx = {
 			schemaCache: new Map(),
@@ -578,7 +671,12 @@
 		let ok = 0;
 		let failures = [];
 		let quotes = { total: 0, verified: 0, notFound: 0, unchecked: 0 };
+		let cancelled = false;
 		for (let item of items) {
+			if (currentBatch && currentBatch.cancelled) {
+				cancelled = true;
+				break;
+			}
 			let title = item.getField("title") || item.key;
 			let line = pw ? new pw.ItemProgress(item.getItemTypeIconName(), title) : null;
 			ctx.status = (s) => {
@@ -598,11 +696,27 @@
 			catch (e) {
 				Zotero.logError(e);
 				failures.push(`${title}：${e.message || e}`);
+				if (batch) batch.failed.push(itemRef(item));
 				if (line) {
 					line.setText(`${title} — ${e.message || e}`);
 					line.setError();
 				}
 			}
+			if (batch) {
+				batch.remaining.splice(batch.remaining.indexOf(itemRef(item)), 1);
+				writePendingBatch(batch);
+			}
+		}
+		let stoppedByShutdown = !!(currentBatch && currentBatch.shutdown);
+		currentBatch = null;
+		if (stopLine) {
+			stopLine.setText("已停止");
+			stopLine.setProgress(100);
+		}
+		if (batch) {
+			// Stopped by the plugin shutting down (Zotero quitting, plugin update): remind at next start
+			batch.running = stoppedByShutdown;
+			writePendingBatch(pendingCount(batch) ? batch : null);
 		}
 		if (action.targets.has("obsidian") && ok) {
 			try {
@@ -615,10 +729,14 @@
 		if (pw) {
 			let quoteSummary = items.length > 1 ? ZB.verify.summarize(quotes) : "";
 			pw.addDescription(`完成 ${ok} 筆${failures.length ? `，失敗 ${failures.length} 筆（詳見 說明 → 除錯輸出記錄）` : ""}`
+				+ (cancelled ? `，未處理 ${batch.remaining.length} 筆` : "")
 				+ (quoteSummary ? `；${quoteSummary}` : ""));
+			if (batch && pendingCount(batch)) {
+				pw.addDescription(`要接續：工具 → 繼續未完成的 Zotero Bridge 同步（${pendingCount(batch)} 筆${batch.failed.length ? `，含失敗 ${batch.failed.length} 筆` : ""}）`);
+			}
 			let usageLine = runUsageLine(ctx.usage);
 			if (usageLine) pw.addDescription(usageLine);
-			pw.startCloseTimer(failures.length ? 15000 : 5000);
+			pw.startCloseTimer(failures.length || cancelled ? 15000 : 5000);
 		}
 		else if (failures.length) {
 			notify("Zotero Bridge 自動同步失敗", failures.slice(0, 3).join("\n"));
@@ -1024,11 +1142,35 @@
 			menuID: "zotero-bridge-tools",
 			pluginID,
 			target: "main/menubar/tools",
-			menus: [{
-				menuType: "menuitem",
-				l10nID: "zotero-bridge-menu-settings",
-				onCommand: () => Zotero.Utilities.Internal.openPreferences("zotero-bridge-prefs"),
-			}],
+			menus: [
+				{
+					menuType: "menuitem",
+					l10nID: "zotero-bridge-menu-settings",
+					onCommand: () => Zotero.Utilities.Internal.openPreferences("zotero-bridge-prefs"),
+				},
+				{
+					menuType: "menuitem",
+					l10nID: "zotero-bridge-menu-stop",
+					onShowing: (ev, context) => context.setVisible(!!currentBatch && !currentBatch.cancelled),
+					onCommand: () => cancelBatch(),
+				},
+				{
+					menuType: "menuitem",
+					l10nID: "zotero-bridge-menu-resume",
+					onShowing: (ev, context) => {
+						let count = currentBatch ? 0 : pendingCount(readPendingBatch());
+						context.setVisible(count > 0);
+						if (count) context.setL10nArgs(JSON.stringify({ count }));
+					},
+					onCommand: () => resumeBatch().catch(e => Zotero.logError(e)),
+				},
+				{
+					menuType: "menuitem",
+					l10nID: "zotero-bridge-menu-discard",
+					onShowing: (ev, context) => context.setVisible(!currentBatch && !!readPendingBatch()),
+					onCommand: () => discardBatch(),
+				},
+			],
 		});
 		menuIDs = [itemMenu, collectionMenu, toolsMenu].filter(Boolean);
 		// Bibliography export (export.js): Tools menu + collection context menu
@@ -1195,9 +1337,24 @@
 		registerMenus();
 		registerItemPane();
 		registerNotifier();
+		remindInterruptedBatch();
+	}
+
+	// A batch still marked running at startup was cut off by Zotero quitting or crashing
+	function remindInterruptedBatch() {
+		let batch = readPendingBatch();
+		if (!batch || !batch.running) return;
+		batch.running = false;
+		writePendingBatch(batch);
+		(Zotero.uiReadyPromise || Promise.resolve()).then(() => {
+			notify("Zotero Bridge：上次的同步沒有完成",
+				`還有 ${pendingCount(batch)} 筆文獻沒有同步。要接續：工具 → 繼續未完成的 Zotero Bridge 同步。`);
+		}).catch(e => Zotero.logError(e));
 	}
 
 	function shutdown() {
+		// The batch loop stops before its next item; its pref already lists what is left
+		if (currentBatch) Object.assign(currentBatch, { cancelled: true, shutdown: true });
 		for (let id of menuIDs) Zotero.MenuManager.unregisterMenu(id);
 		menuIDs = [];
 		if (paneID) Zotero.ItemPaneManager.unregisterSection(paneID);
@@ -1211,5 +1368,5 @@
 		ZB.bibliography.shutdown();
 	}
 
-	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime };
+	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime };
 })(this);

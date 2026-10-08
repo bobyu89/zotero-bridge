@@ -22,3 +22,4 @@ pref("extensions.zotero-bridge.usage.ledger", "{}");
 pref("extensions.zotero-bridge.usage.prices", "");
 pref("extensions.zotero-bridge.export.autoUpdate", false);
 pref("extensions.zotero-bridge.export.bibtex", false);
+pref("extensions.zotero-bridge.batch.pending", "");
