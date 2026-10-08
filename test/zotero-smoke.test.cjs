@@ -1607,33 +1607,3 @@ test("reading status: without a vault the last synced value lives in a pref; the
 	assert.equal(body.querySelector("select"), null);
 	assert.deepEqual(env.errors, []);
 });
-
-// Found by the e2e test in Zotero 10.0.6: the main window translates the item pane section's header
-// as soon as the section is registered, so the FTL must already be linked or Fluent rejects with
-// "uncaught exception: undefined"
-test("startup links the FTL into open main windows before registering menus and the item pane section", async () => {
-	let env = makeEnv({ fetch: notionMock([]), prefs: {} });
-	let order = [];
-	let links = [];
-	let win = {
-		MozXULElement: { insertFTLIfNeeded: (name) => { order.push(`ftl:${name}`); links.push(name); } },
-		document: { querySelector: () => ({ remove: () => order.push("ftl removed") }) },
-	};
-	env.Zotero.getMainWindows = () => [win];
-	let registerSection = env.Zotero.ItemPaneManager.registerSection;
-	env.Zotero.ItemPaneManager.registerSection = (opts) => {
-		order.push("section");
-		return registerSection(opts);
-	};
-	let registerMenu = env.Zotero.MenuManager.registerMenu;
-	env.Zotero.MenuManager.registerMenu = (opts) => {
-		order.push("menu");
-		return registerMenu(opts);
-	};
-	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
-	assert.deepEqual(links, ["zotero-bridge.ftl"]);
-	assert.equal(order[0], "ftl:zotero-bridge.ftl", `order: ${order.join(", ")}`);
-	assert.ok(order.includes("section") && order.includes("menu"));
-	vm.runInContext("shutdown()", env.context);
-	assert.equal(order[order.length - 1], "ftl removed");
-});

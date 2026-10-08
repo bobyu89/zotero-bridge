@@ -229,6 +229,8 @@ const TESTS = [
 				+ `softDisabled=${addon.softDisabled}); appDisabled usually means Zotero rejected manifest.json (strict_min_version/strict_max_version)`);
 			eq(addon.version, ctx.expectedVersion, "installed plugin version differs from manifest.json");
 		},
+		// Startup errors are judged by the next tests (after the control)
+		allowUnattributed: ["uncaught exception: undefined"],
 	},
 	{
 		name: "Zotero.ZoteroBridge is set and has every module",
@@ -273,6 +275,33 @@ const TESTS = [
 		},
 	},
 	{
+		name: "control: an item pane section registered by the harness itself",
+		async fn(d) {
+			// Zotero's collapsible-section asks document.l10n for "pane-<paneID>" without handling the
+			// rejection; a plugin pane ID (namespaced with the plugin ID) can't be a Fluent ID, so every
+			// registered section may log "uncaught exception: undefined". See what a bare section logs.
+			let from = messages.length;
+			let id = Zotero.ItemPaneManager.registerSection({
+				paneID: "zb-e2e-control",
+				pluginID: "zb-e2e-harness@bobyu89.github.io",
+				header: { l10nID: "zotero-bridge-pane-header", icon: "chrome://zotero/skin/16/universal/info.svg" },
+				sidenav: { l10nID: "zotero-bridge-pane-sidenav", icon: "chrome://zotero/skin/20/universal/info.svg" },
+				onRender: ({ body }) => {
+					body.textContent = "control";
+				},
+			});
+			check(id, "registerSection() for the control section failed");
+			await delay(1500);
+			Zotero.ItemPaneManager.unregisterSection(id);
+			await delay(500);
+			ctx.sectionControlErrors = messages.slice(from).filter(m => m.kind === "error").map(m => m.text);
+			d.errors = ctx.sectionControlErrors;
+		},
+		get allowUnattributed() {
+			return ctx.sectionControlErrors || [];
+		},
+	},
+	{
 		name: "no plugin errors in the console during startup",
 		async fn(d) {
 			let all = startupMessages();
@@ -293,7 +322,10 @@ const TESTS = [
 			if (baseline) {
 				let known = new Set(baseline.errors.map(m => m.text));
 				d.baselineErrors = baseline.errors.map(m => m.text);
-				let extra = errors.filter(m => !isPluginMessage(m) && !known.has(m.text));
+				// Errors a bare item pane section causes as well (control test) are Zotero's
+				let zoteroOwn = new Set(ctx.sectionControlErrors || []);
+				d.explainedBySectionControl = errors.filter(m => !known.has(m.text) && zoteroOwn.has(m.text)).map(m => m.text);
+				let extra = errors.filter(m => !isPluginMessage(m) && !known.has(m.text) && !zoteroOwn.has(m.text));
 				d.notInBaseline = extra;
 				check(!extra.length, `console error(s) at startup that Zotero without the plugin does not log: `
 					+ extra.slice(0, 3).map(m => `${m.text} (${m.source || "no source"})`).join(" | "));
@@ -859,12 +891,21 @@ const TESTS = [
 		needs: ["preferences pane is registered"],
 		timeout: 90000,
 		async fn(d) {
+			let t0 = Date.now();
+			let mark = (what) => {
+				d.marks = d.marks || [];
+				d.marks.push(`${what} +${Date.now() - t0} ms`);
+			};
 			await zb().secrets.set("notionToken", "ntn_e2e_prefs_pane");
+			mark("secret set");
 			let win = Zotero.Utilities.Internal.openPreferences(PANE_ID);
+			mark("openPreferences returned");
 			try {
 				let pane = await waitFor(() => win.Zotero_Preferences && win.Zotero_Preferences.panes
 					&& win.Zotero_Preferences.panes.get(PANE_ID), `the preferences window to know pane ${PANE_ID}`, 30000);
+				mark("pane known");
 				await waitFor(() => pane.loaded, `pane ${PANE_ID} to load (Zotero_Preferences._loadPane)`, 30000);
+				mark("pane loaded");
 				let c = pane.container;
 				d.headings = [...c.querySelectorAll("h2")].map(h => h.textContent);
 				let problems = [];
@@ -890,9 +931,11 @@ const TESTS = [
 			}
 			finally {
 				d.innerWindowID = win.windowGlobalChild && win.windowGlobalChild.innerWindowId;
-				d.closedAt = Date.now();
+				mark("closing");
 				win.close();
+				mark("closed");
 				await zb().secrets.clear("notionToken");
+				mark("secret cleared");
 			}
 			await delay(1000);
 		},
@@ -926,6 +969,9 @@ const TESTS = [
 				"item pane section registered again", 10000);
 			await waitFor(() => mainWindow().document.querySelector('link[href="zotero-bridge.ftl"]'), "FTL link back in the main window", 10000);
 			d.menus = menus;
+		},
+		get allowUnattributed() {
+			return ctx.sectionControlErrors || [];
 		},
 	},
 ];
