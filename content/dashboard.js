@@ -495,7 +495,7 @@
 
 	/**
 	 * The managed region's content.
-	 * meta: { now: Date, reviews, drafts, usage: usageReport(), baseLink: "Zotero/研究儀表板.base" | "" }
+	 * meta: { now: Date, reviews, drafts, usage: usageReport(), baseLink: "Zotero/研究儀表板.base" | "", latestReport: { date, link } | null }
 	 */
 	function buildDashboardSection(stats, meta = {}) {
 		let info = [
@@ -503,6 +503,7 @@
 				+ "重新整理：Zotero 工具 → 更新研究儀表板（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。",
 		];
 		if (meta.baseLink) info.push(`> Bases 檢視：[[${meta.baseLink}|${BASE_NAME}]]（證據等級表、掃描檔待 OCR、待讀（依分類））`);
+		if (meta.latestReport) info.push(`> 最新進度報告（給指導教授）：[[${meta.latestReport.link}|${meta.latestReport.date}]]`);
 		return [
 			info.join("\n"),
 			progressSection(stats),
@@ -718,7 +719,9 @@
 		catch (e) {
 			Zotero.logError(e);
 		}
-		let section = buildDashboardSection(stats, { now, reviews, drafts, usage: report, baseLink });
+		// 進度報告 (progress-report.js): link to the newest one
+		let latestReport = scope.ZB && scope.ZB.progressReport ? await scope.ZB.progressReport.latestReport(settings) : null;
+		let section = buildDashboardSection(stats, { now, reviews, drafts, usage: report, baseLink, latestReport });
 		let path = PathUtils.join(dir, NOTE_NAME + ".md");
 		let existing = (await IOUtils.exists(path)) ? await IOUtils.readUTF8(path) : null;
 		let text = buildDashboardNote(existing, section, { updated: now.toISOString() });

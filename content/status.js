@@ -180,6 +180,17 @@
 		if (dirty) Zotero.Prefs.set(PREF + "status.synced", JSON.stringify(all), true);
 	}
 
+	// 進度報告 (progress-report.js) keeps a dated log of status changes; never fails a sync.
+	// `key` is "library/KEY" or a function returning it
+	function logChange(key, from, to) {
+		try {
+			if (scope.ZB && scope.ZB.progressReport) scope.ZB.progressReport.logStatusChange(typeof key === "function" ? key() : key, from, to);
+		}
+		catch (e) {
+			Zotero.logError(e);
+		}
+	}
+
 	// ---------- Zotero tags ----------
 
 	/** Leave exactly one status tag on the item. A separate save is needed; returns whether it changed. */
@@ -228,6 +239,7 @@
 			plan.values.zotero = zoteroStatus(tags, cfg, plan.base);
 			let result = mergeStatus({ base: plan.base, values: plan.values, priority: action.silent ? AUTO_SYNC_PRIORITY : SIDES });
 			plan.value = result.value;
+			if (plan.base && result.value !== plan.base) logChange(key, plan.base, result.value);
 			if (result.conflict) {
 				messages.push(describeConflict(result.conflict));
 				// Auto-sync has no progress window
@@ -335,6 +347,7 @@
 		row.append(label);
 		let pick = (value) => {
 			if (!value || value === current) return;
+			logChange(() => scope.ZB.adapter.zoteroKeyFor(item.libraryID, item.key), current, value);
 			current = value;
 			// Auto-sync (when on) takes the change to Notion and Obsidian; otherwise the next sync does
 			if (setItemStatus(item, value, cfg)) item.saveTx().catch(e => Zotero.logError(e));
@@ -540,6 +553,7 @@
 		let tags = item.getTags().map(t => t.tag);
 		values.zotero = zoteroStatus(tags, cfg, base);
 		let result = mergeStatus({ base, values });
+		if (base && result.value !== base) logChange(key, base, result.value);
 		let wrote = {};
 		if (setItemStatus(item, result.value, cfg)) {
 			await ZB.main.saveQuietly(item);

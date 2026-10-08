@@ -1374,6 +1374,8 @@
 		menuIDs.push(...ZB.searchLinks.registerMenus({ pluginID, icon }));
 		// 文獻評讀總表 (appraisal-form.js): collection and Tools menus
 		menuIDs.push(...ZB.appraisalForm.registerMenus({ pluginID, icon }));
+		// 進度報告 for advisor meetings (progress-report.js): Tools menu
+		menuIDs.push(...ZB.progressReport.registerMenus({ pluginID, icon }));
 		// Claude Message Batches for bulk AI notes (ai-batch.js): Tools menu
 		menuIDs.push(...ZB.aiBatch.registerMenus({ pluginID, icon }));
 	}

@@ -264,6 +264,7 @@ const TESTS = [
 				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "registerMenus", "batchParams", "parseResults"],
 				ebhcReport: ["run", "askOptions", "processReport", "buildReportNote"],
 				appraisalForm: ["renderPaneRow", "syncInfo", "saveRecord", "exportSummary", "registerMenus"],
+				progressReport: ["run", "askOptions", "logStatusChange", "latestReport", "registerMenus"],
 				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly"],
 			};
 			let missing = [];
@@ -351,6 +352,7 @@ const TESTS = [
 				"zotero-bridge-ai-batch-tools": "main/menubar/tools",
 				"zotero-bridge-appraisal-collection": "main/library/collection",
 				"zotero-bridge-appraisal-tools": "main/menubar/tools",
+				"zotero-bridge-progress-report-tools": "main/menubar/tools",
 			};
 			d.registered = mine.map(o => `${o.menuID} → ${o.target}`);
 			let problems = [];
