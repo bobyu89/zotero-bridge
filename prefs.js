@@ -41,6 +41,11 @@ pref("extensions.zotero-bridge.apaZh.enabled", true);
 pref("extensions.zotero-bridge.apaZh.style", "thesis");
 pref("extensions.zotero-bridge.apaZh.chineseFirst", true);
 pref("extensions.zotero-bridge.batch.pending", "");
+// Claude Message Batches for bulk AI notes (content/ai-batch.js): off by default; used when a manual run
+// needs AI notes for at least batchThreshold items; batch.ai keeps the submitted batches across restarts
+pref("extensions.zotero-bridge.llm.batchAPI", false);
+pref("extensions.zotero-bridge.llm.batchThreshold", "10");
+pref("extensions.zotero-bridge.batch.ai", "");
 // Systematic/scoping review screening (content/screening.js): Zotero tag prefixes, exclusion
 // reasons (one per line; empty = built-in list) and the Notion parent page for review pages
 pref("extensions.zotero-bridge.screening.tagPrefix", "篩選/");

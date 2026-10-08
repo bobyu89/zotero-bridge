@@ -48,6 +48,12 @@
 		<checkbox label="掃描版 PDF 直接傳給 AI 讀（Claude；較耗 token）" preference="extensions.zotero-bridge.llm.sendScannedPDF"/>
 		<description class="zb-hint">PDF 沒有文字層（掃描檔）時，把 PDF 檔本身傳給 AI 看每一頁（上限 20 MB、100 頁）；OpenAI 官方 API 也適用。比較省錢的做法是先用 OCR（例如 OCRmyPDF）加上文字層，或重新下載有文字的 PDF。</description>
 		<checkbox label="AI 也看圖片劃線（把圖片／手繪註記的截圖一起傳給 Claude，例如圈選的表格或圖；會增加 token 用量，OpenAI 不適用）" preference="extensions.zotero-bridge.images.sendToAI"/>
+		<checkbox label="大量產生 AI 筆記時使用批次 API（約半價，最長 24 小時）" preference="extensions.zotero-bridge.llm.batchAPI"/>
+		<hbox align="center">
+			<label value="需要產生 AI 筆記的文獻達幾筆才用批次 API："/>
+			<html:input type="number" min="2" step="1" preference="extensions.zotero-bridge.llm.batchThreshold"/>
+		</hbox>
+		<description class="zb-hint">只適用 Claude。送出前會讓你選擇批次或一般模式；批次通常 1 小時內完成，完成後自動寫入 AI 筆記並同步（Zotero 關閉也沒關係，下次開啟會繼續檢查）。進度與取消：工具 → 檢查 AI 批次進度／取消 AI 批次。</description>
 		<label value="筆記模板（system prompt；留空 = 使用內建的護理／醫學文獻模板）："/>
 		<html:textarea id="zb-system-prompt" rows="8" preference="extensions.zotero-bridge.llm.systemPrompt"/>
 		<hbox>
