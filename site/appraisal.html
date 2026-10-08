@@ -1,0 +1,1372 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>文獻評讀表</title>
+<meta name="description" content="不用 Zotero 也能填 CASP、JBI 文獻評讀表：逐題勾選與評析根據、多篇論文燈號總覽、雙人評讀 Cohen's κ，複製成 Markdown／Word 表格或下載 CSV。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&display=swap">
+<style>
+/* 與安裝精靈、文獻快速搜尋共用色彩與字體；版面：左邊評讀表（論文資料、逐題評讀、判定與輸出），右邊論文清單；下方整寬的燈號總覽 */
+:root {
+  --bg: #F3F4F7;
+  --surface: #FFFFFF;
+  --ink: #1B1D22;
+  --muted: #5B6270;
+  --line: #DCDFE6;
+  --accent: #B3243A;      /* Zotero 紅 */
+  --accent-ink: #FFFFFF;
+  --accent-soft: #F7E4E7;
+  --ok: #1E7449;
+  --ok-soft: #E1F1E8;
+  --warn: #7E5300;
+  --warn-soft: #FFF2D1;
+  --bad: #A8251C;
+  --bad-soft: #FCE6E3;
+  --chip: #ECEEF2;
+  --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111317; --surface: #1A1D23; --ink: #E8EAEE; --muted: #9AA1AD; --line: #2B3038;
+    --accent: #EF6A7D; --accent-ink: #1A0B0E; --accent-soft: #3A1D23;
+    --ok: #5DC690; --ok-soft: #142D20; --warn: #E9B54E; --warn-soft: #30270F; --bad: #FF8F80; --bad-soft: #3A1815; --chip: #252931;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111317; --surface: #1A1D23; --ink: #E8EAEE; --muted: #9AA1AD; --line: #2B3038;
+  --accent: #EF6A7D; --accent-ink: #1A0B0E; --accent-soft: #3A1D23;
+  --ok: #5DC690; --ok-soft: #142D20; --warn: #E9B54E; --warn-soft: #30270F; --bad: #FF8F80; --bad-soft: #3A1815; --chip: #252931;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.75;
+  padding-inline: 16px;
+  padding-block: 24px 64px;
+}
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, select:focus-visible, summary:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 24px; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+header.top h1 {
+  font-family: var(--font-display); font-weight: 900; font-size: clamp(28px, 5vw, 40px);
+  line-height: 1.2; margin: 0; text-wrap: balance; letter-spacing: 0.02em;
+}
+header.top h1 span { color: var(--accent); }
+header.top p { margin: 4px 0 0; color: var(--muted); max-width: 56ch; }
+.meta { font-size: 13px; color: var(--muted); text-align: right; display: grid; gap: 2px; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+.main, .side { display: grid; gap: 24px; min-width: 0; }
+.side { position: sticky; top: 16px; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: clamp(18px, 4vw, 32px); min-width: 0; display: grid; gap: 18px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0; }
+.card h2 { font-family: var(--font-display); font-size: clamp(22px, 3.2vw, 26px); line-height: 1.3; margin: 0; text-wrap: balance; }
+.card h3 { font-size: 15px; margin: 0; }
+.card p { margin: 0; }
+.head { display: grid; gap: 4px; }
+.lead { color: var(--muted); font-size: 15px; max-width: 70ch; }
+.small { font-size: 13px; color: var(--muted); }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; background: var(--chip); padding: 1px 6px; border-radius: 5px; overflow-wrap: anywhere; }
+
+/* 表單元件 */
+input[type=text], input[type=date], input[type=number], textarea, select {
+  font: inherit; font-size: 16px; color: var(--ink); background: var(--surface);
+  border: 1.5px solid var(--line); border-radius: 9px; padding: 8px 12px; min-width: 0; width: 100%;
+}
+textarea { resize: vertical; line-height: 1.55; min-height: 64px; }
+textarea.grow { min-height: 0; overflow: hidden; resize: none; }
+input::placeholder, textarea::placeholder { color: var(--muted); opacity: .75; }
+input:focus, textarea:focus, select:focus { border-color: var(--accent); outline: none; }
+label.lbl, .lbl { font-size: 14px; font-weight: 700; display: block; margin-bottom: 4px; }
+input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); margin: 0; flex: none; }
+.check { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+
+.btn {
+  font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; border-radius: 9px; padding: 8px 16px;
+  border: 1.5px solid var(--accent); background: var(--accent); color: var(--accent-ink); text-decoration: none;
+  display: inline-flex; gap: 6px; align-items: center; justify-content: center; white-space: nowrap;
+}
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn.ghost:hover { border-color: var(--muted); }
+.btn.small { font-size: 13px; padding: 4px 10px; font-weight: 500; border-radius: 7px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.linkbtn { font: inherit; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-align: left; }
+
+/* 論文資料 */
+.fields { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px 14px; }
+.fields .full { grid-column: 1 / -1; }
+.toolbox { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; font-size: 14px; }
+.toolbox .tname { font-weight: 700; }
+.toolbox .tname .fam { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .08em; background: var(--chip); color: var(--muted); border-radius: 5px; padding: 1px 6px; margin-right: 6px; vertical-align: 2px; }
+
+/* 提示框 */
+.note { border-radius: 10px; padding: 10px 14px; display: grid; gap: 6px; font-size: 14px; }
+.note.tip { background: var(--ok-soft); }
+.note.tip strong { color: var(--ok); }
+.note.warn { background: var(--warn-soft); }
+.note.warn strong { color: var(--warn); }
+.note.info { background: var(--chip); }
+
+/* 進度 */
+.prog { display: grid; gap: 6px; }
+.prog .bar { height: 6px; background: var(--chip); border-radius: 99px; overflow: hidden; display: flex; }
+.prog .bar i { display: block; height: 100%; transition: width .3s ease; }
+.prog .bar i.yes { background: var(--ok); } .prog .bar i.no { background: var(--bad); }
+.prog .bar i.unclear { background: var(--warn); } .prog .bar i.na { background: var(--muted); }
+.prog .line { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); align-items: baseline; }
+.prog .line b { color: var(--ink); font-size: 14px; }
+
+/* 逐題 */
+ol.items { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+li.sec { font-size: 13px; font-weight: 700; color: var(--accent); padding: 6px 2px 0; }
+li.item { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 10px; min-width: 0; }
+li.item.disagree { border-color: var(--warn); box-shadow: inset 4px 0 0 var(--warn); background: var(--warn-soft); }
+.ihead { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: start; }
+.num { width: 28px; height: 28px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-family: var(--font-mono); font-size: 14px; }
+.itext .t { font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
+.itext .en { font-size: 12px; color: var(--muted); line-height: 1.4; margin-top: 2px; overflow-wrap: anywhere; }
+.hintbtn { font: inherit; font-size: 12px; color: var(--muted); background: var(--chip); border: 0; border-radius: 99px; padding: 2px 10px; cursor: pointer; white-space: nowrap; }
+.hintbtn[aria-expanded="true"] { color: var(--accent); background: var(--accent-soft); }
+.hint { font-size: 13px; background: var(--chip); border-radius: 8px; padding: 8px 12px; color: var(--ink); white-space: pre-line; }
+
+.ans { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px 10px; align-items: center; }
+.dual .ans { grid-template-columns: 24px minmax(0, 1fr); }
+.who { display: none; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.dual .who { display: block; }
+.seg { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 0; border: 1.5px solid var(--line); border-radius: 10px; overflow: hidden; max-width: 460px; }
+.seg button { font: inherit; font-size: 14px; padding: 6px 4px; background: var(--surface); color: var(--ink); border: 0; border-left: 1px solid var(--line); cursor: pointer; min-height: 38px; line-height: 1.3; }
+.seg button:first-child { border-left: 0; }
+.seg button:hover { background: var(--chip); }
+.seg button[aria-pressed="true"] { font-weight: 700; }
+.seg button[aria-pressed="true"].yes { background: var(--ok-soft); color: var(--ok); box-shadow: inset 0 -3px 0 var(--ok); }
+.seg button[aria-pressed="true"].no { background: var(--bad-soft); color: var(--bad); box-shadow: inset 0 -3px 0 var(--bad); }
+.seg button[aria-pressed="true"].unclear { background: var(--warn-soft); color: var(--warn); box-shadow: inset 0 -3px 0 var(--warn); }
+.seg button[aria-pressed="true"].na { background: var(--chip); color: var(--ink); box-shadow: inset 0 -3px 0 var(--muted); }
+.ans.b .seg { max-width: 460px; }
+.ans.b .seg button { min-height: 32px; font-size: 13px; padding: 3px 4px; }
+.distag { grid-column: 2; font-size: 12px; font-weight: 700; color: var(--warn); }
+.item textarea { font-size: 15px; min-height: 60px; max-height: 60vh; }
+.item textarea.grow { overflow-y: auto; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* 判定 */
+.seg.verdict { max-width: 420px; --n: 3; }
+
+/* κ */
+.kbox { border-radius: 10px; padding: 10px 14px; background: var(--chip); display: grid; gap: 4px; font-size: 14px; }
+.kbox .kv { font-family: var(--font-mono); font-size: 18px; }
+details.more { border: 1px solid var(--line); border-radius: 10px; }
+details.more summary { cursor: pointer; padding: 8px 12px; font-weight: 500; font-size: 13px; list-style: none; display: flex; gap: 8px; align-items: center; }
+details.more summary::-webkit-details-marker { display: none; }
+details.more summary::before { content: "＋"; color: var(--accent); font-weight: 700; }
+details.more[open] summary::before { content: "－"; }
+details.more .body { padding: 0 12px 12px; display: grid; gap: 8px; font-size: 13px; }
+.formula { font-family: var(--font-mono); font-size: 13px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; }
+
+/* 論文清單 */
+ul.papers { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+ul.papers li { border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; display: grid; gap: 4px; min-width: 0; }
+ul.papers li.cur { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+ul.papers .open { font: inherit; text-align: left; background: none; border: 0; padding: 0; color: var(--ink); cursor: pointer; display: grid; gap: 1px; min-width: 0; }
+ul.papers .nm { font-weight: 700; font-size: 14px; overflow-wrap: anywhere; line-height: 1.4; }
+ul.papers .sub { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; line-height: 1.4; }
+ul.papers .mini { display: flex; gap: 2px; flex-wrap: wrap; }
+ul.papers .mini i { width: 10px; height: 10px; border-radius: 3px; background: var(--chip); border: 1px solid var(--line); }
+ul.papers .mini i.yes { background: var(--ok); border-color: var(--ok); } ul.papers .mini i.no { background: var(--bad); border-color: var(--bad); }
+ul.papers .mini i.unclear { background: var(--warn); border-color: var(--warn); } ul.papers .mini i.na { background: var(--muted); border-color: var(--muted); }
+ul.papers .foot { display: flex; gap: 6px 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+ul.papers .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* 燈號總覽 */
+.tgroup { display: grid; gap: 8px; }
+.tgroup h3 { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.tgroup h3 .small { font-weight: 400; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th { background: var(--chip); font-weight: 700; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+table.tl th.q, table.tl td.q { text-align: center; padding-inline: 3px; min-width: 32px; }
+table.tl td.paper, table.tl th:first-child { position: sticky; left: 0; z-index: 1; }
+table.tl td.paper { min-width: 120px; max-width: 240px; background: var(--surface); }
+table.tl tr.cur td.paper .linkbtn { font-weight: 700; }
+table.tl td.paper .linkbtn { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+table.tl tr.cur td.paper { box-shadow: inset 3px 0 0 var(--accent); }
+.dot { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-size: 13px; font-weight: 700; line-height: 1; border: 1.5px solid var(--line); color: var(--muted); }
+.dot.yes { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
+.dot.no { background: var(--bad-soft); color: var(--bad); border-color: var(--bad); }
+.dot.unclear { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
+.dot.na { background: var(--chip); color: var(--muted); border-color: var(--muted); }
+.dot.off { box-shadow: 0 0 0 2px var(--warn); }
+.vtag { font-size: 12px; font-weight: 700; border-radius: 4px; padding: 0 6px; white-space: nowrap; background: var(--chip); color: var(--muted); }
+.vtag.yes { background: var(--ok-soft); color: var(--ok); } .vtag.no { background: var(--bad-soft); color: var(--bad); } .vtag.unclear { background: var(--warn-soft); color: var(--warn); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); align-items: center; }
+.legend .dot { width: 20px; height: 20px; font-size: 11px; margin-right: 4px; vertical-align: middle; }
+ol.qkey { margin: 0; padding-left: 2.2em; display: grid; gap: 2px; }
+.empty-list { font-size: 13px; color: var(--muted); }
+
+#toast {
+  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); transform: translate(-50%, 16px);
+  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; max-width: calc(100vw - 32px);
+  opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease; box-shadow: 0 6px 24px rgba(0,0,0,.18); z-index: 10;
+}
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
+
+#printArea { display: none; }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .side { position: static; order: -1; }
+  ul.papers { max-height: 320px; overflow-y: auto; padding: 2px; margin: -2px; }
+  .meta { text-align: left; }
+}
+@media (max-width: 560px) {
+  .fields { grid-template-columns: minmax(0, 1fr); }
+  .ihead { grid-template-columns: 26px minmax(0, 1fr); }
+  .ihead .hintbtn { grid-column: 2; justify-self: start; }
+  .num { width: 26px; height: 26px; font-size: 13px; }
+  li.item { padding: 10px 12px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* 列印：只印 #printArea（評讀表，或全部論文＋燈號總覽） */
+@media print {
+  @page { margin: 16mm 14mm; }
+  body { background: #fff; color: #000; padding: 0; font-size: 11pt; line-height: 1.5; }
+  body > *:not(#printArea) { display: none !important; }
+  #printArea { display: block; }
+  #printArea section { break-inside: auto; margin-bottom: 18pt; }
+  #printArea section + section { break-before: page; }
+  #printArea h1 { font-size: 15pt; margin: 0 0 4pt; }
+  #printArea h2 { font-size: 13pt; margin: 0 0 4pt; }
+  #printArea p { margin: 0 0 6pt; }
+  #printArea table { border-collapse: collapse; width: 100%; font-size: 10pt; }
+  #printArea th, #printArea td { border: 1px solid #000; padding: 4pt 5pt; vertical-align: top; color: #000; }
+  #printArea th { background: #e6e6e6; }
+  #printArea tr { break-inside: avoid; }
+  #printArea * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+
+  <header class="top">
+    <div>
+      <h1>文獻 <span>評讀表</span></h1>
+      <p>不用 Zotero 也能填 CASP、JBI 評讀表：逐題勾選並寫下評析根據，多篇論文一起看燈號，複製成 Word／Markdown 表格交作業或寫實證報告。</p>
+    </div>
+    <div class="meta">
+      <a href="./">← Zotero Bridge 安裝精靈</a>
+      <a href="search.html">🔎 醫學文獻快速搜尋</a>
+      <span>評讀資料只存在這台裝置的瀏覽器</span>
+    </div>
+  </header>
+
+  <div class="note warn" id="noCatalog" hidden><p><strong>載入不到評讀工具清單（appraisal-tools.js）。</strong>請重新整理頁面；若仍然失敗，請到 <a href="https://github.com/bobyu89/zotero-bridge/issues" target="_blank" rel="noopener">GitHub Issues</a> 回報。</p></div>
+
+  <div class="layout" id="layout">
+    <div class="main">
+      <!-- 1 論文資料 -->
+      <section class="card" id="infoCard" aria-labelledby="h-info">
+        <div class="head">
+          <p class="eyebrow">Article</p>
+          <h2 id="h-info">論文資料與評讀工具</h2>
+        </div>
+        <div class="fields">
+          <div><label class="lbl" for="f-author">第一作者</label><input type="text" id="f-author" placeholder="例：Chen et al.、陳等人" autocomplete="off"></div>
+          <div><label class="lbl" for="f-year">年份</label><input type="text" id="f-year" inputmode="numeric" maxlength="12" placeholder="2024" autocomplete="off"></div>
+          <div class="full"><label class="lbl" for="f-title">篇名</label><textarea id="f-title" class="grow" rows="1" placeholder="論文標題"></textarea></div>
+          <div><label class="lbl" for="f-design">研究設計</label><select id="f-design"></select></div>
+          <div><label class="lbl" for="f-level">證據等級（選填）</label><select id="f-level">
+            <option value="">—</option>
+            <option value="Level 1">Level 1</option><option value="Level 2">Level 2</option><option value="Level 3">Level 3</option><option value="Level 4">Level 4</option><option value="Level 5">Level 5</option>
+          </select></div>
+          <div class="full"><label class="lbl" for="f-tool">評讀工具</label><select id="f-tool"></select></div>
+        </div>
+        <div class="note warn" id="toolNote" hidden><p></p></div>
+        <div class="toolbox" id="toolBox">
+          <span class="tname" id="toolName"></span>
+          <span class="small" id="toolLic"></span>
+          <span><a id="toolSrc" href="#" target="_blank" rel="noopener">官方表單與說明 ↗</a></span>
+        </div>
+        <p class="small">證據等級可依 Oxford CEBM 2011（治療性問題：SR＝Level 1、RCT＝Level 2）。題目是中文摘譯，正式送審或發表前請對照官方表單原文。</p>
+      </section>
+
+      <!-- 2 逐題評讀 -->
+      <section class="card" id="itemsCard" aria-labelledby="h-items">
+        <div class="head">
+          <p class="eyebrow">Checklist</p>
+          <h2 id="h-items">逐題評讀</h2>
+          <p class="lead">每題選一個結果，並在「評析根據」引用原文的設計或數字（例如：電腦亂數分派、信封密封；流失率 8%，採 ITT 分析）。再按一次同一個按鈕可取消。</p>
+        </div>
+        <div class="prog" id="prog" aria-live="polite">
+          <div class="bar" id="progBar"></div>
+          <div class="line" id="progLine"></div>
+        </div>
+        <div class="kbox" id="kBox" hidden aria-live="polite"></div>
+        <ol class="items" id="items"></ol>
+      </section>
+
+      <!-- 3 判定與輸出 -->
+      <section class="card" id="outCard" aria-labelledby="h-out">
+        <div class="head">
+          <p class="eyebrow">Verdict &amp; export</p>
+          <h2 id="h-out">整體判定與輸出</h2>
+        </div>
+        <div>
+          <span class="lbl" id="l-verdict">整體判定</span>
+          <div class="seg verdict" id="verdict" role="group" aria-labelledby="l-verdict"></div>
+        </div>
+        <div class="fields">
+          <div><label class="lbl" for="f-reviewer">評讀者</label><input type="text" id="f-reviewer" placeholder="你的名字" autocomplete="name"></div>
+          <div><label class="lbl" for="f-date">評讀日期</label><input type="date" id="f-date"></div>
+        </div>
+        <div class="toolbox">
+          <label class="check"><input type="checkbox" id="f-dual"> 雙人評讀：加上第二位評讀者（B）的答案，計算 Cohen's κ</label>
+          <div id="dualBox" hidden><label class="lbl" for="f-reviewerB">評讀者 B</label><input type="text" id="f-reviewerB" placeholder="第二位評讀者的名字" autocomplete="off"></div>
+        </div>
+        <div class="row">
+          <button class="btn" type="button" id="copyWordBtn">複製到 Word</button>
+          <button class="btn ghost" type="button" id="copyMdBtn">複製 Markdown 表格</button>
+          <button class="btn ghost" type="button" id="csvBtn">下載 CSV</button>
+          <button class="btn ghost" type="button" id="printBtn">列印／存 PDF</button>
+        </div>
+        <label class="check"><input type="checkbox" id="withNotes" checked> Markdown 包含「評析根據」欄</label>
+        <p class="small">「複製到 Word」會複製含框線的表格（評讀項目｜評讀結果｜評析根據），可直接貼到 Word、Google 文件；瀏覽器不支援時改為以 Tab 分隔的文字。CSV 為 UTF-8（含 BOM），Excel 開啟中文不會亂碼。</p>
+      </section>
+    </div>
+
+    <div class="side">
+      <!-- 論文清單 -->
+      <section class="card" id="listCard" aria-labelledby="h-list">
+        <div class="head">
+          <p class="eyebrow">Papers</p>
+          <h2 id="h-list">我的評讀</h2>
+        </div>
+        <div class="note warn" id="storeWarn" hidden><p><strong>這個瀏覽器不能儲存資料</strong>（例如無痕視窗或封鎖網站資料）。關閉分頁後評讀會消失，請用「匯出 JSON」保存。</p></div>
+        <button class="btn" type="button" id="newBtn">＋ 新增一篇</button>
+        <ul class="papers" id="paperList"></ul>
+        <div class="row">
+          <button class="btn small ghost" type="button" id="exportBtn">匯出 JSON</button>
+          <button class="btn small ghost" type="button" id="importBtn">匯入 JSON</button>
+          <input type="file" id="importFile" accept="application/json,.json" hidden>
+        </div>
+        <p class="small">換電腦或和同學交換評讀時，用 JSON 匯出、匯入（同一篇會更新，不會重複）。</p>
+      </section>
+    </div>
+  </div>
+
+  <!-- 4 燈號總覽 -->
+  <section class="card" id="sumCard" aria-labelledby="h-sum">
+    <div class="head">
+      <p class="eyebrow">Summary</p>
+      <h2 id="h-sum">燈號總覽</h2>
+      <p class="lead">所有論文依評讀工具分組，一列一篇、一欄一題；點論文名稱可開啟該篇。</p>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div id="traffic" class="tgroup"></div>
+    <div class="row">
+      <button class="btn small ghost" type="button" id="csvAllBtn">下載 CSV（全部論文）</button>
+      <button class="btn small ghost" type="button" id="copyWordAllBtn">複製全部到 Word</button>
+      <button class="btn small ghost" type="button" id="printAllBtn">列印全部</button>
+    </div>
+  </section>
+
+  <footer>
+    <span>本頁不會把評讀內容送到任何伺服器。CASP checklists © CASP UK，JBI critical appraisal tools © JBI；各工具的授權寫在工具名稱下方，請依授權使用。</span>
+    <span>Zotero Bridge · <a href="https://github.com/bobyu89/zotero-bridge#評讀表網頁" target="_blank" rel="noopener">說明</a></span>
+  </footer>
+</div>
+
+<div id="printArea" aria-hidden="true"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="appraisal-tools.js"></script>
+<script>
+/*
+ * 文獻評讀表：評讀工具（題目、可選答案、判定）來自 appraisal-tools.js（window.ZBAppraisalTools，
+ * 與外掛共用的 content/appraisal-tools.js；GitHub Pages 部署時複製到 site/）。
+ * 本頁只負責：論文清單與儲存、填答介面、雙人評讀 κ、燈號總覽、Markdown／CSV／Word／列印輸出。
+ *
+ * Cohen's κ（兩位評讀者、同一篇論文、兩人都有作答的題目）：
+ *   κ = (p_o − p_e) / (1 − p_e)
+ *   p_o = 答案相同的題數 ÷ 兩人都作答的題數
+ *   p_e = Σ_k（A 選 k 的比例 × B 選 k 的比例），k ＝ 是／否／不清楚／不適用
+ *   p_e = 1（兩人都只用同一種答案）時 κ 無法計算，只顯示一致率。
+ */
+(function (global) {
+  'use strict';
+
+  var T = global.ZBAppraisalTools || null;
+  var DEFAULT_ANSWERS = ['是', '否', '不清楚', '不適用'];
+  var ANSWERS = T && Array.isArray(T.ANSWERS) && T.ANSWERS.length ? T.ANSWERS : DEFAULT_ANSWERS;
+  var TOOLS = T && Array.isArray(T.TOOLS) ? T.TOOLS : [];
+
+  // 答案 → 燈號（依文字，不認得就依在 ANSWERS 裡的位置）
+  var CLASS_BY_VALUE = { '是': 'yes', '否': 'no', '不清楚': 'unclear', '不明確': 'unclear', '不適用': 'na' };
+  var CLASS_BY_INDEX = ['yes', 'no', 'unclear', 'na'];
+  var SYMBOL = { yes: '✓', no: '✗', unclear: '?', na: '–' };
+  function answerClass(a) {
+    if (!a) return '';
+    if (CLASS_BY_VALUE[a]) return CLASS_BY_VALUE[a];
+    var i = ANSWERS.indexOf(a);
+    return i === -1 ? '' : (CLASS_BY_INDEX[i] || 'na');
+  }
+  var VERDICT_CLASS = { '納入': 'yes', '排除': 'no', '需更多資訊': 'unclear' };
+  function verdictClass(v, verdicts) {
+    if (!v) return '';
+    if (VERDICT_CLASS[v]) return VERDICT_CLASS[v];
+    var i = (verdicts || []).indexOf(v);
+    return ['yes', 'no', 'unclear'][i] || '';
+  }
+
+  // 研究設計顯示名稱（設計清單來自工具的 designs；不認得的照原樣顯示）
+  var DESIGN_LABEL = {
+    rct: '隨機對照試驗（RCT）', randomisedcontrolledtrial: '隨機對照試驗（RCT）', randomizedcontrolledtrial: '隨機對照試驗（RCT）',
+    sr: '系統性回顧／統合分析', systematicreview: '系統性回顧／統合分析', metaanalysis: '統合分析', srma: '系統性回顧／統合分析',
+    qualitative: '質性研究', cohort: '世代研究', casecontrol: '病例對照研究', crosssectional: '橫斷性研究', analyticalcrosssectional: '分析性橫斷研究',
+    diagnostic: '診斷準確性研究', diagnostictest: '診斷準確性研究', economic: '經濟評估', economicevaluation: '經濟評估',
+    cpr: '臨床預測規則', clinicalpredictionrule: '臨床預測規則', quasiexperimental: '類實驗研究', quasi: '類實驗研究',
+    casereport: '個案報告', caseseries: '病例系列', prevalence: '盛行率研究', textandopinion: '專家意見／文本', textopinion: '專家意見／文本',
+    guideline: '臨床指引', mixedmethods: '混合方法研究',
+    diagnosticaccuracy: '診斷準確性研究', scopingreview: '範圍回顧（scoping review）', other: '其他'
+  };
+  function designKey(d) { return String(d || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  function designLabel(d) { return DESIGN_LABEL[designKey(d)] || String(d || ''); }
+  function designOptions() {
+    var seen = {}, out = [];
+    TOOLS.forEach(function (t) { (t.designs || []).forEach(function (d) { if (!seen[d]) { seen[d] = true; out.push(d); } }); });
+    return out;
+  }
+  function getTool(id) {
+    if (T && typeof T.getTool === 'function') return T.getTool(id) || null;
+    for (var i = 0; i < TOOLS.length; i++) if (TOOLS[i].id === id) return TOOLS[i];
+    return null;
+  }
+  function toolsForDesign(d) {
+    if (!d) return [];
+    return T && typeof T.toolsForDesign === 'function' ? (T.toolsForDesign(d) || []) : TOOLS.filter(function (t) { return (t.designs || []).indexOf(d) !== -1; });
+  }
+  function toolLabel(t) { return t ? (t.nameZh || t.name || t.id) : ''; }
+
+  // ---------- 評讀資料 ----------
+
+  function newId() { return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function today() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function blankAppraisal(o) {
+    o = o || {};
+    var tool = o.toolId ? getTool(o.toolId) : null;
+    if (!tool && o.design) tool = toolsForDesign(o.design)[0] || null;
+    if (!tool) tool = TOOLS[0] || null;
+    return {
+      id: newId(), author: '', year: '', title: '', design: o.design || '', level: '',
+      toolId: tool ? tool.id : '', answers: {}, answersB: {}, dual: false,
+      reviewer: o.reviewer || '', reviewerB: '', date: today(), verdict: '',
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+    };
+  }
+
+  var STR_FIELDS = { author: 200, year: 12, title: 500, design: 60, level: 20, toolId: 80, reviewer: 80, reviewerB: 80, date: 20, verdict: 40, createdAt: 40, updatedAt: 40 };
+  function cleanAnswers(obj, withNotes) {
+    var out = {};
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return out;
+    Object.keys(obj).forEach(function (k) {
+      var v = obj[k];
+      if (!v || typeof v !== 'object') return;
+      var a = ANSWERS.indexOf(v.answer) !== -1 ? v.answer : '';
+      var n = withNotes && typeof v.note === 'string' ? v.note.slice(0, 8000) : '';
+      if (!a && !n) return;
+      out[k] = withNotes ? { answer: a, note: n } : { answer: a };
+    });
+    return out;
+  }
+  function normalizeAppraisals(data) {
+    var list = data;
+    if (list && !Array.isArray(list) && Array.isArray(list.appraisals)) list = list.appraisals;
+    if (!Array.isArray(list)) return [];
+    return list.filter(function (a) { return a && typeof a === 'object' && typeof a.toolId === 'string' && a.toolId; })
+      .map(function (a) {
+        var o = { id: typeof a.id === 'string' && a.id ? a.id.slice(0, 60) : newId() };
+        Object.keys(STR_FIELDS).forEach(function (k) { o[k] = a[k] == null ? '' : String(a[k]).slice(0, STR_FIELDS[k]); });
+        o.answers = cleanAnswers(a.answers, true);
+        o.answersB = cleanAnswers(a.answersB, false);
+        o.dual = !!a.dual;
+        if (!o.createdAt) o.createdAt = new Date().toISOString();
+        if (!o.updatedAt) o.updatedAt = o.createdAt;
+        return o;
+      });
+  }
+  function mergeAppraisals(existing, incoming) {
+    var byId = {}, out = existing.slice(), added = 0;
+    out.forEach(function (a, i) { byId[a.id] = i; });
+    incoming.forEach(function (a) {
+      if (Object.prototype.hasOwnProperty.call(byId, a.id)) out[byId[a.id]] = a;
+      else { byId[a.id] = out.length; out.push(a); added++; }
+    });
+    return { list: out, added: added };
+  }
+  function duplicateAppraisal(a) {
+    var c = JSON.parse(JSON.stringify(a));
+    c.id = newId(); c.title = (a.title || '') + '（複本）';
+    c.createdAt = c.updatedAt = new Date().toISOString();
+    return c;
+  }
+  function hasAnswers(a) {
+    var any = function (o) { return Object.keys(o || {}).some(function (k) { return o[k] && (o[k].answer || o[k].note); }); };
+    return any(a.answers) || any(a.answersB);
+  }
+  function paperLabel(a) {
+    var au = String(a.author || '').trim(), yr = String(a.year || '').trim(), ti = String(a.title || '').trim();
+    if (au) return au + (yr ? '（' + yr + '）' : '');
+    if (ti) return (ti.length > 40 ? ti.slice(0, 40) + '…' : ti) + (yr ? '（' + yr + '）' : '');
+    return '未命名論文' + (yr ? '（' + yr + '）' : '');
+  }
+  function summaryFor(a, tool, who) {
+    tool = tool || getTool(a.toolId);
+    if (!tool) return null;
+    var ans = who === 'B' ? a.answersB : a.answers;
+    if (T && typeof T.summarize === 'function') return T.summarize(tool, ans || {});
+    return null;
+  }
+
+  // ---------- Cohen's κ ----------
+
+  function kappa(pairs) {
+    pairs = (pairs || []).filter(function (p) { return p && p[0] && p[1]; });
+    var n = pairs.length;
+    if (!n) return { n: 0, agree: 0, po: null, pe: null, kappa: null };
+    var agree = 0, ca = {}, cb = {};
+    pairs.forEach(function (p) {
+      if (p[0] === p[1]) agree++;
+      ca[p[0]] = (ca[p[0]] || 0) + 1;
+      cb[p[1]] = (cb[p[1]] || 0) + 1;
+    });
+    var po = agree / n, pe = 0;
+    Object.keys(ca).forEach(function (k) { pe += (ca[k] / n) * ((cb[k] || 0) / n); });
+    var k = pe >= 1 - 1e-12 ? null : (po - pe) / (1 - pe);
+    return { n: n, agree: agree, po: po, pe: pe, kappa: k };
+  }
+  function pairsFor(a, tool) {
+    tool = tool || getTool(a.toolId);
+    if (!tool) return [];
+    return tool.items.map(function (it) {
+      return [(a.answers[it.id] || {}).answer || '', (a.answersB[it.id] || {}).answer || ''];
+    });
+  }
+  function disagreements(a, tool) {
+    tool = tool || getTool(a.toolId);
+    if (!tool || !a.dual) return [];
+    return tool.items.filter(function (it) {
+      var x = (a.answers[it.id] || {}).answer, y = (a.answersB[it.id] || {}).answer;
+      return x && y && x !== y;
+    }).map(function (it) { return it.id; });
+  }
+  // Landis & Koch (1977)
+  function interpretKappa(k) {
+    if (k == null || isNaN(k)) return '';
+    if (k < 0) return '比機率還差';
+    if (k <= 0.20) return '輕微一致';
+    if (k <= 0.40) return '尚可';
+    if (k <= 0.60) return '中等一致';
+    if (k <= 0.80) return '高度一致';
+    return '幾乎完全一致';
+  }
+  function fmt(x, d) { return x == null ? '—' : (Math.round(x * Math.pow(10, d)) / Math.pow(10, d)).toFixed(d); }
+
+  // ---------- 輸出 ----------
+
+  function headerLines(a, tool) {
+    var au = String(a.author || '').trim(), yr = String(a.year || '').trim(), ti = String(a.title || '').trim().replace(/\s*\n\s*/g, ' ');
+    var cite = [au ? au + (yr ? ' (' + yr + ')' : '') : '', ti + (!au && yr ? ' (' + yr + ')' : '')].filter(Boolean).join('. ') || paperLabel(a);
+    var bits = [];
+    if (a.design) bits.push('研究設計：' + designLabel(a.design));
+    bits.push('評讀工具：' + (tool ? toolLabel(tool) + (tool.name && tool.name !== tool.nameZh ? '（' + tool.name + '）' : '') : a.toolId));
+    if (a.level) bits.push('證據等級：' + a.level);
+    var foot = [];
+    foot.push('整體判定：' + (a.verdict || '—'));
+    if (a.reviewer) foot.push('評讀者：' + a.reviewer + (a.dual && a.reviewerB ? '、' + a.reviewerB : ''));
+    if (a.date) foot.push('日期：' + a.date);
+    return { cite: cite, info: bits.join('｜'), foot: foot.join('｜') };
+  }
+  function markdownFor(a, opts) {
+    var tool = getTool(a.toolId);
+    var h = headerLines(a, tool);
+    var table = tool ? T.toMarkdownTable(tool, a.answers, { includeNotes: !opts || opts.includeNotes !== false }) : '';
+    return '**' + h.cite.replace(/([*_])/g, '\\$1') + '**\n\n' + h.info + '\n\n' + table + '\n\n' + h.foot + '\n';
+  }
+
+  var CSV_HEAD = ['作者', '年份', '篇名', '研究設計', '證據等級', '評讀工具', '題號', '段落', '評讀項目', '評讀結果', '評析根據', '評讀者', '評讀者 B 結果', '評讀者 B', '整體判定', '評讀日期'];
+  function csvRows(list) {
+    var rows = [CSV_HEAD.slice()];
+    list.forEach(function (a) {
+      var tool = getTool(a.toolId);
+      var items = tool ? tool.items : [];
+      if (!items.length) rows.push([a.author, a.year, a.title, designLabel(a.design), a.level, a.toolId, '', '', '', '', '', a.reviewer, '', a.dual ? a.reviewerB : '', a.verdict, a.date]);
+      items.forEach(function (it, i) {
+        var x = a.answers[it.id] || {}, y = a.answersB[it.id] || {};
+        rows.push([a.author, a.year, a.title, designLabel(a.design), a.level, toolLabel(tool), String(i + 1), it.section || '', it.text,
+          x.answer || '', x.note || '', a.reviewer, a.dual ? (y.answer || '') : '', a.dual ? a.reviewerB : '', a.verdict, a.date]);
+      });
+    });
+    return rows;
+  }
+  function csvFor(list) {
+    var s = String(T.toCSV(csvRows(list)));
+    return '﻿' + s.replace(/^﻿/, '');
+  }
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function nl2br(s) { return esc(s).replace(/\r?\n/g, '<br>'); }
+  var CELL = 'border:1px solid #000;padding:4pt 6pt;vertical-align:top;';
+  // Word／Google 文件可直接貼上的表格（行內樣式），也用在列印
+  function tableHtml(a) {
+    var tool = getTool(a.toolId), h = headerLines(a, tool);
+    var out = '<p style="margin:0 0 4pt"><b>' + esc(h.cite) + '</b></p><p style="margin:0 0 6pt">' + esc(h.info) + '</p>';
+    out += '<table style="border-collapse:collapse;width:100%;font-size:11pt" border="1" cellpadding="4"><thead><tr>' +
+      '<th style="' + CELL + 'background:#E7E6E6;width:40%">評讀項目</th><th style="' + CELL + 'background:#E7E6E6;width:12%">評讀結果</th><th style="' + CELL + 'background:#E7E6E6">評析根據</th></tr></thead><tbody>';
+    var sec = null;
+    (tool ? tool.items : []).forEach(function (it, i) {
+      if (it.section && it.section !== sec) {
+        sec = it.section;
+        out += '<tr><td colspan="3" style="' + CELL + 'background:#F2F2F2"><b>' + esc(sec) + '</b></td></tr>';
+      }
+      var x = a.answers[it.id] || {};
+      out += '<tr><td style="' + CELL + '">' + esc((i + 1) + '. ' + it.text) + '</td><td style="' + CELL + 'text-align:center">' + esc(x.answer || '') + '</td><td style="' + CELL + '">' + nl2br(x.note || '') + '</td></tr>';
+    });
+    out += '</tbody></table><p style="margin:6pt 0 0">' + esc(h.foot) + '</p>';
+    return out;
+  }
+  function tableText(a) {
+    var tool = getTool(a.toolId), h = headerLines(a, tool);
+    var clean = function (s) { return String(s || '').replace(/[\t\r\n]+/g, ' '); };
+    var lines = [h.cite, h.info, ['評讀項目', '評讀結果', '評析根據'].join('\t')];
+    (tool ? tool.items : []).forEach(function (it, i) {
+      var x = a.answers[it.id] || {};
+      lines.push([clean((i + 1) + '. ' + it.text), clean(x.answer), clean(x.note)].join('\t'));
+    });
+    lines.push(h.foot);
+    return lines.join('\n');
+  }
+  function wordHtml(list) {
+    return '<html><head><meta charset="utf-8"></head><body>' + list.map(tableHtml).join('<p>&nbsp;</p>') + '</body></html>';
+  }
+  function wordText(list) { return list.map(tableText).join('\n\n'); }
+
+  // 燈號總覽：依工具分組（目錄順序；找不到的工具排最後）
+  function trafficGroups(list) {
+    var groups = [], byTool = {};
+    TOOLS.forEach(function (t) { byTool[t.id] = { tool: t, toolId: t.id, papers: [] }; });
+    list.forEach(function (a) {
+      var g = byTool[a.toolId];
+      if (!g) g = byTool[a.toolId] = { tool: null, toolId: a.toolId, papers: [] };
+      var tool = g.tool, dis = disagreements(a, tool);
+      g.papers.push({
+        id: a.id, label: paperLabel(a), verdict: a.verdict || '',
+        cells: tool ? tool.items.map(function (it) {
+          var v = (a.answers[it.id] || {}).answer || '';
+          return { itemId: it.id, answer: v, cls: answerClass(v), disagree: dis.indexOf(it.id) !== -1 };
+        }) : [],
+        summary: summaryFor(a, tool),
+        kappa: a.dual ? kappa(pairsFor(a, tool)) : null
+      });
+    });
+    Object.keys(byTool).forEach(function (k) { if (byTool[k].papers.length) groups.push(byTool[k]); });
+    groups.sort(function (x, y) {
+      var ix = TOOLS.indexOf(x.tool), iy = TOOLS.indexOf(y.tool);
+      return (ix === -1 ? 1e9 : ix) - (iy === -1 ? 1e9 : iy);
+    });
+    return groups;
+  }
+  function trafficHtml(list) {
+    return trafficGroups(list).map(function (g) {
+      var items = g.tool ? g.tool.items : [];
+      var h = '<h2>' + esc(g.tool ? toolLabel(g.tool) : '找不到的工具：' + g.toolId) + '（' + g.papers.length + ' 篇）</h2>';
+      h += '<table><thead><tr><th>論文</th>' + items.map(function (it, i) { return '<th>Q' + (i + 1) + '</th>'; }).join('') + '<th>判定</th></tr></thead><tbody>';
+      g.papers.forEach(function (p) {
+        h += '<tr><td>' + esc(p.label) + '</td>' + p.cells.map(function (c) {
+          return '<td style="text-align:center">' + esc(c.answer ? SYMBOL[c.cls] + ' ' + c.answer : '') + '</td>';
+        }).join('') + '<td>' + esc(p.verdict) + '</td></tr>';
+      });
+      h += '</tbody></table><p style="font-size:9pt">' + items.map(function (it, i) { return 'Q' + (i + 1) + ' ' + esc(it.text); }).join('；') + '</p>';
+      return h;
+    }).join('');
+  }
+
+  // ---------- 儲存（localStorage 不能用時退回記憶體） ----------
+
+  function makeStore() {
+    var mem = {}, ok = false;
+    try { var k = '__zb_probe'; global.localStorage.setItem(k, '1'); global.localStorage.removeItem(k); ok = true; } catch (e) { ok = false; }
+    return {
+      ok: ok,
+      get: function (key) {
+        if (ok) { try { return global.localStorage.getItem(key); } catch (e) {} }
+        return Object.prototype.hasOwnProperty.call(mem, key) ? mem[key] : null;
+      },
+      set: function (key, val) {
+        mem[key] = val;
+        if (!ok) return false;
+        try { global.localStorage.setItem(key, val); return true; } catch (e) { return false; }
+      }
+    };
+  }
+  var KEYS = { list: 'zb-appraisal-v1', current: 'zb-appraisal-current', reviewer: 'zb-appraisal-reviewer' };
+
+  var doc = global.document;
+
+  // 同步複製（在使用者點擊當下），不行再用 Clipboard API
+  function copyText(text) {
+    var ok = false, active = doc.activeElement;
+    try {
+      var ta = doc.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+      doc.body.appendChild(ta); ta.select();
+      ok = doc.execCommand && doc.execCommand('copy');
+      ta.remove();
+      if (active && active.focus) active.focus({ preventScroll: true });
+    } catch (e) { ok = false; }
+    if (ok) return Promise.resolve(true);
+    if (global.navigator && navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return false; });
+    }
+    return Promise.resolve(false);
+  }
+  // 用 copy 事件放入 text/html（舊瀏覽器、沒有 ClipboardItem 時）
+  function copyHtmlSync(html, text) {
+    var set = false, ok = false;
+    function onCopy(e) {
+      if (!e.clipboardData) return;
+      e.clipboardData.setData('text/html', html); e.clipboardData.setData('text/plain', text);
+      e.preventDefault(); set = true;
+    }
+    try { doc.addEventListener('copy', onCopy); ok = !!(doc.execCommand && doc.execCommand('copy')); } catch (e) { ok = false; }
+    doc.removeEventListener('copy', onCopy);
+    return ok && set;
+  }
+  // 回傳 Promise<'html'|'text'|false>
+  function copyRich(html, text) {
+    var nav = global.navigator;
+    var fallback = function () {
+      if (copyHtmlSync(html, text)) return Promise.resolve('html');
+      return api.copyText(text).then(function (ok) { return ok ? 'text' : false; });
+    };
+    if (typeof global.ClipboardItem === 'function' && nav && nav.clipboard && typeof nav.clipboard.write === 'function') {
+      try {
+        var item = new global.ClipboardItem({
+          'text/html': new global.Blob([html], { type: 'text/html' }),
+          'text/plain': new global.Blob([text], { type: 'text/plain' })
+        });
+        return nav.clipboard.write([item]).then(function () { return 'html'; }, fallback);
+      } catch (e) { /* 改用下面的方式 */ }
+    }
+    return fallback();
+  }
+  function download(name, content, type) {
+    try {
+      var url = URL.createObjectURL(new global.Blob([content], { type: type }));
+      var a = doc.createElement('a');
+      a.href = url; a.download = name;
+      doc.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  var api = {
+    ANSWERS: ANSWERS, KEYS: KEYS, SYMBOL: SYMBOL,
+    answerClass: answerClass, verdictClass: verdictClass, designLabel: designLabel, designOptions: designOptions,
+    blankAppraisal: blankAppraisal, normalizeAppraisals: normalizeAppraisals, mergeAppraisals: mergeAppraisals, duplicateAppraisal: duplicateAppraisal,
+    paperLabel: paperLabel, kappa: kappa, pairsFor: pairsFor, disagreements: disagreements, interpretKappa: interpretKappa,
+    markdownFor: markdownFor, csvRows: csvRows, csvFor: csvFor, tableHtml: tableHtml, tableText: tableText, wordHtml: wordHtml, wordText: wordText,
+    trafficGroups: trafficGroups, makeStore: makeStore,
+    // 以下測試時可替換
+    copyText: copyText, copyRich: copyRich, download: download,
+    print: function () { global.print(); }
+  };
+  global.ZBAppraisal = api;
+
+  // ---------- 介面 ----------
+
+  if (!doc || !doc.getElementById('items')) return;
+  var $ = function (id) { return doc.getElementById(id); };
+
+  // 評析根據、篇名會隨內容長高（不用手動拉）
+  function autosize(ta) {
+    if (!ta || !ta.classList.contains('grow')) return;
+    ta.style.height = 'auto';
+    if (ta.scrollHeight) ta.style.height = (ta.scrollHeight + 3) + 'px';
+  }
+  function autosizeAll() { doc.querySelectorAll('textarea.grow').forEach(autosize); }
+  doc.addEventListener('input', function (e) { if (e.target && e.target.tagName === 'TEXTAREA') autosize(e.target); });
+  global.addEventListener('resize', autosizeAll);
+
+  var toastTimer;
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 3200);
+  }
+  api.toast = toast;
+
+  if (!T || !TOOLS.length) {
+    $('noCatalog').hidden = false;
+    $('layout').hidden = true; $('sumCard').hidden = true;
+    return;
+  }
+
+  var store = makeStore();
+  api.store = store;
+  $('storeWarn').hidden = store.ok;
+
+  var list = [];
+  try { list = normalizeAppraisals(JSON.parse(store.get(KEYS.list) || '[]')); } catch (e) { list = []; }
+  var cur = null;
+  function persist() {
+    store.set(KEYS.list, JSON.stringify(list));
+    if (cur) store.set(KEYS.current, cur.id);
+  }
+  function touch() { cur.updatedAt = new Date().toISOString(); persist(); }
+  function curTool() { return getTool(cur.toolId); }
+  api.state = function () { return { list: list, current: cur }; };
+
+  // 研究設計選單
+  var designSel = $('f-design');
+  (function () {
+    var o = doc.createElement('option'); o.value = ''; o.textContent = '請選擇（會推薦評讀工具）'; designSel.appendChild(o);
+    designOptions().forEach(function (d) {
+      var op = doc.createElement('option'); op.value = d; op.textContent = designLabel(d); designSel.appendChild(op);
+    });
+  })();
+
+  function renderToolSelect() {
+    var sel = $('f-tool'); sel.replaceChildren();
+    var rec = toolsForDesign(cur.design), recIds = rec.map(function (t) { return t.id; });
+    var addGroup = function (label, tools) {
+      if (!tools.length) return;
+      var g = doc.createElement('optgroup'); g.label = label;
+      tools.forEach(function (t) {
+        var o = doc.createElement('option'); o.value = t.id;
+        o.textContent = toolLabel(t) + (t.name && t.name !== t.nameZh ? ' · ' + t.name : '');
+        g.appendChild(o);
+      });
+      sel.appendChild(g);
+    };
+    if (!getTool(cur.toolId)) {
+      var miss = doc.createElement('option'); miss.value = cur.toolId; miss.textContent = '（找不到這個工具：' + cur.toolId + '）'; sel.appendChild(miss);
+    }
+    if (rec.length) addGroup('建議：' + designLabel(cur.design), rec);
+    var fams = [];
+    TOOLS.forEach(function (t) { if (fams.indexOf(t.family) === -1) fams.push(t.family); });
+    fams.forEach(function (f) {
+      addGroup((rec.length ? '其他 ' : '') + (f || '其他'), TOOLS.filter(function (t) { return t.family === f && recIds.indexOf(t.id) === -1; }));
+    });
+    sel.value = cur.toolId;
+    renderToolInfo();
+  }
+  function renderToolInfo() {
+    var tool = curTool();
+    var note = $('toolNote');
+    var rec = toolsForDesign(cur.design);
+    if (!tool) {
+      note.hidden = false;
+      note.querySelector('p').textContent = '目前的評讀工具清單裡沒有「' + cur.toolId + '」，題目無法顯示；已填的答案仍保留在匯出的 JSON。請改選其他工具。';
+    } else if (cur.design && rec.length && rec.indexOf(tool) === -1) {
+      note.hidden = false;
+      note.querySelector('p').textContent = designLabel(cur.design) + ' 建議使用：' + rec.map(toolLabel).join('、') + '。';
+    } else if (cur.design && !rec.length) {
+      note.hidden = false;
+      note.querySelector('p').textContent = '沒有專門給「' + designLabel(cur.design) + '」的工具，請從清單選最接近的一種。';
+    } else note.hidden = true;
+    $('toolBox').hidden = !tool;
+    if (!tool) return;
+    var nm = $('toolName'); nm.replaceChildren();
+    var fam = doc.createElement('span'); fam.className = 'fam'; fam.textContent = tool.family || '';
+    nm.append(fam, doc.createTextNode(toolLabel(tool) + (tool.name && tool.name !== tool.nameZh ? '（' + tool.name + '）' : '')));
+    $('toolLic').textContent = tool.license ? '授權：' + tool.license : '';
+    var src = $('toolSrc');
+    src.hidden = !tool.source;
+    if (tool.source) src.href = tool.source;
+  }
+
+  // 逐題
+  function segButtons(who, itemId) {
+    var seg = doc.createElement('div'); seg.className = 'seg'; seg.setAttribute('role', 'group');
+    seg.style.setProperty('--n', ANSWERS.length);
+    ANSWERS.forEach(function (v) {
+      var b = doc.createElement('button'); b.type = 'button';
+      b.className = answerClass(v); b.textContent = v;
+      b.dataset.who = who; b.dataset.item = itemId; b.dataset.val = v;
+      b.setAttribute('aria-pressed', 'false');
+      seg.appendChild(b);
+    });
+    return seg;
+  }
+  function renderItems() {
+    var ol = $('items'); ol.replaceChildren();
+    var tool = curTool();
+    if (!tool) return;
+    var sec = null;
+    tool.items.forEach(function (it, i) {
+      if (it.section && it.section !== sec) {
+        sec = it.section;
+        var sh = doc.createElement('li'); sh.className = 'sec'; sh.textContent = sec; sh.setAttribute('role', 'presentation'); ol.appendChild(sh);
+      }
+      var li = doc.createElement('li'); li.className = 'item'; li.dataset.item = it.id;
+      var head = doc.createElement('div'); head.className = 'ihead';
+      var num = doc.createElement('span'); num.className = 'num'; num.textContent = i + 1;
+      var tx = doc.createElement('div'); tx.className = 'itext';
+      var t = doc.createElement('p'); t.className = 't'; t.id = 'q-' + it.id; t.textContent = it.text;
+      tx.appendChild(t);
+      if (it.textEn) { var en = doc.createElement('p'); en.className = 'en'; en.textContent = it.textEn; en.lang = 'en'; tx.appendChild(en); }
+      head.append(num, tx);
+      var hint = null;
+      if (it.hint) {
+        var hb = doc.createElement('button'); hb.type = 'button'; hb.className = 'hintbtn'; hb.textContent = '提示';
+        hb.setAttribute('aria-expanded', 'false'); hb.dataset.hint = it.id;
+        head.appendChild(hb);
+        hint = doc.createElement('p'); hint.className = 'hint'; hint.id = 'hint-' + it.id; hint.hidden = true; hint.textContent = it.hint;
+        hb.setAttribute('aria-controls', hint.id);
+      }
+      li.appendChild(head);
+      if (hint) li.appendChild(hint);
+      var lab = doc.createElement('label'); lab.className = 'vh'; lab.htmlFor = 'note-' + it.id; lab.textContent = '第 ' + (i + 1) + ' 題評析根據';
+      var ta = doc.createElement('textarea'); ta.id = 'note-' + it.id; ta.rows = 2; ta.className = 'grow'; ta.dataset.note = it.id;
+      ta.placeholder = '評析根據：引用原文的設計、數字或頁碼';
+      ta.value = (cur.answers[it.id] || {}).note || '';
+      if (it.open) {
+        // 開放題（例如 CASP「結果是什麼？」）：只寫文字，不計入是／否統計
+        li.classList.add('openq');
+        var oq = doc.createElement('p'); oq.className = 'hint'; oq.textContent = '開放題：請在下方寫下結果（不計入「是／否」統計）';
+        ta.placeholder = '寫下結果：效應量、95% CI、p 值與頁碼';
+        li.append(oq, lab, ta);
+        ol.appendChild(li);
+        return;
+      }
+      var ra = doc.createElement('div'); ra.className = 'ans a';
+      var wa = doc.createElement('span'); wa.className = 'who'; wa.textContent = 'A';
+      var sa = segButtons('A', it.id); sa.setAttribute('aria-labelledby', t.id);
+      ra.append(wa, sa);
+      var rb = doc.createElement('div'); rb.className = 'ans b';
+      var wb = doc.createElement('span'); wb.className = 'who'; wb.textContent = 'B';
+      var sb = segButtons('B', it.id); sb.setAttribute('aria-label', '評讀者 B：第 ' + (i + 1) + ' 題');
+      var dt = doc.createElement('span'); dt.className = 'distag'; dt.textContent = '⚠ 兩位評讀者不一致，請討論後決定'; dt.hidden = true;
+      rb.append(wb, sb, dt);
+      li.append(ra, rb, lab, ta);
+      ol.appendChild(li);
+    });
+  }
+
+  function renderVerdict() {
+    var box = $('verdict'); box.replaceChildren();
+    var tool = curTool();
+    var vs = tool && Array.isArray(tool.verdicts) && tool.verdicts.length ? tool.verdicts : ['納入', '排除', '需更多資訊'];
+    box.style.setProperty('--n', vs.length);
+    vs.forEach(function (v) {
+      var b = doc.createElement('button'); b.type = 'button'; b.dataset.verdict = v; b.textContent = v;
+      b.className = verdictClass(v, vs);
+      b.setAttribute('aria-pressed', String(cur.verdict === v));
+      box.appendChild(b);
+    });
+  }
+
+  // 依目前答案更新按鈕、進度、κ、不一致標示
+  function refresh() {
+    var tool = curTool();
+    $('itemsCard').classList.toggle('dual', !!cur.dual);
+    doc.querySelectorAll('#items .seg button').forEach(function (b) {
+      var src = b.dataset.who === 'B' ? cur.answersB : cur.answers;
+      b.setAttribute('aria-pressed', String(((src[b.dataset.item] || {}).answer || '') === b.dataset.val));
+    });
+    doc.querySelectorAll('#items .ans.b').forEach(function (r) { r.hidden = !cur.dual; });
+    var dis = disagreements(cur, tool);
+    doc.querySelectorAll('#items li.item').forEach(function (li) {
+      var d = dis.indexOf(li.dataset.item) !== -1;
+      li.classList.toggle('disagree', d);
+      var tag = li.querySelector('.distag');
+      if (tag) tag.hidden = !d; // open items have no answer rows
+    });
+    doc.querySelectorAll('#verdict button').forEach(function (b) { b.setAttribute('aria-pressed', String(cur.verdict === b.dataset.verdict)); });
+
+    // 進度
+    var bar = $('progBar'), line = $('progLine');
+    bar.replaceChildren(); line.replaceChildren();
+    var s = summaryFor(cur, tool);
+    if (s) {
+      var total = s.total || 0;
+      ANSWERS.forEach(function (v) {
+        var n = (s.counts && s.counts[v]) || 0;
+        if (!n || !total) return;
+        var i = doc.createElement('i'); i.className = answerClass(v); i.style.width = (n / total * 100) + '%'; bar.appendChild(i);
+      });
+      var b = doc.createElement('b'); b.textContent = '已答 ' + s.answered + '／' + total + ' 題';
+      line.appendChild(b);
+      var c = doc.createElement('span');
+      c.textContent = ANSWERS.map(function (v) { return v + ' ' + ((s.counts && s.counts[v]) || 0); }).join('・');
+      line.appendChild(c);
+      var py = doc.createElement('span'); py.textContent = '「' + ANSWERS[0] + '」比例 ' + (s.percentYes == null ? '—' : s.percentYes + '%');
+      line.appendChild(py);
+    }
+
+    // κ
+    var kb = $('kBox');
+    kb.hidden = !cur.dual;
+    kb.replaceChildren();
+    if (cur.dual && tool) {
+      var k = kappa(pairsFor(cur, tool));
+      var top = doc.createElement('div');
+      if (!k.n) top.textContent = '雙人評讀：兩位評讀者都作答的題目出現後，這裡會計算 Cohen\'s κ。';
+      else {
+        var kv = doc.createElement('span'); kv.className = 'kv';
+        kv.textContent = 'κ = ' + (k.kappa == null ? '無法計算' : fmt(k.kappa, 2));
+        top.append(kv, doc.createTextNode(k.kappa == null ? '' : '（' + interpretKappa(k.kappa) + '）'));
+        var sub = doc.createElement('div'); sub.className = 'small';
+        sub.textContent = '兩人都作答 ' + k.n + ' 題，一致 ' + k.agree + ' 題（' + Math.round(k.po * 100) + '%）；p_o = ' + fmt(k.po, 3) + '，p_e = ' + fmt(k.pe, 3) +
+          (dis.length ? '；' + dis.length + ' 題不一致（黃色標示）' : '') +
+          (k.kappa == null ? '。兩人都只用同一種答案，期望一致率 p_e = 1，κ 無法計算。' : '');
+        kb.append(top, sub);
+      }
+      if (!k.n) kb.appendChild(top);
+      var det = doc.createElement('details'); det.className = 'more';
+      var sm = doc.createElement('summary'); sm.textContent = 'κ 怎麼算？';
+      var body = doc.createElement('div'); body.className = 'body';
+      var f = doc.createElement('div'); f.className = 'formula'; f.textContent = 'κ = (p_o − p_e) ÷ (1 − p_e)';
+      var p1 = doc.createElement('p'); p1.textContent = 'p_o（觀察一致率）＝答案相同的題數 ÷ 兩人都作答的題數；p_e（機率一致率）＝Σ（A 選某答案的比例 × B 選同一答案的比例），答案類別為 ' + ANSWERS.join('、') + '。';
+      var p2 = doc.createElement('p'); p2.textContent = '解讀（Landis & Koch, 1977）：≤ 0.20 輕微、0.21–0.40 尚可、0.41–0.60 中等、0.61–0.80 高度、0.81–1.00 幾乎完全一致。題數少時 κ 很不穩定，報告時請同時寫一致率與不一致題目的討論結果。';
+      body.append(f, p1, p2); det.append(sm, body); kb.appendChild(det);
+    }
+  }
+
+  // 論文清單
+  function renderList() {
+    var ul = $('paperList'); ul.replaceChildren();
+    list.forEach(function (a) {
+      var tool = getTool(a.toolId);
+      var li = doc.createElement('li'); li.dataset.id = a.id;
+      if (a.id === cur.id) li.className = 'cur';
+      var open = doc.createElement('button'); open.type = 'button'; open.className = 'open'; open.dataset.open = a.id;
+      if (a.id === cur.id) open.setAttribute('aria-current', 'true');
+      var nm = doc.createElement('span'); nm.className = 'nm'; nm.textContent = paperLabel(a);
+      var sub = doc.createElement('span'); sub.className = 'sub';
+      var s = summaryFor(a, tool);
+      sub.textContent = (tool ? toolLabel(tool) : '找不到工具') + (s ? '・' + s.answered + '/' + s.total + ' 題' : '') + (a.verdict ? '・' + a.verdict : '');
+      open.append(nm, sub);
+      var mini = doc.createElement('span'); mini.className = 'mini'; mini.setAttribute('aria-hidden', 'true');
+      (tool ? tool.items : []).forEach(function (it) {
+        var i = doc.createElement('i'); i.className = answerClass((a.answers[it.id] || {}).answer); mini.appendChild(i);
+      });
+      var acts = doc.createElement('div'); acts.className = 'acts';
+      var dup = doc.createElement('button'); dup.type = 'button'; dup.className = 'btn small ghost'; dup.textContent = '複製'; dup.dataset.dup = a.id;
+      dup.setAttribute('aria-label', '複製「' + paperLabel(a) + '」');
+      var del = doc.createElement('button'); del.type = 'button'; del.className = 'btn small ghost'; del.textContent = '刪除'; del.dataset.del = a.id;
+      del.setAttribute('aria-label', '刪除「' + paperLabel(a) + '」');
+      acts.append(dup, del);
+      var foot = doc.createElement('div'); foot.className = 'foot'; foot.append(mini, acts);
+      li.append(open, foot);
+      ul.appendChild(li);
+    });
+  }
+
+  // 燈號總覽
+  (function () {
+    var lg = $('legend');
+    ANSWERS.forEach(function (v) {
+      var s = doc.createElement('span'); var d = doc.createElement('span'); d.className = 'dot ' + answerClass(v); d.textContent = SYMBOL[answerClass(v)] || '';
+      s.append(d, doc.createTextNode(v)); lg.appendChild(s);
+    });
+    var e = doc.createElement('span'); var d0 = doc.createElement('span'); d0.className = 'dot'; e.append(d0, doc.createTextNode('未答')); lg.appendChild(e);
+    var o = doc.createElement('span'); var d1 = doc.createElement('span'); d1.className = 'dot off'; o.append(d1, doc.createTextNode('雙人評讀不一致')); lg.appendChild(o);
+  })();
+  function renderTraffic() {
+    var box = $('traffic'); box.replaceChildren();
+    var groups = trafficGroups(list);
+    var anyDual = false;
+    groups.forEach(function (g) {
+      var items = g.tool ? g.tool.items : [];
+      var wrap = doc.createElement('div'); wrap.className = 'tgroup'; wrap.dataset.tool = g.toolId;
+      var h = doc.createElement('h3');
+      var hn = doc.createElement('span'); hn.textContent = g.tool ? toolLabel(g.tool) : '找不到的工具：' + g.toolId;
+      var hc = doc.createElement('span'); hc.className = 'small'; hc.textContent = g.papers.length + ' 篇';
+      h.append(hn, hc);
+      var tw = doc.createElement('div'); tw.className = 'table-wrap';
+      var table = doc.createElement('table'); table.className = 'tl';
+      var thead = doc.createElement('thead'), hr = doc.createElement('tr');
+      var th0 = doc.createElement('th'); th0.textContent = '論文'; hr.appendChild(th0);
+      items.forEach(function (it, i) { var th = doc.createElement('th'); th.className = 'q'; th.textContent = 'Q' + (i + 1); th.title = it.text; hr.appendChild(th); });
+      var groupDual = g.papers.some(function (p) { return p.kappa; });
+      anyDual = anyDual || groupDual;
+      ['「' + ANSWERS[0] + '」', '判定'].concat(groupDual ? ['κ'] : []).forEach(function (t) { var th = doc.createElement('th'); th.textContent = t; hr.appendChild(th); });
+      thead.appendChild(hr); table.appendChild(thead);
+      var tb = doc.createElement('tbody');
+      g.papers.forEach(function (p) {
+        var tr = doc.createElement('tr'); tr.dataset.id = p.id;
+        if (p.id === cur.id) tr.className = 'cur';
+        var td = doc.createElement('td'); td.className = 'paper';
+        var b = doc.createElement('button'); b.type = 'button'; b.className = 'linkbtn'; b.dataset.open = p.id; b.textContent = p.label;
+        td.appendChild(b); tr.appendChild(td);
+        p.cells.forEach(function (c, i) {
+          var tdq = doc.createElement('td'); tdq.className = 'q';
+          var d = doc.createElement('span'); d.className = 'dot' + (c.cls ? ' ' + c.cls : '') + (c.disagree ? ' off' : '');
+          d.textContent = c.cls ? SYMBOL[c.cls] : '';
+          d.title = 'Q' + (i + 1) + '：' + (c.answer || '未答') + (c.disagree ? '（雙人不一致）' : '');
+          d.setAttribute('aria-label', d.title);
+          tdq.appendChild(d); tr.appendChild(tdq);
+        });
+        var py = doc.createElement('td'); py.className = 'small';
+        py.textContent = p.summary ? (p.summary.counts && p.summary.counts[ANSWERS[0]] || 0) + '/' + p.summary.total : '—';
+        tr.appendChild(py);
+        var tv = doc.createElement('td');
+        if (p.verdict) { var vt = doc.createElement('span'); vt.className = 'vtag ' + verdictClass(p.verdict, g.tool && g.tool.verdicts); vt.textContent = p.verdict; tv.appendChild(vt); }
+        tr.appendChild(tv);
+        if (groupDual) {
+          var tk = doc.createElement('td'); tk.className = 'small';
+          tk.textContent = p.kappa ? (p.kappa.kappa == null ? (p.kappa.n ? '—' : '') : fmt(p.kappa.kappa, 2)) : '';
+          tr.appendChild(tk);
+        }
+        tb.appendChild(tr);
+      });
+      table.appendChild(tb); tw.appendChild(table);
+      wrap.append(h, tw);
+      if (items.length) {
+        var det = doc.createElement('details'); det.className = 'more';
+        var sm = doc.createElement('summary'); sm.textContent = '題目對照（Q1–Q' + items.length + '）';
+        var body = doc.createElement('div'); body.className = 'body';
+        var ol = doc.createElement('ol'); ol.className = 'qkey';
+        items.forEach(function (it) { var li = doc.createElement('li'); li.textContent = it.text; ol.appendChild(li); });
+        body.appendChild(ol); det.append(sm, body); wrap.appendChild(det);
+      }
+      box.appendChild(wrap);
+    });
+    // 全部雙人評讀合計 κ
+    if (anyDual) {
+      var pairs = [];
+      list.forEach(function (a) { if (a.dual) pairs = pairs.concat(pairsFor(a)); });
+      var k = kappa(pairs);
+      var p = doc.createElement('p'); p.className = 'small'; p.id = 'pooledKappa';
+      p.textContent = '雙人評讀合計（' + list.filter(function (a) { return a.dual; }).length + ' 篇、' + k.n + ' 題）：一致率 ' + (k.n ? Math.round(k.po * 100) + '%' : '—') + '，κ = ' + fmt(k.kappa, 2) + (k.kappa == null ? '' : '（' + interpretKappa(k.kappa) + '）');
+      box.appendChild(p);
+    }
+  }
+
+  // 切換論文
+  function fillInfo() {
+    $('f-author').value = cur.author; $('f-year').value = cur.year; $('f-title').value = cur.title;
+    designSel.value = cur.design;
+    if (designSel.value !== cur.design) {
+      var o = doc.createElement('option'); o.value = cur.design; o.textContent = designLabel(cur.design); designSel.appendChild(o); designSel.value = cur.design;
+    }
+    $('f-level').value = cur.level;
+    $('f-reviewer').value = cur.reviewer; $('f-reviewerB').value = cur.reviewerB; $('f-date').value = cur.date;
+    $('f-dual').checked = !!cur.dual; $('dualBox').hidden = !cur.dual;
+  }
+  function select(id) {
+    var a = list.filter(function (x) { return x.id === id; })[0] || list[0];
+    cur = a;
+    store.set(KEYS.current, cur.id);
+    fillInfo(); renderToolSelect(); renderItems(); renderVerdict(); refresh(); renderList(); renderTraffic(); autosizeAll();
+  }
+  api.select = select;
+  function addNew() {
+    var a = blankAppraisal({ reviewer: store.get(KEYS.reviewer) || '', toolId: cur ? cur.toolId : '', design: cur ? cur.design : '' });
+    list.unshift(a); persist(); select(a.id);
+    return a;
+  }
+  function after() { touch(); refresh(); renderList(); renderTraffic(); }
+
+  // 欄位
+  [['f-author', 'author'], ['f-year', 'year'], ['f-title', 'title'], ['f-reviewer', 'reviewer'], ['f-reviewerB', 'reviewerB'], ['f-date', 'date']].forEach(function (p) {
+    $(p[0]).addEventListener('input', function () {
+      cur[p[1]] = this.value;
+      if (p[1] === 'reviewer') store.set(KEYS.reviewer, this.value.trim());
+      after();
+    });
+  });
+  $('f-level').addEventListener('change', function () { cur.level = this.value; after(); });
+  designSel.addEventListener('change', function () {
+    cur.design = designSel.value;
+    var rec = toolsForDesign(cur.design);
+    var tool = curTool();
+    // 還沒作答就自動換成建議的工具；已作答則只提示，不動答案
+    if (rec.length && rec.indexOf(tool) === -1 && !hasAnswers(cur)) {
+      cur.toolId = rec[0].id; cur.verdict = '';
+      renderItems(); renderVerdict();
+      toast('已改用建議的工具：' + toolLabel(rec[0]));
+    }
+    renderToolSelect(); after();
+  });
+  $('f-tool').addEventListener('change', function () {
+    var next = this.value;
+    if (next === cur.toolId) return;
+    if (hasAnswers(cur) && !global.confirm('換評讀工具會清空這篇已填的答案與評析根據，確定要換？（想保留可以先在清單按「複製」）')) {
+      this.value = cur.toolId; return;
+    }
+    cur.toolId = next; cur.answers = {}; cur.answersB = {}; cur.verdict = '';
+    renderToolSelect(); renderItems(); renderVerdict(); after();
+  });
+  $('f-dual').addEventListener('change', function () {
+    cur.dual = this.checked; $('dualBox').hidden = !cur.dual;
+    after();
+  });
+
+  // 作答（再按一次取消）、評析根據、提示
+  $('items').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.hint) {
+      var h = $('hint-' + b.dataset.hint), open = h.hidden;
+      h.hidden = !open; b.setAttribute('aria-expanded', String(open));
+      return;
+    }
+    if (!b.dataset.val) return;
+    var src = b.dataset.who === 'B' ? cur.answersB : cur.answers;
+    var id = b.dataset.item, prev = src[id] || {};
+    var val = prev.answer === b.dataset.val ? '' : b.dataset.val;
+    if (b.dataset.who === 'B') { if (val) src[id] = { answer: val }; else delete src[id]; }
+    else {
+      var note = prev.note || '';
+      if (val || note) src[id] = { answer: val, note: note }; else delete src[id];
+    }
+    after();
+  });
+  $('items').addEventListener('input', function (e) {
+    var ta = e.target;
+    if (!ta.dataset || !ta.dataset.note) return;
+    var id = ta.dataset.note, prev = cur.answers[id] || {};
+    if (prev.answer || ta.value) cur.answers[id] = { answer: prev.answer || '', note: ta.value }; else delete cur.answers[id];
+    touch();
+  });
+  $('verdict').addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    cur.verdict = cur.verdict === b.dataset.verdict ? '' : b.dataset.verdict;
+    after();
+  });
+
+  // 清單
+  $('newBtn').addEventListener('click', function () { addNew(); $('f-author').focus(); toast('已新增一篇，填完會自動儲存'); });
+  function onListClick(e) {
+    var b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.open) { select(b.dataset.open); if (b.classList.contains('linkbtn')) $('infoCard').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    if (b.dataset.dup) {
+      var src = list.filter(function (a) { return a.id === b.dataset.dup; })[0];
+      if (!src) return;
+      var c = duplicateAppraisal(src);
+      list.splice(list.indexOf(src) + 1, 0, c); persist(); select(c.id);
+      toast('已複製「' + paperLabel(src) + '」');
+      return;
+    }
+    if (b.dataset.del) {
+      var a = list.filter(function (x) { return x.id === b.dataset.del; })[0];
+      if (!a || !global.confirm('刪除「' + paperLabel(a) + '」的評讀？刪除後無法復原。')) return;
+      list = list.filter(function (x) { return x.id !== a.id; });
+      if (!list.length) list.push(blankAppraisal({ reviewer: store.get(KEYS.reviewer) || '' }));
+      persist();
+      select(cur.id === a.id ? list[0].id : cur.id);
+      toast('已刪除');
+    }
+  }
+  $('paperList').addEventListener('click', onListClick);
+  $('traffic').addEventListener('click', onListClick);
+
+  // 匯出／匯入
+  $('exportBtn').addEventListener('click', function () {
+    var data = JSON.stringify({ app: 'zotero-bridge-appraisal', version: 1, exportedAt: new Date().toISOString(), appraisals: list }, null, 2);
+    if (!api.download('zotero-bridge-appraisals-' + today() + '.json', data, 'application/json')) {
+      api.copyText(data).then(function (ok) { toast(ok ? '無法下載，已改為複製 JSON' : '無法匯出'); });
+    }
+  });
+  $('importBtn').addEventListener('click', function () { $('importFile').click(); });
+  function importText(txt) {
+    var incoming = normalizeAppraisals(JSON.parse(txt));
+    if (!incoming.length) { toast('檔案裡沒有可匯入的評讀'); return 0; }
+    // 只有一篇空白的預設論文時，匯入後拿掉它
+    if (list.length === 1 && !hasAnswers(list[0]) && !list[0].author && !list[0].title) list = [];
+    var m = mergeAppraisals(list, incoming);
+    list = m.list; persist(); select(incoming[0].id);
+    toast('已匯入 ' + incoming.length + ' 篇（新增 ' + m.added + ' 篇）');
+    return incoming.length;
+  }
+  api.importText = importText;
+  $('importFile').addEventListener('change', function () {
+    var file = this.files && this.files[0];
+    if (!file) return;
+    var input = this;
+    file.text().then(importText).catch(function () { toast('匯入失敗：不是有效的 JSON 檔'); })
+      .then(function () { input.value = ''; });
+  });
+
+  // 輸出
+  function fileBase(a) {
+    return (paperLabel(a).replace(/[\\/:*?"<>|（）()\s]+/g, '-').replace(/^-+|-+$/g, '') || 'appraisal').slice(0, 60);
+  }
+  $('copyMdBtn').addEventListener('click', function () {
+    api.copyText(markdownFor(cur, { includeNotes: $('withNotes').checked })).then(function (ok) { toast(ok ? '已複製 Markdown 表格' : '無法自動複製，請改用「下載 CSV」'); });
+  });
+  function copyWord(arr) {
+    api.copyRich(wordHtml(arr), wordText(arr)).then(function (r) {
+      toast(r === 'html' ? '已複製表格，貼到 Word 會保留框線' : r === 'text' ? '已複製（以 Tab 分隔的文字；貼到 Word 後可用「文字轉換為表格」）' : '無法自動複製，請改用「列印／存 PDF」或下載 CSV');
+    });
+  }
+  $('copyWordBtn').addEventListener('click', function () { copyWord([cur]); });
+  $('copyWordAllBtn').addEventListener('click', function () { copyWord(list); });
+  $('csvBtn').addEventListener('click', function () {
+    if (!api.download('appraisal-' + fileBase(cur) + '.csv', csvFor([cur]), 'text/csv;charset=utf-8')) toast('無法下載 CSV');
+  });
+  $('csvAllBtn').addEventListener('click', function () {
+    if (!api.download('appraisals-' + today() + '.csv', csvFor(list), 'text/csv;charset=utf-8')) toast('無法下載 CSV');
+  });
+
+  // 列印：按鈕指定內容；直接按 Ctrl／⌘＋P 就印目前這篇
+  var printMode = null;
+  function fillPrint(mode) {
+    var area = $('printArea');
+    var html = '';
+    if (mode === 'all') {
+      html = '<section><h1>文獻評讀燈號總覽</h1>' + trafficHtml(list) + '</section>' + list.map(function (a) { return '<section>' + tableHtml(a) + '</section>'; }).join('');
+    } else {
+      html = '<section>' + tableHtml(cur) + '</section>';
+    }
+    area.innerHTML = html;
+  }
+  api.fillPrint = fillPrint;
+  global.addEventListener('beforeprint', function () { fillPrint(printMode || 'one'); });
+  global.addEventListener('afterprint', function () { printMode = null; });
+  $('printBtn').addEventListener('click', function () { printMode = 'one'; fillPrint('one'); api.print(); });
+  $('printAllBtn').addEventListener('click', function () { printMode = 'all'; fillPrint('all'); api.print(); });
+
+  // 初始化
+  if (!list.length) list.push(blankAppraisal({ reviewer: store.get(KEYS.reviewer) || '' }));
+  select(store.get(KEYS.current) || list[0].id);
+})(window);
+</script>
+</body>
+</html>

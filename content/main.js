@@ -270,6 +270,15 @@
 			if (ai.dataError) messages.push(`⚠️ AI 子筆記的結構化資料無法讀取：${ai.dataError}`);
 		}
 
+		// 文獻評讀表 (appraisal-form.js): the saved form, else the AI note's appraisal as an unverified prefill
+		let appraisal = null;
+		try {
+			appraisal = ZB.appraisalForm.syncInfo(data, ai);
+		}
+		catch (e) {
+			messages.push(`⚠️ 文獻評讀表無法讀取：${e.message || e}`);
+		}
+
 		let route = ZB.core.resolveRoute(data, settings.rules, settings.defaults);
 		let folderParts = ZB.core.splitFolder(route.obsidianFolder);
 		let basename = ZB.core.noteBasename(data, settings.filenameFormat);
@@ -289,7 +298,7 @@
 			try {
 				if (!route.notionDatabase) throw new Error(`沒有對應的資料庫（規則：${route.ruleName || "預設"}）`);
 				notionUrl = await syncNotion(ctx.notion(settings.notionToken), route.notionDatabase, data, {
-					ai, notesMarkdown, obsidianURI: obsidian && obsidian.uri, messages, images, status,
+					ai, notesMarkdown, obsidianURI: obsidian && obsidian.uri, messages, images, status, appraisal,
 				}, ctx);
 			}
 			catch (e) {
@@ -301,7 +310,7 @@
 			ctx.status("寫入 Obsidian…");
 			try {
 				let noteData = await ZB.images.writeToVault(obsidian, data, images, messages);
-				await writeObsidian(obsidian, noteData, { ai, notesMarkdown, notionUrl, status });
+				await writeObsidian(obsidian, noteData, { ai, notesMarkdown, notionUrl, status, appraisal });
 				if (ctx.obsidianIndex) ctx.obsidianIndex.add(`${data.libraryPath}/${data.key}`, obsidian.path, obsidian.relParts);
 			}
 			catch (e) {
@@ -483,6 +492,8 @@
 			notionUrl,
 			// 「🔎 延伸搜尋」 links (search-links.js)
 			searchCallout: ZB.searchLinks.calloutFor(data, opts.ai && opts.ai.data),
+			appraisalMarkdown: opts.appraisal && opts.appraisal.markdown,
+			appraisal: opts.appraisal && opts.appraisal.values,
 			now: nowISO(),
 		});
 		text = ZB.status.applyPlanToNote(text, opts.status);
@@ -519,6 +530,10 @@
 			ctx.schemaHints.add(dsId);
 			if (opts.messages) opts.messages.push("Notion 資料庫還沒有研讀欄位（Study Design 等）：到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」即可加上");
 		}
+		if (opts.appraisal && !schema.props["Appraisal Verified"] && !ctx.schemaHints.has(dsId + "/appraisal")) {
+			ctx.schemaHints.add(dsId + "/appraisal");
+			if (opts.messages) opts.messages.push("Notion 資料庫還沒有「Appraisal Verified」欄位：到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」即可加上");
+		}
 		let zoteroKey = `${data.libraryPath}/${data.key}`;
 		let properties = ZB.notion.buildProperties(schema, {
 			title: data.title,
@@ -547,6 +562,7 @@
 			study,
 			apa: data.apa,
 			status: ZB.status.notionValue(opts.status),
+			appraisal: opts.appraisal && opts.appraisal.values,
 			lastSynced: nowISO(),
 		});
 		// The page status.js already looked up while merging the reading status
@@ -569,9 +585,12 @@
 			aiMarkdown: opts.ai && opts.ai.md,
 			notesMarkdown: opts.notesMarkdown,
 			searchCallout: ZB.searchLinks.calloutFor(data, study),
+			appraisalMarkdown: opts.appraisal && opts.appraisal.notionMarkdown,
 		});
 		let blocks = ZB.markdown.mdToNotionBlocks(md, { images: uploaded.ids });
-		await client.replaceManagedContainer(page.id, "自動同步區（重新同步會覆寫，個人筆記請寫在此區塊外）", blocks);
+		let containerId = await client.replaceManagedContainer(page.id, "自動同步區（重新同步會覆寫，個人筆記請寫在此區塊外）", blocks);
+		// The form's table as a real Notion table (a table can't be nested inside the container in one request)
+		if (opts.appraisal) await ZB.appraisalForm.insertNotionTable(client, containerId, opts.appraisal, opts.messages);
 		return page.url;
 	}
 
@@ -1353,6 +1372,8 @@
 		menuIDs.push(...ZB.citationChase.registerMenus({ pluginID, icon }));
 		// Medical-literature search links (search-links.js): item and Tools menus
 		menuIDs.push(...ZB.searchLinks.registerMenus({ pluginID, icon }));
+		// 文獻評讀總表 (appraisal-form.js): collection and Tools menus
+		menuIDs.push(...ZB.appraisalForm.registerMenus({ pluginID, icon }));
 		// Claude Message Batches for bulk AI notes (ai-batch.js): Tools menu
 		menuIDs.push(...ZB.aiBatch.registerMenus({ pluginID, icon }));
 	}
@@ -1367,6 +1388,8 @@
 		ZB.status.renderPaneRow(doc, body, item);
 		ZB.screening.renderPaneRow(doc, body, item);
 		ZB.searchLinks.renderPaneRow(doc, body, item);
+		// 文獻評讀表 (appraisal-form.js)
+		ZB.appraisalForm.renderPaneRow(doc, body, item);
 		let el = (tag, text, style) => {
 			let e = doc.createElement(tag);
 			if (text !== undefined) e.textContent = text;
@@ -1560,6 +1583,8 @@
 	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime,
 		// for status.js
 		enqueue, notify, buildObsidianIndex, saveQuietly,
+		// for appraisal-form.js
+		markSelfModified,
 		// for review-draft.js
 		recordAIUsage, runUsageLine, retryStatus,
 		// for ai-batch.js

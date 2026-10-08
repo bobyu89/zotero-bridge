@@ -347,6 +347,8 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 		"main/library/item", "main/library/collection", "main/menubar/tools",
 		// search-links.js
 		"main/library/item", "main/menubar/tools",
+		// appraisal-form.js
+		"main/library/collection", "main/menubar/tools",
 		// ai-batch.js
 		"main/menubar/tools"]);
 	assert.equal(env.panes[0].paneID, "zotero-bridge-ai-note");
@@ -688,7 +690,9 @@ test("item pane shows the AI note; synthesis from a collection writes Obsidian, 
 	assert.doesNotMatch(body.textContent, /study_design/);
 	assert.match(body.textContent, /claude-opus-5-5 · 2026-10-01/);
 	assert.match(body.textContent, /• 設計：RCT/);
-	assert.equal(body.querySelectorAll("button").length, 2);
+	// Two actions, plus 「開啟評讀表」 on the 文獻評讀表 row (appraisal-form.js)
+	assert.equal(body.querySelectorAll("button").length, 3);
+	assert.match(body.textContent, /文獻評讀表：尚未評讀/);
 	env.panes[0].onRender({ doc, body, item: b, setSectionSummary: s => { summary = s; } });
 	assert.equal(summary, "尚未產生");
 	assert.match(body.textContent, /還沒有 AI 文獻筆記/);

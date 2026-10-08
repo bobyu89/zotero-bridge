@@ -241,6 +241,7 @@ const TESTS = [
 			eq(ZB.version, ctx.expectedVersion, "ZB.version (from bootstrap startup's version param)");
 			const MODULES = {
 				apaZh: ["formatReference", "isChineseItem", "options"],
+				appraisalTools: ["getTool", "toolsForDesign", "findToolByName", "summarize", "toMarkdownTable", "toCSV", "toJSON", "fromJSON"],
 				core: ["buildObsidianNote", "resolveRoute", "buildBaseFile"],
 				markdown: ["htmlToMd", "mdToHtml"],
 				notion: ["NotionClient"],
@@ -262,6 +263,7 @@ const TESTS = [
 				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "registerMenus"],
 				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "registerMenus", "batchParams", "parseResults"],
 				ebhcReport: ["run", "askOptions", "processReport", "buildReportNote"],
+				appraisalForm: ["renderPaneRow", "syncInfo", "saveRecord", "exportSummary", "registerMenus"],
 				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly"],
 			};
 			let missing = [];
@@ -347,6 +349,8 @@ const TESTS = [
 				"zotero-bridge-search-item": "main/library/item",
 				"zotero-bridge-search-tools": "main/menubar/tools",
 				"zotero-bridge-ai-batch-tools": "main/menubar/tools",
+				"zotero-bridge-appraisal-collection": "main/library/collection",
+				"zotero-bridge-appraisal-tools": "main/menubar/tools",
 			};
 			d.registered = mine.map(o => `${o.menuID} → ${o.target}`);
 			let problems = [];

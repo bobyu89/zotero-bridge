@@ -1119,6 +1119,8 @@
 					}
 				}
 				if (!study) noData.push(r);
+				// A verified 文獻評讀表 overrides the AI note's tool and verdict (appraisal-form.js)
+				if (study && ZB.appraisalForm) study = ZB.appraisalForm.overrideStudyForItem(byID.get(r.id), study);
 				let entries = index ? index.get(`${r.libraryPath}/${r.key}`) || [] : [];
 				let link = entries.length ? entries[0].relParts.join("/").replace(/\.md$/i, "") : "";
 				rows.push(evidenceRow(r, study, link));
