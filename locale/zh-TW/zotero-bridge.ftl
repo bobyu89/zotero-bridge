@@ -96,3 +96,7 @@ zotero-bridge-search-more =
     .label = 更多資料庫…
 zotero-bridge-search-tools =
     .label = 醫學文獻快速搜尋…
+zotero-bridge-appraisal-summary =
+    .label = Zotero Bridge：匯出文獻評讀總表
+zotero-bridge-appraisal-tools-summary =
+    .label = 匯出文獻評讀總表（目前分類）

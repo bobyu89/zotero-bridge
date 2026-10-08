@@ -27,6 +27,8 @@
 		"title", "authors", "year", "publication", "item_type", "doi", "url", "citekey",
 		"zotero", "zotero_key", "library", "collections", "tags", "notion",
 		...STUDY_KEYS,
+		// 文獻評讀表 (appraisal-form.js): has the user verified the appraisal?
+		"appraisal_verified",
 		"ai_model", "ai_generated", "fulltext_truncated", "date_added", "last_synced",
 		// Full-text status of the PDF (scanned.js): ok / partial / none / no_pdf
 		"full_text",
@@ -274,6 +276,20 @@
 		return out;
 	}
 
+	/**
+	 * 文獻評讀表 values (appraisal-form.js): appraisal_verified, and once verified the form's tool and
+	 * verdict in place of the AI note's. {} when the sync has no form (existing values are kept).
+	 */
+	function appraisalFrontmatter(appraisal) {
+		if (!appraisal) return {};
+		let out = { appraisal_verified: !!appraisal.verified };
+		if (appraisal.verified) {
+			out.appraisal_tool = appraisal.tool || "";
+			out.appraisal_overall = appraisal.overall || "";
+		}
+		return out;
+	}
+
 	function managedFrontmatter(data, opts = {}) {
 		return Object.assign({
 			title: data.title || "",
@@ -290,7 +306,7 @@
 			collections: data.collections || [],
 			tags: (data.tags || []).map(tagToObsidian).filter(Boolean),
 			notion: opts.notionUrl || "",
-		}, studyFrontmatter(opts.study), {
+		}, studyFrontmatter(opts.study), appraisalFrontmatter(opts.appraisal), {
 			ai_model: opts.aiModel || "",
 			ai_generated: opts.aiGeneratedAt || "",
 			fulltext_truncated: opts.fullTextTruncated ? true : "",
@@ -383,7 +399,8 @@
 	/**
 	 * @param {object} data item data from the Zotero adapter
 	 * @param {object} opts { aiMarkdown, notesMarkdown: [{title, md}], notionUrl,
-	 *   searchCallout: the 「🔎 延伸搜尋」 callout (search-links.js) }
+	 *   searchCallout: the 「🔎 延伸搜尋」 callout (search-links.js),
+	 *   appraisalMarkdown: the 「文獻評讀表」 section (appraisal-form.js) }
 	 */
 	function buildManagedSection(data, opts = {}) {
 		let parts = [MARK_START, infoCallout(data, opts)];
@@ -391,6 +408,7 @@
 		if (opts.aiMarkdown) {
 			parts.push("## 🤖 AI 文獻筆記\n\n" + demoteHeadings(opts.aiMarkdown.trim(), 1));
 		}
+		if (opts.appraisalMarkdown) parts.push(opts.appraisalMarkdown.trim());
 		if (data.abstract) {
 			parts.push("## Abstract\n\n" + data.abstract.trim());
 		}
@@ -575,7 +593,7 @@
 		MARK_START, MARK_END, MANAGED_KEYS, STUDY_KEYS, COLORS,
 		colorInfo, sanitizeFilename, creatorName, authorNames, firstAuthorLastName,
 		noteBasename, splitFolder, demoteHeadings, zoteroSelectURI, annotationURI, obsidianURI, tagToObsidian,
-		yamlScalar, splitFrontmatter, parseFrontmatterBlocks, buildFrontmatter, managedFrontmatter, studyFrontmatter,
+		yamlScalar, splitFrontmatter, parseFrontmatterBlocks, buildFrontmatter, managedFrontmatter, studyFrontmatter, appraisalFrontmatter,
 		annotationsMarkdown, buildManagedSection, buildObsidianNote,
 		resolveRoute, parseRules, truncate, buildBaseFile, STATUSES, DELETED_STATUS,
 		frontmatterScalar, setFrontmatterValue, zoteroKeyFromHead, markObsidianNoteDeleted,

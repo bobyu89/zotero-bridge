@@ -68,6 +68,8 @@
 		"JBI Level": { select: {} },
 		"Appraisal Tool": { select: {} },
 		"Appraisal": { select: {} },
+		// 文獻評讀表 (appraisal-form.js): checked once the user has verified the appraisal
+		"Appraisal Verified": { checkbox: {} },
 		"Population": { rich_text: {} },
 		"Intervention": { rich_text: {} },
 		"Comparison": { rich_text: {} },
@@ -322,6 +324,8 @@
 	 * study: normalised structured data from the AI note (ZB.llm.normalizeStudyData). When it is
 	 * absent the structured columns are left untouched, so a note without the JSON block doesn't
 	 * wipe values from an earlier sync.
+	 * appraisal: the 文獻評讀表 { verified, tool, overall } (appraisal-form.js); once verified, its tool
+	 * and verdict replace the AI note's in "Appraisal Tool" / "Appraisal".
 	 */
 	function buildProperties(schema, v) {
 		let p = {};
@@ -370,6 +374,12 @@
 			set("Measures", "multi_select", { multi_select: uniq(s.measures) });
 			set("Country", "select", select(s.country));
 		}
+		let a = v.appraisal;
+		if (a && a.verified) {
+			set("Appraisal Tool", "select", { select: a.tool ? { name: optionName(a.tool) } : null });
+			set("Appraisal", "select", { select: a.overall ? { name: optionName(a.overall) } : null });
+		}
+		set("Appraisal Verified", "checkbox", { checkbox: !!(a && a.verified) });
 		// Reading status merged by status.js; left as it is when this sync doesn't include it
 		if (v.status) set("Status", "select", { select: { name: optionName(v.status) } });
 		set("APA", "rich_text", { rich_text: rt(v.apa) });

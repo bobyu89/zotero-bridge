@@ -96,3 +96,7 @@ zotero-bridge-search-more =
     .label = More Databases…
 zotero-bridge-search-tools =
     .label = Quick Medical Literature Search…
+zotero-bridge-appraisal-summary =
+    .label = Zotero Bridge: Export appraisal summary
+zotero-bridge-appraisal-tools-summary =
+    .label = Export appraisal summary (current collection)
