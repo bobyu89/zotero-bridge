@@ -115,6 +115,26 @@ zotero-bridge-classify-tools =
 zotero-bridge-classify-undo =
     .label = Undo Last Classification
 
+## Toolbar button in the main window (content/toolbar.js)
+zotero-bridge-toolbar-group-sync =
+    .label = Sync
+zotero-bridge-toolbar-group-organize =
+    .label = Organize
+zotero-bridge-toolbar-group-search =
+    .label = Find literature
+zotero-bridge-toolbar-group-appraise =
+    .label = Screening and appraisal
+zotero-bridge-toolbar-group-ai =
+    .label = AI assistance and writing
+zotero-bridge-toolbar-sync =
+    .label = Sync Selected Items (Notion + Obsidian)
+zotero-bridge-toolbar-chase-items =
+    .label = Chase Citations of Selected Items (OpenAlex)
+zotero-bridge-toolbar-screen =
+    .label = Screen Selected Items
+zotero-bridge-toolbar-settings =
+    .label = Settings…
+
 ## Settings → 功能: presets and feature switches (content/features.js, preferences.js)
 zotero-bridge-features-heading = Features
 zotero-bridge-features-intro = Pick a starting point, then adjust one by one. Switches take effect immediately; when a feature is off, its settings below fold away too.
@@ -167,6 +187,8 @@ zotero-bridge-feature-concepts = Concept cards
 zotero-bridge-feature-concepts-desc = Turns the [[concepts]] in your notes into cards and an index, so you can see which papers talk about the same thing. No AI.
 zotero-bridge-feature-auto-classify = Auto-classification
 zotero-bridge-feature-auto-classify-desc = Suggests Zotero sub-collections by study design, PICO and your own rules; only what you tick is added, and a whole run can be undone.
+zotero-bridge-feature-toolbar-button = Toolbar button
+zotero-bridge-feature-toolbar-button-desc = A Zotero Bridge button in the toolbar above the item list, with the main commands grouped by research workflow instead of spread over the context and Tools menus.
 zotero-bridge-feature-search-links = Medical database search links
 zotero-bridge-feature-search-links-desc = Takes the title, MeSH terms and PICO to PubMed, CINAHL, Cochrane, Airiti and more. The search strategy is still yours.
 zotero-bridge-feature-pubmed-watch = PubMed new-literature watch

@@ -209,6 +209,35 @@ function fmValue(fm, key) {
 	return m ? m[1].trim().replace(/^"(.*)"$/, "$1") : undefined;
 }
 
+/**
+ * Open the Zotero Bridge toolbar menu as a click does, read what it shows (visible group IDs, entry
+ * IDs and translated labels), close it again.
+ */
+async function openToolbarMenu(button) {
+	let win = button.ownerGlobal;
+	let popup = button.querySelector("menupopup");
+	check(popup, "the toolbar button has no menupopup");
+	popup.openPopup(button, "after_start", 0, 0, false, false);
+	try {
+		await waitFor(() => popup.state === "open", "the Zotero Bridge toolbar menu to open", 10000);
+		// Fluent translates the entries asynchronously
+		await win.document.l10n.translateFragment(popup);
+		let shown = el => !el.hidden;
+		let groups = [...popup.querySelectorAll("[data-zb-group]")].filter(shown);
+		let entries = [...popup.children].filter(el => el.hasAttribute("data-zb-entry") && shown(el));
+		return {
+			groups: groups.map(el => el.getAttribute("data-zb-group")),
+			entries: entries.map(el => el.getAttribute("data-zb-entry")),
+			labels: [...groups, ...entries].map(el => `${el.getAttribute("data-l10n-id")}: ${el.getAttribute("label") || ""}`),
+			untranslated: [...groups, ...entries].filter(el => !(el.getAttribute("label") || "").trim()).map(el => el.getAttribute("data-l10n-id")),
+		};
+	}
+	finally {
+		popup.hidePopup();
+		await waitFor(() => popup.state === "closed", "the Zotero Bridge toolbar menu to close", 10000);
+	}
+}
+
 const ctx = { l10nSourceErrors: [] };
 
 // ---------- tests ----------
@@ -268,6 +297,7 @@ const TESTS = [
 				appraisalForm: ["renderPaneRow", "syncInfo", "saveRecord", "exportSummary", "registerMenus"],
 				progressReport: ["run", "askOptions", "logStatusChange", "latestReport", "registerMenus"],
 				features: ["isEnabled", "rawValue", "applyPreset", "currentPreset", "snapshot", "restore", "migrate", "gateMenus"],
+				toolbar: ["init", "add", "remove", "shutdown", "update"],
 				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly"],
 			};
 			let missing = [];
@@ -496,6 +526,65 @@ const TESTS = [
 			}
 			d.rendered = rendered;
 			check(!problems.length, problems.join("; "));
+		},
+	},
+	{
+		name: "toolbar button in the main window: place, label, icon, size, translated menu, keyboard, switch",
+		needs: ["Zotero.ZoteroBridge is set and has every module"],
+		async fn(d) {
+			let win = mainWindow();
+			let doc = win.document;
+			let T = zb().toolbar;
+			let button = await waitFor(() => doc.getElementById(T.BUTTON_ID),
+				"the Zotero Bridge toolbar button (bootstrap onMainWindowLoad → ZB.toolbar.add)", 10000);
+			eq(doc.querySelectorAll("#" + T.BUTTON_ID).length, 1, "toolbar buttons in the main window");
+			d.parent = button.parentNode && button.parentNode.id;
+			eq(d.parent, "zotero-items-toolbar", "the toolbar holding the button");
+			eq(button.previousElementSibling && button.previousElementSibling.id, "zotero-tb-note-add", "the button's neighbour on the left");
+			eq(button.getAttribute("aria-label"), "Zotero Bridge", "aria-label");
+			eq(button.getAttribute("tooltiptext"), "Zotero Bridge", "tooltiptext");
+			eq(button.getAttribute("type"), "menu", "button type");
+			check(button.classList.contains("zotero-tb-button"), "the button lacks Zotero's zotero-tb-button class");
+			check(!button.hidden, "the button is hidden although 工具列按鈕 is on");
+			// toolbar.css is applied: the plugin's icon, at the size of Zotero's own buttons
+			d.listStyleImage = win.getComputedStyle(button).listStyleImage;
+			check(/bridge\.svg/.test(d.listStyleImage), `list-style-image is ${d.listStyleImage} (is content/toolbar.css loaded?)`);
+			let note = doc.getElementById("zotero-tb-note-add");
+			let size = (el) => {
+				let r = el.getBoundingClientRect();
+				return `${Math.round(r.width)}x${Math.round(r.height)}`;
+			};
+			d.size = size(button);
+			d.noteAddSize = size(note);
+			eq(d.size, d.noteAddSize, "button size (width x height) compared with Zotero's 新增筆記 menu button");
+			let icon = button.querySelector(".toolbarbutton-icon");
+			let noteIcon = note.querySelector(".toolbarbutton-icon");
+			if (icon && noteIcon) {
+				d.iconSize = size(icon);
+				eq(d.iconSize, size(noteIcon), "icon size compared with 新增筆記");
+			}
+			// The menu as a click opens it: labelled groups, every entry translated, 設定… last
+			let menu = await openToolbarMenu(button);
+			d.menu = menu.labels;
+			check(menu.groups.length > 0, "no group shows in the toolbar menu");
+			check(!menu.untranslated.length, `toolbar menu entries without a label: ${menu.untranslated.join(", ")}`);
+			eq(menu.entries[menu.entries.length - 1], "settings", "last entry of the toolbar menu");
+			// Keyboard: Zotero's arrow-key row continues from 新增筆記 to the button and back
+			note.focus();
+			note.dispatchEvent(new win.KeyboardEvent("keydown", { key: Zotero.arrowNextKey, bubbles: true, cancelable: true }));
+			eq(doc.activeElement && doc.activeElement.id, T.BUTTON_ID, "focus after ArrowNext on 新增筆記");
+			button.dispatchEvent(new win.KeyboardEvent("keydown", { key: Zotero.arrowPreviousKey, bubbles: true, cancelable: true }));
+			eq(doc.activeElement && doc.activeElement.id, "zotero-tb-note-add", "focus after ArrowPrevious on the button");
+			note.blur();
+			// The 工具列按鈕 switch hides it live
+			try {
+				zb().features.setEnabled("toolbarButton", false);
+				await waitFor(() => button.hidden, "the button to hide with 工具列按鈕 off", 5000);
+			}
+			finally {
+				Zotero.Prefs.clear(ZB_PREF + "feature.toolbarButton", true);
+			}
+			await waitFor(() => !button.hidden, "the button to come back with 工具列按鈕 on", 5000);
 		},
 	},
 	{
@@ -1180,9 +1269,17 @@ const TESTS = [
 				});
 				return visible;
 			};
+			// The toolbar menu's entries (content/toolbar.js), off in 研究生引導 / on in both
+			const TOOLBAR_GATED = ["pubmed-watch", "chase-items", "chase-included", "chase-import", "synthesis", "review-draft",
+				"ebhc-report", "progress-report", "concepts-ai"];
+			const TOOLBAR_ALWAYS = ["sync", "sync-no-ai", "sync-obsidian", "sync-notion", "status", "classify", "dashboard", "concepts",
+				"bibliography", "quick-search", "screen", "dedup", "prisma", "appraisal-summary", "regenerate", "settings"];
+			let button = mainWindow().document.getElementById(ZB.toolbar.BUTTON_ID);
 			let before = F.snapshot();
 			let problems = [];
+			if (!button) problems.push("no Zotero Bridge toolbar button in the main window");
 			d.visible = {};
+			d.toolbar = {};
 			try {
 				for (let [preset, gatedVisible] of [["guided", false], ["advanced", true], ["guided", false]]) {
 					F.applyPreset(preset);
@@ -1204,6 +1301,20 @@ const TESTS = [
 						if (got !== want) problems.push(`${preset}: ${id} setVisible(${got}), expected ${want}`);
 					}
 					d.visible[preset] = seen;
+					// The toolbar menu follows the same switches, opened as a click opens it
+					if (button) {
+						let menu = await openToolbarMenu(button);
+						d.toolbar[preset] = menu.entries;
+						let groupsWant = ["sync", "organize", "search", "appraise", "ai"];
+						if (JSON.stringify(menu.groups) !== JSON.stringify(groupsWant)) {
+							problems.push(`${preset}: toolbar menu groups ${JSON.stringify(menu.groups)}, expected ${JSON.stringify(groupsWant)}`);
+						}
+						for (let id of [...TOOLBAR_GATED, ...TOOLBAR_ALWAYS]) {
+							let want = TOOLBAR_GATED.includes(id) ? gatedVisible : true;
+							let got = menu.entries.includes(id);
+							if (got !== want) problems.push(`${preset}: toolbar menu entry ${id} ${got ? "shown" : "hidden"}, expected ${want ? "shown" : "hidden"}`);
+						}
+					}
 				}
 				// One switch away from a preset is 自訂
 				F.setEnabled("synthesis", true);
@@ -1219,6 +1330,14 @@ const TESTS = [
 					check(render().querySelector("[data-zb-appraisal]"), "with 文獻評讀表 on, the item pane should show its row");
 					F.setEnabled("appraisalForm", false);
 					check(!render().querySelector("[data-zb-appraisal]"), "with 文獻評讀表 off, the item pane should not show its row");
+				}
+				// A toolbar group whose features are all off hides with its label
+				if (button) {
+					F.setEnabled("appraisalForm", false);
+					F.setEnabled("screening", false);
+					let menu = await openToolbarMenu(button);
+					d.toolbar.custom = menu.groups;
+					check(!menu.groups.includes("appraise"), `toolbar menu groups with 篩選 and 評讀表 off: ${JSON.stringify(menu.groups)}`);
 				}
 				// The PubMed watch timer only runs while the feature is on (no watches are saved: nothing is fetched)
 				setPref("pubmedWatch.autoCheck", true);
@@ -1249,12 +1368,18 @@ const TESTS = [
 			await waitFor(() => count() === 0, "the plugin's menus to be unregistered", 10000);
 			check(!(Zotero.ItemPaneManager.customSectionData.options || []).some(o => o.pluginID === PLUGIN_ID), "item pane section still registered after shutdown");
 			check(!mainWindow().document.querySelector('link[href="zotero-bridge.ftl"]'), "FTL link still in the main window after shutdown (onMainWindowUnload)");
+			check(!mainWindow().document.getElementById("zotero-bridge-tb-button"), "toolbar button still in the main window after shutdown");
+			check(!mainWindow().document.getElementById("zotero-bridge-tb-popup"), "toolbar menu still in the main window after shutdown");
+			check(!mainWindow().document.getElementById("zotero-bridge-toolbar-css"), "toolbar stylesheet still in the main window after shutdown");
 			await addon.enable();
 			await waitFor(() => Zotero.ZoteroBridge && Zotero.ZoteroBridge !== before, "a new Zotero.ZoteroBridge after enable()", 20000);
 			await waitFor(() => count() === menus, `${menus} menus registered again`, 10000);
 			await waitFor(() => (Zotero.ItemPaneManager.customSectionData.options || []).some(o => o.pluginID === PLUGIN_ID),
 				"item pane section registered again", 10000);
 			await waitFor(() => mainWindow().document.querySelector('link[href="zotero-bridge.ftl"]'), "FTL link back in the main window", 10000);
+			await waitFor(() => mainWindow().document.getElementById("zotero-bridge-tb-button"), "toolbar button back in the main window", 10000);
+			eq(mainWindow().document.querySelectorAll("#zotero-bridge-tb-button").length, 1, "toolbar buttons after the cycle");
+			eq(mainWindow().document.querySelectorAll("#zotero-bridge-toolbar-css").length, 1, "toolbar stylesheets after the cycle");
 			d.menus = menus;
 		},
 		// disable() and enable() each rebuild Zotero's plugin l10n source (see the startup test)
@@ -1411,8 +1536,14 @@ async function baseline() {
 			let src = win.L10nFileSource.createMock("zb-e2e-baseline", "app", Services.locale.availableLocales,
 				"zb-e2e-baseline:{locale}/", Services.locale.availableLocales.map(l => ({ path: `zb-e2e-baseline:${l}/x.ftl`, source: "zb-e2e-x = x\n" })));
 			reg.registerSources([src]);
-			await delay(1500);
-			diag.registerMockSource = messages.slice(from).filter(m => m.kind === "error").map(m => m.text);
+			// What it logs arrives asynchronously, after a varying delay (a fixed 1.5 s wait sometimes
+			// missed it): wait up to 10 s for the first error, then give any that follow a moment to land
+			let logged = () => messages.slice(from).filter(m => m.kind === "error");
+			let start = Date.now();
+			while (!logged().length && Date.now() - start < 10000) await delay(100);
+			diag.registerMockSourceWaitMs = Date.now() - start;
+			if (logged().length) await delay(1000);
+			diag.registerMockSource = logged().map(m => m.text);
 		}
 		catch (e) {
 			diag.registerMockSource = `threw ${e}`;

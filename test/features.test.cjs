@@ -48,7 +48,7 @@ test("presets: 研究生引導 leaves finding literature and writing to the user
 	assert.deepEqual(offInGuided, ["aiBatch", "citationChase", "classifyAI", "conceptsAI", "ebhcReport", "progressReport", "pubmedWatch", "reviewDraft", "synthesis"]);
 	assert.ok(F.FEATURES.every(f => f.presets.advanced), "advanced: all on");
 	// The features that help the user do it themselves stay on
-	for (let id of ["sync", "aiNotes", "status", "apaZh", "dashboard", "concepts", "autoClassify", "bibliography", "screening", "searchLinks", "appraisalForm", "annotationImages"]) {
+	for (let id of ["sync", "aiNotes", "status", "apaZh", "dashboard", "concepts", "autoClassify", "toolbarButton", "bibliography", "screening", "searchLinks", "appraisalForm", "annotationImages"]) {
 		assert.equal(F.get(id).presets.guided, true, id);
 	}
 	// Every AI feature is marked, and so is every feature that goes online on its own
@@ -65,6 +65,11 @@ test("presets: 研究生引導 leaves finding literature and writing to the user
 	assert.equal(F.get("autoClassify").group, "organize");
 	assert.equal(F.get("classifyAI").group, "ai");
 	assert.deepEqual(F.get("classifyAI").requires, ["autoClassify", "aiNotes"]);
+	// The toolbar button: plain UI, in 整理與同步, on in both presets
+	assert.equal(F.get("toolbarButton").group, "organize");
+	assert.equal(F.get("toolbarButton").usesAI, undefined);
+	assert.equal(F.get("toolbarButton").usesNetwork, undefined);
+	assert.deepEqual(F.get("toolbarButton").requires, []);
 });
 
 test("reused enable prefs stay the single source of truth", () => {
@@ -181,7 +186,7 @@ test("migrate: a fresh profile stays guided; earlier use turns the new switches 
 test("migrate to version 2: profiles already on 進階 get the new switches on, others keep the defaults", () => {
 	assert.equal(F.MIGRATION_VERSION, 2);
 	let added = F.FEATURES.filter(f => f.since === 2).map(f => f.id).sort();
-	assert.deepEqual(added, ["autoClassify", "classifyAI"]);
+	assert.deepEqual(added, ["autoClassify", "classifyAI", "toolbarButton"]);
 	assert.ok(F.FEATURES.filter(f => !added.includes(f.id)).every(f => f.since === 1));
 	let v1Advanced = () => {
 		let values = { "features.version": 1, "obsidian.vaultPath": "/vault" };
@@ -194,9 +199,10 @@ test("migrate to version 2: profiles already on 進階 get the new switches on, 
 	assert.equal(F.currentPreset(), "custom", "AI 主題分類 is still at its default before the migration");
 	let result = F.migrate();
 	assert.equal(result.preset, "advanced");
-	assert.deepEqual(result.added.sort(), ["autoClassify", "classifyAI"]);
+	assert.deepEqual(result.added.sort(), ["autoClassify", "classifyAI", "toolbarButton"]);
 	assert.equal(s.data["feature.classifyAI"], true);
 	assert.equal(s.data["feature.autoClassify"], true);
+	assert.equal(s.data["feature.toolbarButton"], true, "written, so a later default change can't hide it");
 	assert.equal(s.data[F.MIGRATION_PREF], 2);
 	assert.equal(F.currentPreset(), "advanced");
 	assert.equal(F.migrate(), null, "runs once");
@@ -209,6 +215,8 @@ test("migrate to version 2: profiles already on 進階 get the new switches on, 
 	assert.deepEqual(s.writes, [F.MIGRATION_PREF]);
 	assert.equal(F.isEnabled("classifyAI"), false);
 	assert.equal(F.isEnabled("autoClassify"), true);
+	assert.equal(F.isEnabled("toolbarButton"), true, "the toolbar button is on by default");
+	assert.equal(F.currentPreset(), "guided", "the new switches at their defaults keep 研究生引導");
 
 	// 自訂 (one earlier switch away from 進階): defaults, still 自訂
 	let custom = v1Advanced();
@@ -218,22 +226,27 @@ test("migrate to version 2: profiles already on 進階 get the new switches on, 
 	assert.equal(result.preset, "custom");
 	assert.equal(s.data["feature.classifyAI"], undefined);
 	assert.equal(F.isEnabled("classifyAI"), false);
+	assert.equal(s.data["feature.toolbarButton"], undefined);
+	assert.equal(F.isEnabled("toolbarButton"), true);
 
 	// A switch the user already set by hand is kept
-	let preset = Object.assign(v1Advanced(), { "feature.classifyAI": false });
+	let preset = Object.assign(v1Advanced(), { "feature.classifyAI": false, "feature.toolbarButton": false });
 	s = store(preset);
 	s.hasUserValue = key => key in s.data;
 	F.migrate();
 	assert.equal(s.data["feature.classifyAI"], false);
+	assert.equal(s.data["feature.toolbarButton"], false, "a hidden toolbar button stays hidden");
 
 	// A profile from before the switches (version 0) follows the earlier evidence logic for all switches
 	s = store({ "obsidian.vaultPath": "/vault" });
 	assert.equal(F.migrate().preset, "advanced");
 	assert.equal(s.data["feature.classifyAI"], true);
+	assert.equal(s.data["feature.toolbarButton"], true);
 	assert.equal(F.currentPreset(), "advanced");
 	s = store();
 	assert.equal(F.migrate().preset, "guided");
 	assert.equal(F.isEnabled("classifyAI"), false);
+	assert.equal(F.isEnabled("toolbarButton"), true);
 	assert.equal(s.data[F.MIGRATION_PREF], 2);
 });
 

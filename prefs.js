@@ -101,7 +101,7 @@ pref("extensions.zotero-bridge.searchLinks.meshHelper", true);
 // Feature switches (content/features.js), defaults = the 研究生引導 (guided) preset. Features that had
 // an enable pref before use it instead: llm.enabled, llm.batchAPI, status.enabled, apaZh.enabled,
 // images.export. features.version: the one-time migrations (0 = not run yet; 1 turned everything on for
-// profiles that used the plugin before the switches existed; 2 turns the 文獻自動分類 switches on for 進階 profiles)
+// profiles that used the plugin before the switches existed; 2 turns the 文獻自動分類 switches and the toolbar button on for 進階 profiles)
 pref("extensions.zotero-bridge.features.version", 0);
 pref("extensions.zotero-bridge.feature.sync", true);
 pref("extensions.zotero-bridge.feature.bibliography", true);
@@ -119,6 +119,7 @@ pref("extensions.zotero-bridge.feature.progressReport", false);
 pref("extensions.zotero-bridge.feature.conceptsAI", false);
 pref("extensions.zotero-bridge.feature.autoClassify", true);
 pref("extensions.zotero-bridge.feature.classifyAI", false);
+pref("extensions.zotero-bridge.feature.toolbarButton", true);
 // 文獻自動分類 (content/classify.js): where the sub-collections go (a collection path like 碩論/文獻回顧;
 // empty = the library's top level) and the parent's name; the four dimensions; topics (one per line,
 // `名稱: 說明`) and rules (one per line, `子分類名稱 = 條件`); the last applied run, for 復原上次分類

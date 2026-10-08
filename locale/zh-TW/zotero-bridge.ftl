@@ -115,6 +115,26 @@ zotero-bridge-classify-tools =
 zotero-bridge-classify-undo =
     .label = 復原上次分類
 
+## Toolbar button in the main window (content/toolbar.js)
+zotero-bridge-toolbar-group-sync =
+    .label = 同步
+zotero-bridge-toolbar-group-organize =
+    .label = 整理
+zotero-bridge-toolbar-group-search =
+    .label = 找文獻
+zotero-bridge-toolbar-group-appraise =
+    .label = 篩選與評讀
+zotero-bridge-toolbar-group-ai =
+    .label = AI 輔助與寫作
+zotero-bridge-toolbar-sync =
+    .label = 同步所選文獻（Notion + Obsidian）
+zotero-bridge-toolbar-chase-items =
+    .label = 引文追蹤所選文獻（OpenAlex）
+zotero-bridge-toolbar-screen =
+    .label = 篩選所選文獻
+zotero-bridge-toolbar-settings =
+    .label = 設定…
+
 ## Settings → 功能: presets and feature switches (content/features.js, preferences.js)
 zotero-bridge-features-heading = 功能
 zotero-bridge-features-intro = 先選一個起點，再逐項調整。開關馬上生效；關掉的功能，下面的設定也會收起來。
@@ -167,6 +187,8 @@ zotero-bridge-feature-concepts = 概念卡片
 zotero-bridge-feature-concepts-desc = 把筆記裡的 [[概念]] 整理成卡片和索引，看得出哪些文獻談同一件事。不呼叫 AI。
 zotero-bridge-feature-auto-classify = 文獻自動分類
 zotero-bridge-feature-auto-classify-desc = 依研究設計、PICO 和你寫的規則建議 Zotero 子分類，你勾選後才放進去，也能整批復原。
+zotero-bridge-feature-toolbar-button = 工具列按鈕
+zotero-bridge-feature-toolbar-button-desc = 在文獻清單上方的工具列放一個 Zotero Bridge 按鈕，常用功能依研究流程分組，不必再從右鍵或工具選單找。
 zotero-bridge-feature-search-links = 醫學資料庫搜尋連結
 zotero-bridge-feature-search-links-desc = 把題目、MeSH、PICO 帶到 PubMed、CINAHL、Cochrane、華藝等資料庫。檢索式還是你自己決定。
 zotero-bridge-feature-pubmed-watch = PubMed 新文獻追蹤

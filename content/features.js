@@ -31,7 +31,7 @@
 	}
 })(this, function (scope) {
 	const PREF = "extensions.zotero-bridge.";
-	// Bumped when a later version needs another one-time migration (2: 文獻自動分類 and AI 主題分類)
+	// Bumped when a later version needs another one-time migration (2: 文獻自動分類, AI 主題分類 and the toolbar button)
 	const MIGRATION_PREF = "features.version";
 	const MIGRATION_VERSION = 2;
 
@@ -92,6 +92,9 @@
 		{ id: "autoClassify", group: "organize", pref: "feature.autoClassify", presets: { guided: true, advanced: true }, since: 2,
 			label: "文獻自動分類",
 			desc: "依研究設計、PICO 和你寫的規則建議 Zotero 子分類，你勾選後才放進去，也能整批復原。" },
+		{ id: "toolbarButton", group: "organize", pref: "feature.toolbarButton", presets: { guided: true, advanced: true }, since: 2,
+			label: "工具列按鈕",
+			desc: "在文獻清單上方的工具列放一個 Zotero Bridge 按鈕，常用功能依研究流程分組，不必再從右鍵或工具選單找。" },
 		// 找文獻
 		{ id: "searchLinks", group: "search", pref: "feature.searchLinks", presets: { guided: true, advanced: true }, usesNetwork: true,
 			label: "醫學資料庫搜尋連結",

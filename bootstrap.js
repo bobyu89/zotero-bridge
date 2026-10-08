@@ -3,7 +3,7 @@ var ZB;
 // chrome://zotero-bridge/content/ (the review dialog of 文獻自動分類, content/classify-review.xhtml)
 var chromeHandle = null;
 
-const SCRIPTS = ["apa-zh.js", "appraisal-tools.js", "core.js", "markdown.js", "notion.js", "llm.js", "synthesis.js", "verify.js", "scanned.js", "usage.js", "secrets.js", "zotero-adapter.js", "export.js", "annotation-images.js", "status.js", "review-draft.js", "screening.js", "pubmed-watch.js", "dashboard.js", "citation-chase.js", "search-links.js", "ebhc-report.js", "ai-batch.js", "appraisal-form.js", "progress-report.js", "concepts.js", "classify.js", "features.js", "main.js"];
+const SCRIPTS = ["apa-zh.js", "appraisal-tools.js", "core.js", "markdown.js", "notion.js", "llm.js", "synthesis.js", "verify.js", "scanned.js", "usage.js", "secrets.js", "zotero-adapter.js", "export.js", "annotation-images.js", "status.js", "review-draft.js", "screening.js", "pubmed-watch.js", "dashboard.js", "citation-chase.js", "search-links.js", "ebhc-report.js", "ai-batch.js", "appraisal-form.js", "progress-report.js", "concepts.js", "classify.js", "features.js", "toolbar.js", "main.js"];
 
 function install() {}
 
@@ -30,6 +30,8 @@ async function startup({ id, version, rootURI }) {
 	Zotero.ZoteroBridge = ZB;
 	ZB.version = version;
 	ZB.main.init({ id, rootURI });
+	// The toolbar button (toolbar.js) loads its stylesheet from chrome:// when that is registered
+	ZB.toolbar.init({ rootURI, chrome: !!chromeHandle });
 	await Zotero.PreferencePanes.register({
 		pluginID: id,
 		id: "zotero-bridge-prefs",
@@ -46,9 +48,12 @@ async function startup({ id, version, rootURI }) {
 
 function onMainWindowLoad({ window }) {
 	window.MozXULElement.insertFTLIfNeeded("zotero-bridge.ftl");
+	// The Zotero Bridge button in the items toolbar
+	if (ZB && ZB.toolbar) ZB.toolbar.add(window);
 }
 
 function onMainWindowUnload({ window }) {
+	if (ZB && ZB.toolbar) ZB.toolbar.remove(window);
 	window.document.querySelector('[href="zotero-bridge.ftl"]')?.remove();
 }
 
@@ -57,6 +62,8 @@ function shutdown() {
 	for (let win of Zotero.getMainWindows()) {
 		onMainWindowUnload({ window: win });
 	}
+	// Windows that are no longer listed as main windows but still hold the button
+	if (ZB && ZB.toolbar) ZB.toolbar.shutdown();
 	delete Zotero.ZoteroBridge;
 	ZB = undefined;
 	if (chromeHandle) {

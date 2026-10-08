@@ -1,6 +1,6 @@
 ---
 name: Zotero Bridge
-description: Zotero 10 外掛的設定頁與項目窗格：在 Zotero 自己的設定視窗裡，像學長姐的提點一樣安靜、清楚。
+description: Zotero 10 外掛的設定頁、項目窗格與工具列按鈕：在 Zotero 自己的視窗裡，像學長姐的提點一樣安靜、清楚。
 colors:
   # The plugin defines no colors of its own: every value is one of Zotero's theme variables, so light
   # and dark themes come for free. Hex values are Zotero's light theme, for reference only.
@@ -62,6 +62,15 @@ components:
     padding: "0 0.45em"
   more-summary:
     textColor: "{colors.text-muted}"
+  toolbar-button:
+    # Zotero's own `.zotero-tb-button` rules in #zotero-items-toolbar (a menu button); the plugin sets only the 20px icon
+    textColor: "{colors.text-muted}"
+    rounded: "5px"
+    width: "40px"
+    height: "28px"
+  toolbar-menu-caption:
+    textColor: "{colors.text-muted}"
+    fontWeight: 600
 ---
 
 # Design System: Zotero Bridge
@@ -70,7 +79,7 @@ components:
 
 **Creative North Star: "The Senior's Margin Note"（學長姐的邊註）**
 
-The plugin lives inside someone else's house: Zotero's settings window and item pane. It never brings its own world. It borrows Zotero's typeface, colors, controls and spacing, and spends its one signature move on honesty: every feature says in one line what it does, and small markers say plainly when something calls an AI that costs money or goes online. The tone is a senior classmate leaning over to point at the right switch: direct, warm, never a sales pitch.
+The plugin lives inside someone else's house: Zotero's settings window, item pane and main toolbar. It never brings its own world. It borrows Zotero's typeface, colors, controls and spacing, and spends its one signature move on honesty: every feature says in one line what it does, and small markers say plainly when something calls an AI that costs money or goes online. The tone is a senior classmate leaning over to point at the right switch: direct, warm, never a sales pitch.
 
 The surface is **Operate** mode. A nursing graduate student opens settings to get one thing done (connect the vault, add an API key, turn a feature on) and leaves. The page is a working settings pane first; density is moderate, scanning beats reading, and nothing moves unless state changes.
 
@@ -178,6 +187,16 @@ The one place the plugin opens a window of its own: a non-modal Zotero dialog, b
 - **Foot** (sidepane material, Hairline above): the live count as a `role="status"` line (「已勾選 12 項：會建立 4 個子分類，加入 10 筆」), then 「取消」 and 「套用」 (600). Esc cancels; a decision disables both buttons.
 - **Focus:** the first checkbox gets focus; 2px Accent outlines on checkboxes, buttons and the folded list's summary.
 
+### Toolbar button (`content/toolbar.js`, `toolbar.css`)
+The one way into every command without hunting through context and Tools menus. It is a guest in Zotero's own toolbar, so it borrows everything and adds only its icon.
+- **Place:** the items toolbar (`#zotero-items-toolbar`, above the item list), right after Zotero's 「新增筆記」: that row holds the buttons that act on the selected items, before the search box. Not the tab bar (window-level: tabs, sync) and not the collections toolbar.
+- **Shape and states:** a XUL `toolbarbutton` with Zotero's `zotero-tb-button` class, `type="menu"` and a dropmarker, so size (40 × 28px), 5px radius, hover (Hairline fill), active and open (`--fill-quarternary`), disabled and the focus ring are Zotero's own rules. `toolbar.css` sets only the icon: `bridge.svg` as `list-style-image`, filled with `currentColor` through `-moz-context-properties`, drawn at Zotero's 20px. No colors of its own, so light, dark and high-contrast themes follow the neighbouring buttons.
+- **Name:** tooltip and `aria-label` 「Zotero Bridge」 (the product name, the same in every language); no visible text, like its neighbours.
+- **Keyboard:** Zotero's toolbar is one arrow-key row (`tabindex="-1"` on every button); the button joins it: ArrowRight from 「新增筆記」 reaches it, ArrowLeft goes back, Tab goes on to the search box. Enter, Space and ArrowDown open the menu.
+- **Menu:** groups in the order of the research workflow, each under a caption (Label weight 600, Pencil; a XUL `menucaption`, never clickable): 同步 → 整理 → 找文獻 → 篩選與評讀 → AI 輔助與寫作, separated by native separators, then 「設定…」 always last. Entry labels reuse the context and Tools menu strings where they fit, so a command reads the same everywhere. No icons in the menu: the button carries the only one.
+- **Live:** checked each time the menu opens: entries of switched-off features hide, conditional entries (繼續／停止同步, 復原上次分類, 檢查 AI 批次進度) appear only when there is something to do, and a group with nothing left hides with its caption. The switch 「工具列按鈕」 hides the button itself without a restart.
+- **Selection:** commands act on the items selected in the list; collection commands (找重複, PRISMA, 評讀總表, 引文追蹤納入研究) on the collection selected on the left; with nothing suitable selected they say so in the same words as the existing commands (「請先選取文獻。」).
+
 ### Item pane section
 - **Tools block:** status, screening, search links and appraisal rows, each only when its feature is on, inside a `<section>` with a Hairline below.
 - **Note:** model and date in Pencil at 0.9em, study facts in 600, headings 600 with more space above (10px) than below (2px), quotes with a 2px Hairline at the inline start.
@@ -195,6 +214,6 @@ The one place the plugin opens a window of its own: a non-modal Zotero dialog, b
 ### Don't:
 - **Don't** load fonts, images or scripts from outside the plugin.
 - **Don't** use shadows, gradients, or colored side stripes.
-- **Don't** invent controls: no custom toggle switches, no modals for settings.
+- **Don't** invent controls: no custom toggle switches, no modals for settings, no restyled toolbar buttons (the toolbar button uses Zotero's own class and states).
 - **Don't** use emoji as icons in new UI; existing item-pane rows keep theirs.
 - **Don't** describe AI features as finding literature or writing for the user without saying the draft must be checked.
