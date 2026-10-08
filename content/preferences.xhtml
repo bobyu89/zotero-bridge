@@ -60,7 +60,9 @@
 		</vbox>
 		<hbox align="center" data-zb-feature="sync">
 			<button label="測試連線並補齊資料庫欄位" oncommand="ZoteroBridgePrefs.testNotion()"/>
+			<button data-l10n-id="zotero-bridge-notion-rename" label="把 Notion 欄位改成中文…" oncommand="ZoteroBridgePrefs.renameNotionColumns()"/>
 		</hbox>
+		<html:p class="zb-hint" data-zb-feature="sync" data-l10n-id="zotero-bridge-notion-columns-hint">新的資料庫直接用中文欄位（標題、作者、年份、研究設計…）；舊資料庫的英文欄位照樣能用。按「把 Notion 欄位改成中文」會先列出要改的欄位，確認後才改名。</html:p>
 		<html:pre id="zb-notion-status" class="zb-status"/>
 	</groupbox>
 
@@ -77,6 +79,35 @@
 	<groupbox data-zb-feature="sync">
 		<label><html:h2>自動同步</html:h2></label>
 		<checkbox label="Zotero 條目、註記或筆記變更時自動同步到 Notion 與 Obsidian（不會自動呼叫 AI，沿用既有 AI 筆記）" preference="extensions.zotero-bridge.autoSync"/>
+	</groupbox>
+
+	<groupbox data-zb-feature="sync" class="zb-colors-box">
+		<label><html:h2 data-l10n-id="zotero-bridge-colors-heading">劃線顏色與意義</html:h2></label>
+		<html:p class="zb-lead" data-l10n-id="zotero-bridge-colors-intro">在 Zotero 用不同顏色劃線時，每個顏色代表什麼。文獻筆記依這個順序把劃線分組，排在前面的會優先放進「重點」。</html:p>
+		<html:ol id="zb-colors" class="zb-colors"/>
+		<hbox>
+			<button data-l10n-id="zotero-bridge-colors-reset" label="恢復預設" oncommand="ZoteroBridgePrefs.resetColorMeanings()"/>
+		</hbox>
+	</groupbox>
+
+	<groupbox data-zb-feature="fullTextMarkdown">
+		<label><html:h2 data-l10n-id="zotero-bridge-fulltext-heading">全文筆記</html:h2></label>
+		<html:p class="zb-lead" data-l10n-id="zotero-bridge-fulltext-intro">每篇文獻旁邊多一份全文筆記（文獻筆記資料夾裡的子資料夾），你的劃線依顏色標在原文位置。它每次同步都會重新產生，想法請寫在文獻筆記。</html:p>
+		<html:div class="zb-field">
+			<html:label for="zb-fulltext-folder" data-l10n-id="zotero-bridge-fulltext-folder">全文筆記的子資料夾：</html:label>
+			<html:input id="zb-fulltext-folder" type="text" preference="extensions.zotero-bridge.fullText.folder" placeholder="全文"/>
+		</html:div>
+		<checkbox data-zb-feature="aiNotes" data-l10n-id="zotero-bridge-fulltext-trim" label="送給 AI 前先刪掉參考文獻、誌謝、經費與利益衝突（省 token；同步的進度視窗會顯示省下多少）" preference="extensions.zotero-bridge.llm.trimReferences"/>
+		<checkbox data-l10n-id="zotero-bridge-fulltext-notion" label="Notion：在文獻頁面底下另建「全文」子頁面（每篇多幾次 API 呼叫，同步會變慢）" preference="extensions.zotero-bridge.notion.fullTextPage"/>
+		<html:details class="zb-more">
+			<html:summary data-l10n-id="zotero-bridge-fulltext-markitdown-summary">選用：用 markitdown 轉換 PDF</html:summary>
+			<html:label for="zb-markitdown-path" data-l10n-id="zotero-bridge-fulltext-markitdown-path">markitdown 執行檔（留空 = 只用內建轉換）：</html:label>
+			<hbox align="center">
+				<html:input id="zb-markitdown-path" type="text" preference="extensions.zotero-bridge.fullText.markitdownPath" placeholder="markitdown" style="flex: 1"/>
+				<button data-l10n-id="zotero-bridge-fulltext-markitdown-pick" label="選擇檔案…" oncommand="ZoteroBridgePrefs.pickMarkitdown()"/>
+			</hbox>
+			<html:p class="zb-hint" data-l10n-id="zotero-bridge-fulltext-markitdown-hint">markitdown 是 Microsoft 的開源轉換工具，要自己安裝：pip install 'markitdown[pdf]'。它對表格、表單類的頁面有幫助（保留成 Markdown 表格）；一般論文的段落標題與掃描檔 OCR 它不會做，標題仍由外掛偵測。轉換失敗或超過 2 分鐘時自動改用內建轉換。</html:p>
+		</html:details>
 	</groupbox>
 
 	<groupbox data-zb-feature="status">

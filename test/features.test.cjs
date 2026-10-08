@@ -45,20 +45,23 @@ test("catalog: unique IDs, known groups and requirements, both presets on every 
 
 test("presets: 研究生引導 leaves finding literature and writing to the user; 進階 turns everything on", () => {
 	let offInGuided = F.FEATURES.filter(f => !f.presets.guided).map(f => f.id).sort();
-	assert.deepEqual(offInGuided, ["aiBatch", "citationChase", "conceptsAI", "ebhcReport", "progressReport", "pubmedWatch", "reviewDraft", "synthesis"]);
+	assert.deepEqual(offInGuided, ["aiBatch", "aiHighlights", "citationChase", "conceptsAI", "ebhcReport", "progressReport", "pubmedWatch", "reviewDraft", "synthesis"]);
 	assert.ok(F.FEATURES.every(f => f.presets.advanced), "advanced: all on");
 	// The features that help the user do it themselves stay on
-	for (let id of ["sync", "aiNotes", "status", "apaZh", "dashboard", "concepts", "bibliography", "screening", "searchLinks", "appraisalForm", "annotationImages"]) {
+	for (let id of ["sync", "aiNotes", "status", "apaZh", "dashboard", "concepts", "bibliography", "screening", "searchLinks", "appraisalForm", "annotationImages", "fullTextMarkdown"]) {
 		assert.equal(F.get(id).presets.guided, true, id);
 	}
 	// Every AI feature is marked, and so is every feature that goes online on its own
-	for (let id of ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "ebhcReport", "progressReport", "conceptsAI"]) {
+	for (let id of ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "ebhcReport", "progressReport", "conceptsAI", "aiHighlights"]) {
 		assert.equal(F.get(id).usesAI, true, id);
 		assert.equal(F.get(id).usesNetwork, true, id);
 	}
 	for (let id of ["pubmedWatch", "citationChase", "searchLinks", "sync"]) assert.equal(F.get(id).usesNetwork, true, id);
 	assert.equal(F.get("dashboard").usesAI, undefined);
 	assert.equal(F.get("concepts").usesAI, undefined, "concept cards without AI");
+	assert.equal(F.get("fullTextMarkdown").usesAI, undefined, "the full-text note needs no AI");
+	assert.deepEqual(F.get("fullTextMarkdown").requires, ["sync"]);
+	assert.deepEqual(F.get("aiHighlights").requires, ["aiNotes"], "AI key sentences come with the AI note");
 });
 
 test("reused enable prefs stay the single source of truth", () => {
@@ -120,7 +123,7 @@ test("applyPreset, currentPreset (自訂 when mixed) and restore for undo", () =
 test("migrate: a fresh profile stays guided; earlier use turns the new switches on once, reused prefs keep the user's values", () => {
 	// Fresh install
 	let s = store();
-	assert.deepEqual(F.migrate(), { preset: "guided", evidence: [] });
+	assert.deepEqual(F.migrate(), { preset: "guided", evidence: [], steps: [1, 2], fullTextSwitches: false });
 	assert.equal(s.data[F.MIGRATION_PREF], F.MIGRATION_VERSION);
 	assert.equal(F.currentPreset(), "guided");
 	assert.equal(F.migrate(), null, "runs once");
@@ -162,6 +165,44 @@ test("migrate: a fresh profile stays guided; earlier use turns the new switches 
 	}
 	store({ "obsidian.vaultPath": " ", "usage.ledger": "{}", "routing.rules": "[]", "pubmedWatch.watches": "[]", "batch.pending": "" });
 	assert.equal(F.migrate().preset, "guided");
+});
+
+test("migrate step 2: a 進階 profile gets 全文筆記 and AI 標重點 at their advanced values; others keep the guided defaults", () => {
+	assert.equal(F.MIGRATION_VERSION, 2);
+	assert.deepEqual(F.MIGRATIONS.map(m => m.version), [1, 2], "one entry per step, in order");
+	let newOnes = F.FEATURES.filter(f => f.since === 2).map(f => f.id);
+	assert.deepEqual(newOnes.sort(), ["aiHighlights", "fullTextMarkdown"]);
+	let advancedBefore = Object.fromEntries(F.FEATURES.filter(f => !f.since).map(f => [f.pref, f.presets.advanced]));
+
+	// Migrated to 進階 by version 1 (everything from then on), AI 標重點 still at its default
+	let s = store(Object.assign({ [F.MIGRATION_PREF]: 1 }, advancedBefore));
+	let result = F.migrate();
+	assert.deepEqual(result.steps, [2], "only the new step runs");
+	assert.equal(result.fullTextSwitches, true);
+	assert.equal(s.data["feature.aiHighlights"], true);
+	assert.equal(F.isEnabled("fullTextMarkdown"), true);
+	assert.equal(result.preset, "advanced");
+	assert.equal(F.currentPreset(), "advanced", "still 進階 with the new switches");
+	assert.equal(s.data[F.MIGRATION_PREF], 2);
+	assert.equal(F.migrate(), null, "runs once");
+
+	// A 研究生引導 profile at version 1: the new switches keep their guided values
+	s = store({ [F.MIGRATION_PREF]: 1 });
+	result = F.migrate();
+	assert.equal(result.fullTextSwitches, false);
+	assert.equal(s.data["feature.aiHighlights"], undefined, "nothing written");
+	assert.equal(F.currentPreset(), "guided");
+
+	// A custom profile (one switch off) is left alone
+	s = store(Object.assign({ [F.MIGRATION_PREF]: 1 }, advancedBefore, { "feature.synthesis": false }));
+	assert.equal(F.migrate().fullTextSwitches, false);
+	assert.equal(F.isEnabled("aiHighlights"), false);
+
+	// 進階, but the user already turned AI 標重點 off themselves: kept off
+	s = store(Object.assign({ [F.MIGRATION_PREF]: 1 }, advancedBefore, { "feature.aiHighlights": false }));
+	s.hasUserValue = key => key in s.data;
+	assert.equal(F.migrate().fullTextSwitches, true);
+	assert.equal(s.data["feature.aiHighlights"], false);
 });
 
 test("gateMenus: hidden while off, the entry's own onShowing decides while on, registration unchanged", () => {

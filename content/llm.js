@@ -66,6 +66,16 @@
 - country：研究執行的國家（英文國名，例如 "Taiwan"、"United States"）；多國研究填 "Multinational"；未報告填 null。
 - 使用標準 JSON：雙引號、不加註解、不要尾隨逗號。`;
 
+	// 「AI 標重點」 (feature aiHighlights): asked for in the same call as the note, so it costs no extra
+	// request; the quotes are checked against the full text and the ones that don't match are dropped
+	const MAX_AI_HIGHLIGHTS = 8;
+	const AI_HIGHLIGHTS_PROMPT = `在同一個 JSON 物件裡再加一個 "highlights" 欄位：從全文（沒有全文時從摘要）挑 3–6 句最能代表這篇研究重點的原句，讓讀者在全文中一眼看到重點。格式：
+"highlights": [{ "quote": "逐字照抄的原句", "why": "為什麼重要（一句中文，20 字以內）" }]
+規則：
+- quote 必須逐字照抄原文的一句話（保留原文語言，不要翻譯、改寫、合併句子，也不要加引號或頁碼），每句 300 字元以內；省略的部分用 … 表示。
+- 優先挑研究目的、主要結果（含數據）、作者結論與研究限制；不要挑參考文獻、表格裡的數字或圖說。
+- 系統會把每一句與全文比對，對不上的會被刪掉。`;
+
 	const DEFAULT_SYSTEM_PROMPT = `你是護理與醫學領域的研究助理，負責把一篇文獻整理成結構化的「文獻筆記」，供研究生在 Obsidian 與 Notion 中閱讀與建立知識連結，並用於碩士論文與實證護理（EBP）報告。
 
 寫作規則：
@@ -151,6 +161,8 @@
 		// A scan's text layer holds at most a download stamp: not worth sending
 		if (data.fullText && data.fullTextStatus !== "none") {
 			let note = opts.fullTextTruncated ? "（全文過長，以下只提供前段內容；後段未提供的部分請勿推測）\n" : "";
+			// fulltext.js: Markdown with section headings, the reference list and the like cut out
+			if (data.fullTextFormat === "markdown" && data.fullTextTrimmed) note += "（全文已整理成 Markdown；參考文獻、誌謝、經費與利益衝突等段落已省略）\n";
 			if (data.fullTextStatus === "partial") {
 				note += "（這份 PDF 大部分頁面是掃描影像，以下只有少數頁面的文字；缺少的內容寫「文中未報告」，不要推測）\n";
 			}
@@ -164,8 +176,9 @@
 
 	/**
 	 * @param {object} data - item data from the Zotero adapter (may include fullText, fullTextStatus)
-	 * @param {object} opts - { systemPrompt, notesMarkdown: [{title, md}], fullTextTruncated, pdf }
+	 * @param {object} opts - { systemPrompt, notesMarkdown: [{title, md}], fullTextTruncated, pdf, aiHighlights }
 	 *   pdf: a scanned PDF sent along as a file ({ data: base64, filename, pages }); replaces <fulltext>
+	 *   aiHighlights: also ask for "highlights" (key sentences quoted verbatim) in the JSON block
 	 * @returns {{ system, user, systemParts }} systemParts = [system, STUDY_DATA_PROMPT]: the same for
 	 *   every item, so it is sent first (Claude caches it as one prefix); `user` holds only this item
 	 */
@@ -193,7 +206,7 @@
 			system,
 			user: sections.join("\n\n"),
 			// Plugin-owned JSON instructions after the (possibly custom) template, ahead of the item
-			systemParts: [system, STUDY_DATA_PROMPT],
+			systemParts: opts.aiHighlights ? [system, STUDY_DATA_PROMPT, AI_HIGHLIGHTS_PROMPT] : [system, STUDY_DATA_PROMPT],
 		};
 	}
 
@@ -614,10 +627,28 @@
 		return out.slice(0, 30);
 	}
 
-	/** Canonical structured data (every STUDY_FIELDS key present), or null when `obj` isn't an object. */
+	/** The AI's key sentences: [{ quote, why }] (at most MAX_AI_HIGHLIGHTS; empty quotes dropped). */
+	function normalizeHighlights(v) {
+		let list = Array.isArray(v) ? v : [];
+		let seen = new Set();
+		let out = [];
+		for (let h of list) {
+			let quote = cleanString(h && typeof h === "object" ? h.quote : h, 600).replace(/^["“「『]+|["”」』]+$/gu, "").trim();
+			if (!quote || seen.has(quote.toLowerCase())) continue;
+			seen.add(quote.toLowerCase());
+			out.push({ quote, why: h && typeof h === "object" ? cleanString(h.why, 100) : "" });
+		}
+		return out.slice(0, MAX_AI_HIGHLIGHTS);
+	}
+
+	/**
+	 * Canonical structured data (every STUDY_FIELDS key present, plus `highlights` when the AI gave
+	 * any), or null when `obj` isn't an object.
+	 */
 	function normalizeStudyData(obj) {
 		if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
-		return {
+		let highlights = normalizeHighlights(obj.highlights);
+		return Object.assign({
 			study_design: normalizeDesign(obj.study_design),
 			sample_size: normalizeSampleSize(obj.sample_size),
 			setting: cleanString(obj.setting),
@@ -631,7 +662,7 @@
 			appraisal_tool: cleanString(obj.appraisal_tool, 100),
 			appraisal_overall: normalizeVerdict(obj.appraisal_overall),
 			country: cleanString(obj.country, 100),
-		};
+		}, highlights.length ? { highlights } : {});
 	}
 
 	function parseJSONLenient(text) {
@@ -749,7 +780,8 @@
 	 * data back. `raw` is stored instead when the model's JSON could not be parsed, so the user can fix it.
 	 */
 	function studyDataBlock(data, raw) {
-		let json = data ? JSON.stringify(Object.fromEntries(STUDY_FIELDS.map(k => [k, data[k]])), null, 2) : String(raw || "").trim();
+		let fields = data && data.highlights && data.highlights.length ? [...STUDY_FIELDS, "highlights"] : STUDY_FIELDS;
+		let json = data ? JSON.stringify(Object.fromEntries(fields.map(k => [k, data[k]])), null, 2) : String(raw || "").trim();
 		if (!json) return "";
 		return `## ${STUDY_DATA_HEADING}\n\n\`\`\`json\n${json}\n\`\`\``;
 	}
@@ -761,5 +793,6 @@
 		RETRY_STATUSES, MAX_RETRIES, postWithRetry, retryAfterMs, backoffDelay, parseUsage, httpError,
 		STUDY_FIELDS, STUDY_DESIGNS, APPRAISAL_VERDICTS, STUDY_DATA_HEADING, STUDY_DATA_PROMPT, APPRAISAL_HEADING,
 		normalizeStudyData, extractStudyData, hasStudyData, studyDataBlock,
+		AI_HIGHLIGHTS_PROMPT, MAX_AI_HIGHLIGHTS, normalizeHighlights,
 	};
 });

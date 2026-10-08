@@ -59,17 +59,22 @@ test("new Obsidian note has frontmatter, managed block and user section", () => 
 	assert.match(frontmatter, /^zotero_key: "library\/ABCD1234"$/m);
 	assert.doesNotMatch(frontmatter, /^fulltext_truncated/m);
 	assert.match(body, /^# Effects of nurse-led/m);
-	assert.match(body, /## 🤖 AI 文獻筆記/);
+	// 「重點」 opens the managed block; the AI note is a folded callout with its headings one level down
+	assert.match(body, /%% zotero-bridge:start[^\n]*%%\n\n> \[!abstract\] 重點\n> \*\*一句話\*\*：護理師主導衛教可降低住院病人跌倒率 30%（\[\[Fall prevention\]\]）。/);
+	assert.match(body, /^> \[!note\]- AI 文獻筆記（[^）\n]+）$/m);
 	assert.match(body, /\[\[Fall prevention\]\]/);
-	assert.match(body, /^### 一句話摘要$/m, "AI note headings nest under the section heading");
-	// Obsidian 1.14 colored highlight
-	assert.match(body, /> ==🟡Falls decreased by 30%==\n> — \[p\. 5\]\(zotero:\/\/open-pdf\/library\/items\/PDF00001\?page=5&annotation=ANN00001\)/);
+	assert.match(body, /^> ### 研究設計與方法$/m, "AI note headings nest under the callout");
+	assert.doesNotMatch(body, /一句話摘要/, "the one sentence is shown once, in 重點");
+	// Obsidian 1.14 colored highlight, grouped under its colour's meaning
+	assert.match(body, /^> \[!quote\]- 🟡 重要發現（1）\n> - ==🟡Falls decreased by 30%== · \[p\. 5\]\(zotero:\/\/open-pdf\/library\/items\/PDF00001\?page=5&annotation=ANN00001\)$/m);
 	assert.match(frontmatter, /^status: "待讀"$/m);
-	assert.match(body, /💬 key result {2}\nsecond line/);
-	assert.match(body, /#result/);
-	assert.match(body, /\*\[便利貼\]\*/);
-	assert.match(body, /\*\[圖片註記\]\*/);
-	assert.match(body, /\*\*APA 7\*\*: Chen, M\./);
+	assert.match(body, /^> {3}💬 key result\n> {3}second line\n> {3}#result$/m);
+	assert.match(body, /^> \[!quote\]- 🔴 限制／疑問（1）\n> - 🔴 \*\[便利貼\]\* · \[p\. iv\]/m);
+	assert.match(body, /^> - 🟢 \*\[圖片註記\]\* · \[p\. 7\]/m);
+	assert.match(body, /^> \*\*APA 7\*\*: Chen, M\./m);
+	assert.match(body, /^> \[!info\]- 書目資訊$/m);
+	// Links in 重點: Zotero and Notion (no full-text note in this sync)
+	assert.match(body, /^> \[Zotero\]\(zotero:\/\/select\/library\/items\/ABCD1234\) · \[Notion\]\(https:\/\/www\.notion\.so\/abc\) · \[DOI\]\(https:\/\/doi\.org\/10\.1111\/jan\.12345\)$/m);
 	assert.ok(body.trimEnd().endsWith("## ✍️ 我的筆記"));
 });
 
@@ -111,9 +116,12 @@ test("highlights: multi-line, magenta/gray mapping, underline", () => {
 		{ key: "C", type: "underline", text: "under", color: "#2ea8e5", pageLabel: "3" },
 	];
 	let md = core.annotationsMarkdown(d);
-	assert.match(md, /^> ==🟣line one==\n> ==🟣line =\\= two==$/m);
-	assert.match(md, /^> ==gray==$/m);
-	assert.match(md, /^> 🔵 <u>under<\/u>$/m);
+	// One highlight per list item (Obsidian highlights can't span lines), escaped ==
+	assert.match(md, /^- ==🟣line one line =\\= two== · \[p\. 1\]/m);
+	assert.match(md, /^- ==gray== · \[p\. 2\]/m);
+	assert.match(md, /^- 🔵 <u>under<\/u> · \[p\. 3\]/m);
+	// Grouped by meaning, in the default order: 可引用句 (blue) before 我的想法 (magenta) before 其他 (gray)
+	assert.deepEqual(md.match(/^### .*$/gm), ["### 🔵 可引用句（1）", "### 🩷 我的想法（1）", "### ⚪ 其他（1）"]);
 });
 
 test("status is set on creation only and kept afterwards", () => {

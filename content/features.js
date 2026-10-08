@@ -29,9 +29,9 @@
 	}
 })(this, function (scope) {
 	const PREF = "extensions.zotero-bridge.";
-	// Bumped when a later version needs another one-time migration
+	// Bumped when a later version needs another one-time migration (see MIGRATIONS)
 	const MIGRATION_PREF = "features.version";
-	const MIGRATION_VERSION = 1;
+	const MIGRATION_VERSION = 2;
 
 	const GROUPS = [
 		{ id: "organize", label: "整理與同步", l10n: "zotero-bridge-feature-group-organize" },
@@ -86,6 +86,11 @@
 		{ id: "concepts", group: "organize", pref: "feature.concepts", presets: { guided: true, advanced: true },
 			label: "概念卡片",
 			desc: "把筆記裡的 [[概念]] 整理成卡片和索引，看得出哪些文獻談同一件事。不呼叫 AI。" },
+		// since: the migration version that introduced the switch (MIGRATIONS)
+		{ id: "fullTextMarkdown", group: "organize", pref: "feature.fullTextMarkdown", presets: { guided: true, advanced: true },
+			requires: ["sync"], since: 2,
+			label: "全文筆記",
+			desc: "把 PDF 全文整理成 Markdown 存成一份筆記，你的劃線依顏色標在原文位置；送給 AI 的全文也改用它，省下參考文獻的 token。不呼叫 AI。" },
 		// 找文獻
 		{ id: "searchLinks", group: "search", pref: "feature.searchLinks", presets: { guided: true, advanced: true }, usesNetwork: true,
 			label: "醫學資料庫搜尋連結",
@@ -112,6 +117,10 @@
 			usesAI: true, usesNetwork: true, requires: ["aiNotes"],
 			label: "批次 API",
 			desc: "一次產生很多篇 AI 筆記時改用 Claude 批次 API：約半價，但最久要等 24 小時。" },
+		{ id: "aiHighlights", group: "ai", pref: "feature.aiHighlights", presets: { guided: false, advanced: true },
+			usesAI: true, usesNetwork: true, requires: ["aiNotes"], since: 2,
+			label: "AI 標重點",
+			desc: "產生 AI 筆記時順便請 AI 挑出幾句關鍵原句，核對後用跟你的劃線不同的記號標出，僅供參考。不另外呼叫 AI。" },
 		{ id: "synthesis", group: "ai", pref: "feature.synthesis", presets: { guided: false, advanced: true }, usesAI: true, usesNetwork: true,
 			label: "文獻比較表",
 			desc: "選幾篇文獻，讓 AI 做比較表、主題整理和研究缺口。" },
@@ -258,10 +267,11 @@
 		}
 	}
 
-	function migrate() {
-		let s = store();
-		let done = Number(s.get(MIGRATION_PREF)) || 0;
-		if (done >= MIGRATION_VERSION) return null;
+	/**
+	 * Step 1 (the switches arrive): an install used before the switches existed gets everything on.
+	 * Returns { preset, evidence }.
+	 */
+	function migrateSwitches(s) {
 		let evidence = priorUse(key => s.get(key));
 		if (evidence.length) {
 			// Written even where the default matches, so a later default change can't switch them off
@@ -272,8 +282,49 @@
 				else if (f.presets.advanced !== f.presets.guided && !userSet(s, f.pref)) setEnabled(f.id, f.presets.advanced);
 			}
 		}
-		s.set(MIGRATION_PREF, MIGRATION_VERSION);
 		return { preset: evidence.length ? "advanced" : "guided", evidence };
+	}
+
+	/**
+	 * A later step that adds switches: a profile on 進階 (every switch from earlier versions at its
+	 * advanced value) gets the new switches at their advanced value too, so it stays 進階; any other
+	 * profile keeps the new switches' guided defaults. Switches the user already set are left alone.
+	 * Returns true when it moved the profile along.
+	 */
+	function migrateNewSwitches(s, version) {
+		let older = FEATURES.filter(f => !f.since || f.since < version);
+		if (!older.every(f => rawValue(f.id) === f.presets.advanced)) return false;
+		for (let f of FEATURES.filter(x => x.since === version)) {
+			if (!userSet(s, f.pref) && rawValue(f.id) !== f.presets.advanced) setEnabled(f.id, f.presets.advanced);
+		}
+		return true;
+	}
+
+	// One-time steps, in order; MIGRATION_PREF records the last one done. Each step is its own entry,
+	// so steps from different branches merge as separate lines.
+	const MIGRATIONS = [
+		{ version: 1, run: s => migrateSwitches(s) },
+		// 全文筆記 and AI 標重點 (fulltext.js, the aiHighlights switch)
+		{ version: 2, run: s => ({ fullTextSwitches: migrateNewSwitches(s, 2) }) },
+	];
+
+	/**
+	 * Run the one-time steps this profile hasn't had yet. Returns null when there was nothing to do,
+	 * else { preset, evidence, steps } (preset/evidence from step 1 when it ran, else the current preset).
+	 */
+	function migrate() {
+		let s = store();
+		let done = Number(s.get(MIGRATION_PREF)) || 0;
+		if (done >= MIGRATION_VERSION) return null;
+		let result = { preset: null, evidence: [], steps: [] };
+		for (let step of MIGRATIONS) {
+			if (step.version <= done) continue;
+			Object.assign(result, step.run(s));
+			result.steps.push(step.version);
+			s.set(MIGRATION_PREF, step.version);
+		}
+		if (!result.preset) result.preset = currentPreset();
+		return result;
 	}
 
 	/**
@@ -305,7 +356,7 @@
 	}
 
 	return {
-		PREF, MIGRATION_PREF, MIGRATION_VERSION, GROUPS, PRESETS, FEATURES, PRIOR_USE,
+		PREF, MIGRATION_PREF, MIGRATION_VERSION, MIGRATIONS, GROUPS, PRESETS, FEATURES, PRIOR_USE,
 		setStore, get, rawValue, isEnabled, setEnabled, snapshot, restore, applyPreset, presetOf, currentPreset,
 		priorUse, migrate, gateMenus, prefKeys,
 	};

@@ -119,7 +119,7 @@ test("syncInfo: the saved form wins; else the AI prefill; nothing without answer
 	assert.equal(form.syncInfo({ appraisalNote: { html: "<pre>{x</pre>" } }, { md: AI_MD, data: AI_DATA }).saved, false);
 });
 
-test("Obsidian: 「文獻評讀表」 after the AI note; appraisal_verified, and the verified tool/verdict override the AI's", () => {
+test("Obsidian: 「文獻評讀表」 folded before the AI note (the user's judgement first); appraisal_verified, and the verified tool/verdict override the AI's", () => {
 	let data = { key: "ABCD1234", libraryPath: "library", title: "Fall prevention RCT", creators: [], year: "2024" };
 	let verified = form.syncInfo({ appraisalNote: { html: form.noteHTML(verifiedRecord()) } }, { md: AI_MD, data: AI_DATA });
 	let note = core.buildObsidianNote(null, data, {
@@ -128,8 +128,11 @@ test("Obsidian: 「文獻評讀表」 after the AI note; appraisal_verified, and
 	assert.match(note, /\nappraisal_tool: "CASP Checklist: For Randomised Controlled Trials \(RCTs\) \(2024\)"\n/);
 	assert.match(note, /\nappraisal_overall: "納入"\n/);
 	assert.match(note, /\nappraisal_verified: true\n/);
-	assert.ok(note.indexOf("## 🤖 AI 文獻筆記") < note.indexOf("## 文獻評讀表"));
-	assert.ok(note.indexOf("## 文獻評讀表") < note.indexOf("%% zotero-bridge:end %%"));
+	assert.ok(note.indexOf("> [!example]- 文獻評讀表\n> > [!success]") > note.indexOf("%% zotero-bridge:start"));
+	assert.ok(note.indexOf("> [!example]- 文獻評讀表") < note.indexOf("> [!note]- AI 文獻筆記"));
+	assert.ok(note.indexOf("> [!note]- AI 文獻筆記") < note.indexOf("%% zotero-bridge:end %%"));
+	// The verified verdict is in 重點 too
+	assert.match(note, /^> RCT · N = 120 · 評讀：納入（已核對）$/m);
 
 	// Not verified: the AI's values stay, appraisal_verified false; a later sync without any form keeps the keys as they are
 	let ai = form.syncInfo({}, { md: AI_MD, data: AI_DATA });
@@ -137,7 +140,7 @@ test("Obsidian: 「文獻評讀表」 after the AI note; appraisal_verified, and
 	assert.match(again, /\nappraisal_tool: "JBI Checklist for Randomized Controlled Trials"\n/);
 	assert.match(again, /\nappraisal_overall: "排除"\n/);
 	assert.match(again, /\nappraisal_verified: false\n/);
-	assert.equal(again.match(/## 文獻評讀表/g).length, 1);
+	assert.equal(again.match(/\[!example\]- 文獻評讀表/g).length, 1);
 	assert.match(again, /\[!warning\] AI 初評，尚未核對/);
 	let none = core.buildObsidianNote(again, data, { aiMarkdown: "## 一句話摘要\nx" });
 	assert.doesNotMatch(none, /## 文獻評讀表/);

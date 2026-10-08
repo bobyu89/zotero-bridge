@@ -266,6 +266,7 @@ function makeEnv({ prefs, fetch, logins = [], confirm = () => true, timers }) {
 // One data source (ds-1); pages are created as page-1, page-2… and can be moved to the trash
 function notionMock(log, pages = new Map()) {
 	let schemaPatched = false;
+	let blockSeq = 0;
 	return async (url, init) => {
 		let body = init.body ? JSON.parse(init.body) : undefined;
 		let ok = json => ({ status: 200, ok: true, headers: { get: () => null }, text: async () => JSON.stringify(json) });
@@ -313,6 +314,9 @@ function notionMock(log, pages = new Map()) {
 		}
 		if (/^blocks\/page-\d+\/children\?/.test(p)) return ok({ results: [], has_more: false });
 		if (/^blocks\/page-\d+\/children$/.test(p)) return ok({ results: [{ id: "container-1" }] });
+		// The folded sections: toggles appended to the container (and anything appended inside them)
+		if (/^blocks\/[\w-]+\/children$/.test(p) && init.method === "PATCH") return ok({ results: (body.children || []).map(() => ({ id: `block-${++blockSeq}` })) });
+		if (/^blocks\/[\w-]+\/children\?/.test(p)) return ok({ results: [], has_more: false });
 		return { status: 404, ok: false, headers: { get: () => null }, text: async () => JSON.stringify({ message: p }) };
 	};
 }
@@ -448,12 +452,13 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	assert.match(text, /^fulltext_truncated: true$/m);
 	assert.match(text, /\[\[Fall prevention\]\]/);
 	assert.match(text, /My \*\*own\*\* note/);
-	assert.match(text, /> ==🟡Falls decreased==/);
+	assert.match(text, /^> - ==🟡Falls decreased== · \[p\. 5\]/m, "the highlight under its colour's meaning");
+	assert.match(text, /^> \[!abstract\] 重點\n> \*\*一句話\*\*：護理師主導衛教/m, "重點 at the top");
 	assert.match(text, /^study_design: "RCT"$/m);
 	assert.match(text, /^sample_size: 120$/m);
 	assert.match(text, /^measures:\n {2}- "Morse Fall Scale"$/m);
 	assert.doesNotMatch(text, /"study_design"|```json|結構化資料/, "no raw JSON in the Obsidian body");
-	assert.match(text, /^- "Falls decreased" \(p\. 5\) ✅$/m);
+	assert.match(text, /^> - "Falls decreased" \(p\. 5\) ✅$/m);
 	// Bases overview created once in the default folder
 	let base = path.join(vault, "Zotero", "Zotero 文獻庫.base");
 	assert.match(fs.readFileSync(base, "utf8"), /type: kanban/);
@@ -1210,9 +1215,10 @@ test("regenerating the AI note keeps the previous version as a history note that
 	// Once it exists, the history note is not sent to Notion, Obsidian or the LLM; the user's own note is
 	log.length = 0;
 	await ZB.main.run([item], { targets: ["notion", "obsidian"], ai: "reuse" });
-	let container = log.find(l => l.method === "PATCH" && /^blocks\/page-\d+\/children$/.test(l.path));
-	assert.match(JSON.stringify(container.body), /My own note/);
-	assert.doesNotMatch(JSON.stringify(container.body), /舊版|第一版/);
+	// The container and its folded sections (the notes are in a toggle)
+	let written = JSON.stringify(log.filter(l => l.method === "PATCH" && /^blocks\/[\w-]+\/children$/.test(l.path)).map(l => l.body));
+	assert.match(written, /My own note/);
+	assert.doesNotMatch(written, /舊版|第一版/);
 	let text = fs.readFileSync(path.join(vault, "Zotero", "chen2024.md"), "utf8");
 	assert.match(text, /My own note/);
 	assert.doesNotMatch(text, /舊版|第一版/);

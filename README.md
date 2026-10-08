@@ -23,6 +23,11 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 - **嚴格評讀（critical appraisal）**：AI 依研究設計選對應的 JBI 清單（RCT、quasi-experimental、cohort、case-control、analytical cross-sectional、qualitative、systematic review；也可用 CASP），逐題回答 是／否／不清楚／不適用 並附一句理由，最後給整體評價（納入／排除／需更多資訊），可直接用在實證報告的文獻評讀。題目以官方清單為準，請對照原版清單確認。
 - **文獻評讀表**：右側面板逐題點選 是／否／不清楚／不適用、寫評析根據，預先帶入 AI 的嚴格評讀（標示「AI 初評」），可選 CASP（2024 RCT、2018 SR 等）或 JBI 清單；勾選「我已核對」後，評讀工具與整體評價會取代 AI 的值同步到 Notion／Obsidian。可加第二位評讀者算 Cohen's κ，並匯出分類的評讀總表（燈號矩陣、CSV、Word）（見[文獻評讀表](#文獻評讀表)）。
 - **研讀欄位（結構化資料）**：AI 同時輸出研究設計、樣本數、場域、PICO、測量工具、證據等級（Oxford CEBM 2011 與 JBI）、評讀工具與結果、國家，寫入 Notion 欄位與 Obsidian frontmatter，可以直接篩選，例如「Study Design = RCT 且 Sample Size > 100」。這些資料也存在 Zotero AI 子筆記最後的「📋 結構化資料」區塊，之後不呼叫 AI 的同步也會沿用；你可以直接在 Zotero 修改那段 JSON。這段 JSON 不會出現在 Obsidian／Notion 的內文。即使改用自訂模板，插件仍會要求 AI 附上這段資料。
+- **一眼看到重點的文獻筆記**：Obsidian 筆記最上面是「重點」：一句話、研究設計 · 樣本數 · 證據等級 · 評讀結果、2–3 個主要發現、你自己的重點劃線，加上全文與 Zotero 的連結。其餘（依顏色分組的劃線、你的 Zotero 子筆記、文獻評讀表、AI 標的重點、完整的 AI 筆記、摘要、延伸搜尋、書目資訊）都收在固定順序的摺疊區塊裡；Notion 頁面同樣是「重點」加摺疊區塊（見[文獻筆記的版面](#文獻筆記的版面)）。
+- **全文筆記（Markdown）**：每篇文獻旁邊多一份全文筆記（`Zotero/全文/<同檔名>.md`），由 Zotero 已抽出的文字整理成 Markdown：接回斷字、分段、標出 Abstract／Methods／Results／Discussion／References（中文的摘要、前言、研究方法、結果、討論、結論、參考文獻等）、去掉每頁重複的頁首頁尾與頁碼；你的劃線依顏色標在原文位置。AI 筆記也改讀這份 Markdown，並先刪掉參考文獻、誌謝、經費與利益衝突，省下 token。可選擇用 markitdown 轉換（見[全文筆記與 markitdown](#全文筆記與-markitdown)）。
+- **劃線顏色有意義**：Zotero 的 8 種劃線顏色各代表一種意義（預設：黃 重要發現、紅 限制／疑問、綠 研究方法、藍 可引用句、紫 定義／概念、橘 待查證、洋紅 我的想法、灰 其他），可在設定改名稱和順序；筆記裡的劃線依意義分組（見[劃線顏色的意義](#劃線顏色的意義)）。
+- **AI 標重點**（研究生引導預設關閉）：產生 AI 筆記時順便請 AI 挑幾句關鍵原句（同一次呼叫，不多花一次請求），逐句和全文核對，對不上的刪掉；在全文筆記裡用「🤖＋底線」標出，跟你自己的彩色劃線分開，文獻筆記另列「AI 標的重點（僅供參考）」（見[AI 標重點](#ai-標重點)）。
+- **Notion 中文欄位**：新的 Notion 資料庫直接用中文欄位（標題、作者、年份、期刊、研究設計、證據等級、閱讀狀態…）；舊資料庫的英文欄位照樣能用，也可以一鍵改成中文（見[Notion 中文欄位](#notion-中文欄位)）。
 - **可引用句查證**：產生筆記後，「可引用的句子」每一句都會和全文、摘要與你的劃線比對（忽略大小寫、彎引號、PDF 換行斷字、中文字間空白；省略號 … 前後分段比對；九成以上的字依序相符即算找到）。找到的標 ✅，找不到的標 ⚠️ 未在全文中找到；沒有全文時標 ⚠️ 無全文可查證。進度視窗會顯示查證結果。
 - **APA 7 引文由 Zotero 產生**：使用內建 CSL 引文處理器，不讓 LLM 編造參考文獻。
 - **中文文獻用中文 APA**：中文期刊、學位論文自動改用中文 APA 7（`陳美玲、林小華（2023）。題目。護理雜誌，70(2)，45–56。`、內文「陳美玲等，2023」），中文文獻可排在英文前（見[中文文獻與中文 APA](#中文文獻與中文-apa)）。
@@ -46,7 +51,7 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 - **Zotero 內直接看 AI 筆記**：條目右側面板新增「AI 文獻筆記」區塊，顯示摘要與重點，並有「同步」「重新產生」按鈕。
 - **批次 API**（研究生引導預設關閉）：大量產生 AI 筆記時改用 Claude 批次 API，約半價（見[省錢：批次 API 與提示快取](#省錢批次-api-與提示快取)）。
 - **批次同步可中途停止、之後接續**：同步很多篇時可以從工具選單停止；Zotero 關閉或當掉也不會從頭來過，失敗的文獻可以一鍵重試。
-- **閱讀狀態三邊同步**：在 Zotero（標籤）、Notion（`Status` 欄位）或 Obsidian（看板拖曳）任一邊改閱讀狀態，下次同步時另外兩邊會跟著改（見[閱讀狀態同步](#閱讀狀態同步)）。
+- **閱讀狀態三邊同步**：在 Zotero（標籤）、Notion（`閱讀狀態`／舊資料庫的 `Status` 欄位）或 Obsidian（看板拖曳）任一邊改閱讀狀態，下次同步時另外兩邊會跟著改（見[閱讀狀態同步](#閱讀狀態同步)）。
 - **自動同步（選用）**：條目、劃線或筆記變更後，自動同步到兩邊。自動同步不會呼叫 AI。
   - 條目移到 Zotero 垃圾桶或刪除時：Notion 頁面移到 Notion 的垃圾桶；Obsidian 筆記**不會刪除**，只把 `status` 改成「已刪除」，並在自動同步區塊最上方加一段提示。從 Zotero 垃圾桶還原後再同步，筆記會恢復原本的閱讀狀態（Notion 會建立新頁面，舊頁面留在 Notion 垃圾桶）。
 - **參考文獻檔（Pandoc）**：把文獻庫匯出成 vault 裡的 `Zotero/references.json`（CSL JSON），條目 id 就是筆記的 `citekey`。在 Obsidian 用 `[@citekey]` 寫論文，再用 Pandoc 產生 APA 7 的 Word 檔（見[下方說明](#在-obsidian-寫論文並用-pandoc-產生-apa-word)）。
@@ -57,15 +62,17 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 
 | 模式 | 適合 | 內容 |
 |---|---|---|
-| **研究生引導**（新安裝預設） | 正在學怎麼找文獻、寫論文的研究生 | 找文獻與寫作留給你自己。下列功能先關著：PubMed 新文獻追蹤、引文追蹤、文獻比較表、文獻探討草稿、實證報告草稿、進度報告、概念卡片 AI 綜整、批次 API。其他（同步、AI 文獻筆記、閱讀狀態、中文 APA、圖片劃線、參考文獻檔、研究儀表板、概念卡片、醫學資料庫搜尋連結、篩選與 PRISMA、文獻評讀表）照常開著 |
+| **研究生引導**（新安裝預設） | 正在學怎麼找文獻、寫論文的研究生 | 找文獻與寫作留給你自己。下列功能先關著：PubMed 新文獻追蹤、引文追蹤、文獻比較表、文獻探討草稿、實證報告草稿、進度報告、概念卡片 AI 綜整、批次 API、AI 標重點。其他（同步、AI 文獻筆記、閱讀狀態、中文 APA、圖片劃線、全文筆記、參考文獻檔、研究儀表板、概念卡片、醫學資料庫搜尋連結、篩選與 PRISMA、文獻評讀表）照常開著 |
 | **進階** | 已經熟悉流程、想把雜事交給工具的人 | 全部打開，包括 AI 草稿、批次 API 與自動追蹤新文獻 |
 | **自訂** | 自動顯示 | 開關跟兩種模式都不完全一樣時 |
 
 - 每個開關改了馬上生效：選單項目、右側面板的列（閱讀狀態、篩選、搜尋連結、評讀表）、背景工作（同步後更新儀表板／概念卡片／參考文獻檔、PubMed 自動檢查）都會跟著出現或消失；關掉的功能不會連網，也不會呼叫 AI。
 - 切換模式後可以按「復原」回到切換前的開關。
-- 「AI 文獻筆記」需要「同步到 Obsidian／Notion」，「批次 API」需要「AI 文獻筆記」，「概念卡片 AI 綜整」需要「概念卡片」；前面的關掉時，後面的開關會變灰並說明原因。
+- 「AI 文獻筆記」與「全文筆記」需要「同步到 Obsidian／Notion」，「批次 API」與「AI 標重點」需要「AI 文獻筆記」，「概念卡片 AI 綜整」需要「概念卡片」；前面的關掉時，後面的開關會變灰並說明原因。
+- 劃線顏色的意義和新的筆記版面是同步的一部分，沒有另外的開關。
 - 關掉「文獻評讀表」只是隱藏表單，已填的評讀照樣同步到筆記。
 - **從舊版升級**：第一次啟動新版時，如果你已經用過（設定了 Obsidian vault、Notion 資料庫、分流規則、PubMed 追蹤，或有 AI 用量紀錄），新加的開關全部打開，原本的行為不變；原本就有的設定（AI 文獻筆記、批次 API、閱讀狀態、中文 APA、圖片劃線）維持你原來的選擇，所以模式可能顯示「自訂」。這個檢查只做一次。
+- **之後版本新增的開關**：已經在「進階」的設定檔，升級後新開關（例如「全文筆記」「AI 標重點」）也會打開，維持「進階」；「研究生引導」或「自訂」的設定檔，新開關用研究生引導的預設值（全文筆記開、AI 標重點關）。你自己設過的開關不會被改。
 
 ## 安裝（從 GitHub 下載）
 
@@ -89,18 +96,18 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 1. 到 <https://www.notion.so/profile/integrations> 建立一個 **Internal integration**，複製 token（`ntn_` 開頭）
 2. 在 Notion 建立一個資料庫（可以是空白的 Table）。右上角 `•••` → **Connections** → 加入剛剛的 integration
 3. 複製資料庫連結（`https://www.notion.so/...`），貼到「預設資料庫連結」或分流規則
-4. 按 **測試連線並補齊資料庫欄位**，插件會用 Zotero 的書目欄位當作資料庫表頭，自動建立以下欄位：
+4. 按 **測試連線並補齊資料庫欄位**，插件會用 Zotero 的書目欄位當作資料庫表頭，自動建立以下欄位（新資料庫用中文名稱；括號裡是舊版的英文名稱）：
 
    | 類別 | 欄位 |
    |---|---|
-   | 書目資料 | 標題（沿用資料庫原本的標題欄）、`Authors`、`Year`、`Date`、`Publication`、`Volume`、`Issue`、`Pages`、`Publisher`、`Item Type`、`DOI`、`URL`、`Abstract` |
-   | 整理用 | `Status`（閱讀狀態，單選：待讀／閱讀中／已讀／已引用／已刪除）、`Tags`、`Collections`、`Library`、`Citation Key`、`APA`、`Summary`（AI 一句話摘要） |
-   | 研讀欄位（AI） | `Study Design`（選項：RCT、quasi-experimental、cohort、case-control、cross-sectional、qualitative、mixed methods、systematic review、meta-analysis、scoping review、guideline、other）、`Sample Size`（數字）、`Evidence Level`（Oxford CEBM 2011，1–5）、`JBI Level`、`Appraisal Tool`、`Appraisal`（納入／排除／需更多資訊）、`Population`、`Intervention`、`Comparison`、`Outcomes`、`Setting`、`Measures`（多選：測量工具）、`Country` |
-   | 連結與同步 | `Zotero`、`Obsidian`、`Zotero Key`、`Date Added`、`Last Synced` |
+   | 書目資料 | 標題（沿用資料庫原本的標題欄）、`作者`（Authors）、`年份`（Year）、`出版日期`（Date）、`期刊`（Publication）、`卷`（Volume）、`期`（Issue）、`頁碼`（Pages）、`出版者`（Publisher）、`文獻類型`（Item Type）、`DOI`、`網址`（URL）、`摘要`（Abstract） |
+   | 整理用 | `閱讀狀態`（Status；單選：待讀／閱讀中／已讀／已引用／已刪除）、`標籤`（Tags）、`分類`（Collections）、`文獻庫`（Library）、`引用鍵`（Citation Key）、`APA 7`（APA）、`一句話摘要`（Summary）、`全文狀態`（Full Text） |
+   | 研讀欄位（AI） | `研究設計`（Study Design；選項：RCT、quasi-experimental、cohort、case-control、cross-sectional、qualitative、mixed methods、systematic review、meta-analysis、scoping review、guideline、other）、`樣本數`（Sample Size）、`證據等級`（Evidence Level；Oxford CEBM 2011，1–5）、`JBI 證據等級`（JBI Level）、`評讀工具`（Appraisal Tool）、`評讀結果`（Appraisal；納入／排除／需更多資訊）、`評讀已核對`（Appraisal Verified）、`P 族群`、`I 介入措施`、`C 對照`、`O 結果指標`（Population／Intervention／Comparison／Outcomes）、`研究場域`（Setting）、`測量工具`（Measures，多選）、`國家`（Country） |
+   | 連結與同步 | `Zotero 連結`（Zotero）、`Obsidian 連結`（Obsidian）、`Zotero 識別碼`（Zotero Key）、`加入日期`（Date Added）、`最後同步`（Last Synced） |
 
-   > 請不要改這些欄位的名稱，插件是靠名稱寫入的；改名後會再建立一個新的同名欄位。你可以自由新增自己的欄位（例如「評分」），插件不會動它們。
+   > 欄位可以改名，但不要刪除或改類型：同步過一次後，插件記得每個欄位的 ID，改名後照樣找得到（舊的英文名稱和新的中文名稱也都認得），不會再建一個新欄位。你可以自由新增自己的欄位（例如「評分」），插件不會動它們。
    >
-   > 已經在用的資料庫：再按一次「測試連線並補齊資料庫欄位」，就會加上新的研讀欄位與 `Status` 欄位。AI 筆記沒有結構化資料（例如舊的筆記）時，研讀欄位維持原值不會被清空。
+   > 已經在用的資料庫：英文欄位照常運作；再按一次「測試連線並補齊資料庫欄位」會用同一種語言補上缺的欄位。想改成中文，按「把 Notion 欄位改成中文」（見[Notion 中文欄位](#notion-中文欄位)）。AI 筆記沒有結構化資料（例如舊的筆記）時，研讀欄位維持原值不會被清空。
 
 ### 2. Obsidian
 
@@ -207,11 +214,93 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 - **沒有東西可讀就不呼叫 AI**：沒有全文、沒有傳 PDF、沒有摘要，也沒有劃線或筆記時，插件會略過這篇的 AI 筆記（進度視窗顯示原因），避免 AI 只憑標題編出內容；Notion／Obsidian 仍照常同步。
 - 「全文最多送出字元數」設成 0 時，表示你選擇不送全文，插件也不會傳 PDF，也不顯示上述提示。
 
+### 文獻筆記的版面
+
+文獻筆記（Obsidian）在自動區塊裡分成兩層，順序固定：
+
+```markdown
+> [!abstract] 重點
+> **一句話**：護理師帶的運動課讓住院長者跌倒率下降 30%。
+>
+> RCT · N = 120 · CEBM 2 · JBI 1.c · 評讀：納入（AI 初評）
+>
+> **主要發現**
+> - 跌倒率下降 30%
+> - 遵從度高、沒有嚴重不良事件
+>
+> **我的劃線**
+> - ==🟡reduced the rate of falls by thirty percent== 重要發現 · [p. 2](zotero://…)
+> - ==🔴no serious adverse events were reported== 限制／疑問 · [p. 2](zotero://…)
+>
+> [[Zotero/全文/lee2024|全文與劃線]] · [Zotero](zotero://…) · [Notion](https://…) · [DOI](https://doi.org/…)
+
+> [!quote]- 🟡 重要發現（1）
+> [!quote]- 🔴 限制／疑問（1）
+> [!note]- 我的 Zotero 筆記（1）
+> [!example]- 文獻評讀表
+> [!tip]- AI 標的重點（僅供參考）
+> [!note]- AI 文獻筆記（模型 · 日期）
+> [!info]- 摘要（Abstract）
+> [!search]- 🔎 延伸搜尋
+> [!info]- 書目資訊
+```
+
+- **重點**：10 秒內看完：一句話（AI 筆記的一句話摘要）、研究設計 · 樣本數 · 證據等級 · 評讀結果（核對過的評讀表優先，標「已核對」；只有 AI 的標「AI 初評」）、2–3 個主要發現（AI 筆記「主要結果」的前幾點）、你自己的重點劃線（依顏色意義的順序，每種意義先挑一條，最多 3 條），最後一行是全文筆記、Zotero、Notion、DOI 的連結。沒有 AI 筆記或劃線時，這裡會說明產生後會出現什麼。
+- **摺疊區塊**：點標題才展開。先放你自己的東西（各顏色的劃線、Zotero 子筆記、文獻評讀表），再放 AI 的（AI 標的重點、完整 AI 筆記），最後是參考資料（摘要、延伸搜尋、書目資訊）。沒有內容的區塊不會出現。
+- **不重複**：一句話只出現在「重點」（AI 筆記區塊裡不再重複）；Zotero／Notion 連結只在「重點」；全文不貼進筆記，用連結開全文筆記。
+- **Notion**：自動同步區最上面同樣是「重點」，其餘每一段是一個收合的切換區塊（toggle）；劃線分組的切換區塊帶著該顏色的底色。
+- **你的內容照樣保留**：只有 `%% zotero-bridge:start %%` 到 `%% zotero-bridge:end %%` 之間會改成新版面；舊版本同步的筆記第一次重新同步時就會換成新版面，你寫在區塊外的文字、「✍️ 我的筆記」與自己的 frontmatter 欄位都不會動。概念卡片仍會從摺疊區塊裡讀到「關鍵概念」與一句話摘要。
+
+### 全文筆記與 markitdown
+
+「全文筆記」打開時（研究生引導預設開啟），每次同步：
+
+- **全文筆記**：寫在文獻筆記所在資料夾的 `全文/` 子資料夾（例如 `Zotero/全文/lee2024.md`，子資料夾名稱可在設定改），檔案最上面有一個小提示框說明這是自動產生的，並連回文獻筆記；文獻筆記的 frontmatter 有 `fulltext: "[[Zotero/全文/lee2024]]"`。這份檔案每次同步都會依最新的全文與劃線重新產生，**不要在裡面寫字**（想法寫在文獻筆記）。它沒有 `zotero_key`，所以不會出現在 Bases 總表、儀表板與概念卡片裡。文獻筆記改名時，全文筆記跟著改名；同名的檔案如果不是插件產生的，不會被覆寫。
+- **怎麼轉成 Markdown**：用 Zotero 已經抽出的全文（不用另外裝東西）。接回行尾斷字（`interven- tion` → `intervention`，`self-reported` 這類複合字保留連字號）、跨頁的段落接回同一段、整行是段落名稱的才當標題（Abstract、Background、Introduction、Methods、Results、Discussion、Conclusion(s)、Limitations、References、Acknowledgements、Funding、Conflict of interest；中文的摘要、前言、緒論、研究方法、方法、結果、討論、結論、研究限制、參考文獻、誌謝），刪掉在多頁頁首／頁尾重複出現的行（期刊名、下載浮水印）和頁緣的頁碼。不確定的就保留：完整的句子、只出現一兩頁的行、頁面中間的數字都不會刪。
+- **劃線標在原文**：你的劃線依顏色標成 `==🟡…==`（和文獻筆記同一套顏色），比對時忽略換行、斷字與少數字的差異；對不上的劃線（跨頁、圖表裡的字、掃描檔）列在全文筆記最後的「沒有在全文中找到位置的劃線」，不會遺失。
+- **送給 AI 的全文**：產生 AI 筆記時改送這份 Markdown，並先刪掉 References、Acknowledgements、Funding、Conflict of interest 等段落（設定可關；印在參考文獻後面的表格與圖會保留）。「全文最多送出字元數」照舊，在刪減之後才截斷。同步完成時進度視窗會顯示「全文整理成 Markdown 後送給 AI：N 字（原本 M 字，省下 X%，略過 …）」。
+- **Notion 全文子頁面**（設定，預設關閉）：在文獻頁面底下建立「全文：標題」子頁面，劃線變成對應顏色的底色、AI 標的重點加底線。每 100 個區塊送一次（每段文字最多 2,000 字），一篇論文通常要 5–10 次 API 請求，同步會變慢。內容沒變時不會重建；有變時舊的子頁面移到 Notion 垃圾桶、建一個新的，所以永遠只有一份（子頁面的連結會變）。
+- **快取**：轉好的 Markdown 依附件、檔案修改時間與大小快取在 Zotero 資料夾的 `zotero-bridge/fulltext/`，重新同步不會重做。
+- **掃描版 PDF**：沒有文字層就沒有全文筆記（先用 OCR，見[掃描版 PDF](#掃描版-pdf沒有文字層)）。
+
+**markitdown（選用）**：[markitdown](https://github.com/microsoft/markitdown) 是 Microsoft 的開源轉換工具，要自己安裝：`pip install 'markitdown[pdf]'`，然後在 設定 → 全文筆記 → 選用：用 markitdown 轉換 PDF 填入執行檔路徑（例如 `/usr/local/bin/markitdown`、Windows 的 `C:\Users\你\AppData\Local\Programs\Python\Python312\Scripts\markitdown.exe`；只填 `markitdown` 會在 PATH 裡找）。插件會對 PDF 執行 `markitdown 檔案.pdf`，再做上面同樣的整理。老實說它能幫的有限：它的 PDF 轉換對表格、表單類的頁面用 pdfplumber 保留成 Markdown 表格，其餘頁面用 pdfminer 輸出純文字——一般論文的段落標題它不會標（仍由插件偵測），掃描檔也不會 OCR（要另外裝外掛）。執行失敗、超過 2 分鐘或輸出超過 8 MB 時，自動改用內建轉換，進度視窗會說明原因（同一個檔案不會每次都重試）。
+
+### 劃線顏色的意義
+
+設定 → 劃線顏色與意義：Zotero 的 8 種劃線顏色各一列，可以改意義的名稱（最多 40 字）、用「上移／下移」排順序，「恢復預設」回到預設值。
+
+| 顏色 | 預設意義 |
+|---|---|
+| 🟡 黃 | 重要發現 |
+| 🔴 紅 | 限制／疑問 |
+| 🟢 綠 | 研究方法 |
+| 🔵 藍 | 可引用句 |
+| 🟣 紫 | 定義／概念 |
+| 🟠 橘 | 待查證 |
+| 🩷 洋紅 | 我的想法 |
+| ⚪ 灰 | 其他 |
+
+文獻筆記依這個順序把劃線分組，每組一個摺疊區塊（標題是顏色與意義，例如「🟡 重要發現（3）」），每條劃線保留頁碼連結、評註與標籤；「重點」裡的「我的劃線」依同一個順序挑選。Obsidian 只有 6 種螢光筆顏色，洋紅顯示成紫色、灰色顯示成預設顏色（和以前一樣）。不在這 8 色裡的顏色歸到「其他顏色」。
+
+### AI 標重點
+
+「AI 標重點」打開時（研究生引導預設關閉，要「AI 文獻筆記」），產生 AI 筆記時會多請 AI 在結構化資料裡附上 3–6 句「最能代表這篇研究重點的原句」——和 AI 筆記是**同一次呼叫**，只多一點輸出 token，不會多一次請求。
+
+- **核對**：每一句都和全文（沒有全文時和摘要）比對，用的是和「可引用句查證」相同的方法；對不上的直接刪掉，進度視窗會說刪了幾句。
+- **跟你的劃線分開**：全文筆記裡用「🤖＋底線」（`🤖<u>…</u>`）標出，和你的彩色劃線不同；兩者重疊時以你的劃線為準。文獻筆記另列摺疊區塊「AI 標的重點（僅供參考）」，排在你自己的劃線與評讀之後。Notion 也是底線。
+- **僅供參考**：AI 挑的不一定是你的研究需要的；決定哪裡重要的還是你。這些句子存在 Zotero AI 子筆記的結構化資料裡，之後不呼叫 AI 的同步會沿用；關掉開關後不再顯示。
+
+### Notion 中文欄位
+
+- **新資料庫**：「測試連線並補齊資料庫欄位」或第一次同步時，欄位直接用中文名稱（見上方[Notion](#1-notion)的欄位表）。DOI、APA、JBI、PICO 的 P／I／C／O 這類慣用英文的詞保留英文。
+- **舊資料庫照常運作**：插件依序用「記住的欄位 ID」、「中文名稱」、「英文名稱」找欄位，所以英文欄位、改過名的欄位都找得到，不會重複建立。缺的欄位會用資料庫原本的語言補上。
+- **一鍵改成中文**：設定 → Notion →「把 Notion 欄位改成中文…」。先列出每個資料庫要改的欄位（例如 `Authors → 作者`、`Name → 標題`），確認後才透過 Notion API 依欄位 ID 改名；只改名字，資料不動。已經有同名中文欄位的不會改，會在結果裡說明。如果你在 Notion 的公式、篩選或其他整合用到這些欄位名稱，也要自己跟著改。
+
 ### 圖片劃線（表格、圖）
 
 護理研究的主要結果常在表格和圖裡。在 Zotero 的 PDF 閱讀器用「選取區域」框選表格或圖（圖片劃線），或用手繪工具畫記（手繪註記），同步時會一起帶出截圖：
 
-- **Obsidian**：截圖存到筆記所在資料夾底下的 `attachments/`，檔名是 `<條目KEY>-<註記KEY>.png`（例如 `Zotero/attachments/ABCD2345-EFGH6789.png`），依劃線順序嵌入筆記的 Annotations 區（`![[...]]`）：上方是顏色標記與頁碼連結，下方是你的評註。內容沒變時不會重寫檔案。用條目 KEY 命名，所以改了 citekey 或標題，截圖也不用改名。
+- **Obsidian**：截圖存到筆記所在資料夾底下的 `attachments/`，檔名是 `<條目KEY>-<註記KEY>.png`（例如 `Zotero/attachments/ABCD2345-EFGH6789.png`），嵌入筆記劃線區（依顏色意義分組的摺疊區塊）的對應項目（`![[...]]`）：上方是顏色標記與頁碼連結，下方是你的評註。內容沒變時不會重寫檔案。用條目 KEY 命名，所以改了 citekey 或標題，截圖也不用改名。
 - **刪除註記**：在 Zotero 刪掉圖片劃線後再同步到 Obsidian，對應的截圖會從 `attachments/` 刪除。插件只刪「這篇文獻的 `條目KEY-註記KEY.png`」格式的檔案，你自己放在 `attachments/` 的圖片和其他文獻的截圖都不會動；關閉「匯出圖片劃線」後也不會再刪任何檔案。把筆記搬到別的資料夾後，舊資料夾 `attachments/` 裡的截圖不會跟著搬，可以自行刪除。
 - **Notion**：截圖用 Notion 的檔案上傳 API 上傳，成為自動同步區裡的圖片區塊。上傳的檔案若沒有馬上放進頁面，一小時後就會失效，而自動同步區每次同步都會整個重建，所以**每次同步到 Notion 都會重新上傳**（每張圖多 2 次 API 請求）。單一檔案上限 20 MB（Notion 免費方案為 5 MB）；上傳失敗時頁面照常同步，只是少了圖片，進度視窗會顯示 ⚠️。
 - **截圖從哪來**：Zotero 會快取每個圖片／手繪註記的截圖。沒有快取時（例如在另一台電腦劃的線剛同步過來），插件會請 Zotero 當場從 PDF 產生；產生不了（例如這台電腦沒有 PDF 檔）時，進度視窗會顯示 ⚠️，筆記保留顏色、頁碼與評註（Obsidian 裡上次同步的截圖會繼續沿用）。
@@ -315,8 +404,8 @@ AI 筆記的「嚴格評讀」是 AI 初評；實證報告與論文需要**你�
 **4. 儲存**：「儲存評讀表」存成這篇文獻的子筆記「📝 文獻評讀表」（標籤 `zotero-bridge-appraisal`），內容是可讀的表格加一段 JSON 資料；**AI 筆記不會被修改**。儲存不會觸發自動同步，下次同步（或按「儲存並同步」）時才更新 Notion 與 Obsidian。子筆記不會被當成你的 Zotero 筆記同步，也不會送給 AI；請在面板修改，不要直接編輯子筆記的 JSON。
 
 **5. 同步到哪裡**
-- **Obsidian**：文獻筆記的自動同步區在 AI 筆記之後多一節「## 文獻評讀表」：狀態提示框（綠色「已核對（日期）」／黃色「AI 初評，尚未核對」）、評讀工具與出處連結、「評讀項目｜評讀結果｜評析根據」表格、整體評價、雙人評讀的 κ。還沒有存評讀表時，顯示 AI 初評並標「AI 初評，尚未核對」。frontmatter 新增 `appraisal_verified: true/false`；核對後 `appraisal_tool`、`appraisal_overall` 改為評讀表的值。
-- **Notion**：自動同步區塊內同樣一節，表格是真正的 Notion 表格；`Appraisal Tool`、`Appraisal` 欄位在核對後改為評讀表的值，新增勾選欄位 **Appraisal Verified**。既有資料庫請到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」加上這個欄位。
+- **Obsidian**：文獻筆記的自動同步區多一個摺疊區塊「文獻評讀表」（在你的劃線與子筆記之後、AI 筆記之前）：狀態提示框（綠色「已核對（日期）」／黃色「AI 初評，尚未核對」）、評讀工具與出處連結、「評讀項目｜評讀結果｜評析根據」表格、整體評價、雙人評讀的 κ。還沒有存評讀表時，顯示 AI 初評並標「AI 初評，尚未核對」。frontmatter 新增 `appraisal_verified: true/false`；核對後 `appraisal_tool`、`appraisal_overall` 改為評讀表的值。
+- **Notion**：自動同步區塊內同樣一個收合區塊，表格是真正的 Notion 表格；`評讀工具`、`評讀結果`（舊資料庫：`Appraisal Tool`、`Appraisal`）欄位在核對後改為評讀表的值，新增勾選欄位 **評讀已核對**（Appraisal Verified）。既有資料庫請到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」加上這個欄位。
 - **PRISMA 證據表**與**實證健康照護報告草稿**：已核對的評讀表取代 AI 筆記的評讀工具、整體評價與逐題評讀（報告草稿的 AI 會依你核對的答案撰寫評讀表）。
 
 **6. 評讀總表**：在分類上按右鍵 → **Zotero Bridge：匯出文獻評讀總表**（或 工具 → 匯出文獻評讀總表（目前分類））。分類有篩選標籤時只用全文納入的研究。產出在 `Zotero/Reviews/`：
@@ -845,9 +934,11 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi
 | `content/secrets.js` | API key／Notion token 存取（Gecko 密碼管理員） |
 | `content/usage.js` | AI 用量月報、價格表與費用估算（快取讀寫倍率、批次折扣） |
 | `content/ai-batch.js` | 批次 API（Message Batches）：大量 AI 筆記打包送出、custom_id、輪詢與重新啟動後續查、結果 JSONL 解析與套用、取消 |
-| `content/notion.js` | Notion API（2025-09-03，data sources） |
+| `content/notion.js` | Notion API（2025-09-03，data sources）、中英文欄位名稱與依 ID 對應、欄位改名、摺疊區塊（toggle） |
 | `content/status.js` | 閱讀狀態在 Zotero 標籤、Notion Status、Obsidian `status` 之間的合併與同步 |
-| `content/core.js` | Obsidian 筆記組裝、frontmatter 合併、分流規則 |
+| `content/core.js` | Obsidian 筆記組裝（「重點」＋摺疊區塊、劃線顏色意義）、frontmatter 合併、分流規則 |
+| `content/fulltext-md.js` | 全文轉 Markdown（斷字、分段、段落標題、頁首頁尾）、刪參考文獻、劃線定位與標記、全文筆記、Notion 分批（純函式） |
+| `content/fulltext.js` | 全文筆記：轉換快取、markitdown（Subprocess）、寫入 Obsidian、Notion 全文子頁面、AI 標重點核對 |
 | `content/markdown.js` | Markdown ⇄ Notion blocks ⇄ HTML |
 | `content/synthesis.js` | 跨文獻比較表：提示詞、引文轉換、APA 參考文獻 |
 | `content/export.js` | 參考文獻檔匯出（CSL JSON／BibTeX）與 citekey 產生 |

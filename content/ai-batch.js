@@ -336,6 +336,8 @@
 		let data = await ZB.adapter.extractItemData(item, { fullTextLimit: settings.llm.fullTextLimit, checkFullText: true });
 		let notesMarkdown = ZB.main.notesFor(settings, data);
 		let messages = [];
+		// The same Markdown full text the normal path sends (fulltext.js, when 「全文筆記」 is on)
+		await ZB.main.prepareFullText(data, settings.llm, messages);
 		let images = await ZB.images.collect(data, { targets: new Set(), ai: true }, ctx, messages);
 		let aiInput = await ZB.scanned.prepareAIInput(data, settings.llm, notesMarkdown, IOUtils);
 		messages.push(...aiInput.messages);
@@ -590,6 +592,7 @@
 			try {
 				if (!result.ok) throw new Error(result.error);
 				let data = await ZB.adapter.extractItemData(item, { fullTextLimit: settings.llm.fullTextLimit, checkFullText: true });
+				await ZB.main.prepareFullText(data, settings.llm, null);
 				// What the AI read when the request was built (scanned.generateWithPDF sets this)
 				data.aiReadPDF = !!req.pdf;
 				ZB.main.recordAIUsage({ model: result.model, usage: result.usage, batch: true }, usage);

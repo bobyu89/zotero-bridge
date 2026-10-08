@@ -242,16 +242,18 @@ const TESTS = [
 			const MODULES = {
 				apaZh: ["formatReference", "isChineseItem", "options"],
 				appraisalTools: ["getTool", "toolsForDesign", "findToolByName", "summarize", "toMarkdownTable", "toCSV", "toJSON", "fromJSON"],
-				core: ["buildObsidianNote", "resolveRoute", "buildBaseFile"],
+				core: ["buildObsidianNote", "resolveRoute", "buildBaseFile", "buildNoteSections", "colorMeanings"],
 				markdown: ["htmlToMd", "mdToHtml"],
-				notion: ["NotionClient"],
+				notion: ["NotionClient", "resolveSchema", "renamePlan", "pageProperty"],
 				llm: ["generateNote", "extractStudyData"],
 				synthesis: [],
 				verify: ["verifyQuotes"],
 				scanned: ["classifyFullText", "prepareAIInput", "countChars"],
+				fulltextMd: ["toMarkdown", "trimForAI", "markHighlights", "buildFullTextNote", "notionChunks"],
 				usage: ["recordUsage"],
 				secrets: ["get", "set", "clear", "migrateFromPrefs", "createStore", "geckoBackend"],
 				adapter: ["extractItemData", "saveAINote", "getAINote", "toRegularItems"],
+				fulltext: ["prepare", "render", "verifyAIHighlights", "writeObsidian", "writeNotion", "runMarkitdown"],
 				bibliography: ["exportLibrary", "exportCollections", "citekeyFor", "afterSync"],
 				images: ["collect"],
 				status: ["runPass", "prepare", "setItemStatus"],
@@ -267,7 +269,7 @@ const TESTS = [
 				appraisalForm: ["renderPaneRow", "syncInfo", "saveRecord", "exportSummary", "registerMenus"],
 				progressReport: ["run", "askOptions", "logStatusChange", "latestReport", "registerMenus"],
 				features: ["isEnabled", "rawValue", "applyPreset", "currentPreset", "snapshot", "restore", "migrate", "gateMenus"],
-				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly"],
+				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly", "renameNotionColumns", "notionClient", "prepareFullText"],
 			};
 			let missing = [];
 			for (let [mod, fns] of Object.entries(MODULES)) {
@@ -420,7 +422,7 @@ const TESTS = [
 				if (!ctx.l10n.has(m[1])) ctx.l10n.set(m[1], null);
 			}
 			let ids = [...ctx.l10n.keys()];
-			let args = { count: 3, reason: "E2E", name: "E2E", preset: "guided", req: "sync" };
+			let args = { count: 3, reason: "E2E", name: "E2E", preset: "guided", req: "sync", color: "yellow" };
 			let report = {};
 			let problems = [];
 			for (let locale of ["en-US", "zh-TW"]) {
@@ -634,6 +636,17 @@ const TESTS = [
 			ctx.noteDir = PathUtils.join(vault, "Zotero");
 			setPref("obsidian.vaultPath", vault);
 			setPref("export.bibtex", true);
+			// A red highlight on the text PDF: coloured in place in the full-text note (fulltext.js)
+			let highlight = new Zotero.Item("annotation");
+			highlight.parentID = ctx.textPDF.id;
+			highlight.annotationType = "highlight";
+			highlight.annotationText = "The intervention reduced the rate of falls by thirty percent compared with usual care.";
+			highlight.annotationColor = "#ff6666";
+			highlight.annotationPageLabel = "1";
+			highlight.annotationSortIndex = "00000|000500|00300";
+			highlight.annotationPosition = JSON.stringify({ pageIndex: 0, rects: [[40, 600, 420, 610]] });
+			await highlight.saveTx();
+			ctx.highlight = highlight;
 			let items = [ctx.english, ctx.chinese, ctx.book, ctx.extra1, ctx.extra2];
 			await zb().main.run(items, { targets: ["obsidian"], ai: "none" });
 			let problems = [];
@@ -672,6 +685,29 @@ const TESTS = [
 				problems.push(`English APA line (Zotero citeproc) wrong: ${(/^.*APA 7.*$/m.exec(en) || ["(no APA line)"])[0]}`);
 			}
 			if (!en.includes("E2E child note")) problems.push("English note does not contain the child note text");
+			// The compact layout: 「重點」 first in the managed block, the highlight under its colour's meaning
+			if (!/%% zotero-bridge:start[^\n]*%%\n\n> \[!abstract\] 重點\n/.test(en)) problems.push("English note has no 「重點」 block at the top of the managed region");
+			if (!/^> \[!quote\]- 🔴 限制／疑問（1）\n> - ==🔴The intervention reduced the rate of falls by thirty percent compared with usual care\.== · \[p\. 1\]/m.test(en)) {
+				problems.push("English note does not list the red highlight under 限制／疑問");
+			}
+			// The full-text note next to it (全文筆記 is on in 研究生引導), with the highlight coloured in place
+			let fullTextPath = PathUtils.join(ctx.noteDir, "全文", PathUtils.filename(notes.english.path));
+			if (!(await IOUtils.exists(fullTextPath))) {
+				problems.push(`no full-text note ${fullTextPath}; files in 全文: ${(await listFiles(PathUtils.join(ctx.noteDir, "全文"))).map(p => PathUtils.filename(p)).join(", ")}`);
+			}
+			else {
+				let ft = await IOUtils.readUTF8(fullTextPath);
+				d.fullTextHead = ft.slice(0, 600);
+				if (!ft.includes(`fulltext_of: "library/${ctx.english.key}"`)) problems.push("full-text note lacks fulltext_of");
+				if (/zotero_key:/.test(ft)) problems.push("full-text note has a zotero_key (it would be indexed as a literature note)");
+				if (!/==🔴The intervention reduced the rate of falls by thirty percent compared with usual care==/.test(ft)) {
+					problems.push(`full-text note does not colour the highlight in place: ${(/^.*thirty percent.*$/m.exec(ft) || ["(sentence not found)"])[0]}`);
+				}
+				if (!en.includes(`fulltext: "[[Zotero/全文/${PathUtils.filename(notes.english.path).replace(/\.md$/, "")}]]"`)) problems.push("English note does not link to its full-text note");
+			}
+			if (await IOUtils.exists(PathUtils.join(ctx.noteDir, "全文", PathUtils.filename(notes.chinese.path)))) {
+				problems.push("a full-text note was written for the scanned PDF (no text layer)");
+			}
 			if (!/^tags:\n(?: {2}- .*\n)*? {2}- "?falls"?$/m.test(fm("english") + "\n")) problems.push("English note frontmatter tags do not include falls");
 			if (!/^collections:\n {2}- "?E2E Review"?$/m.test(fm("english"))) problems.push("English note frontmatter collections do not include E2E Review");
 			let base = PathUtils.join(ctx.noteDir, "Zotero 文獻庫.base");
@@ -934,6 +970,12 @@ const TESTS = [
 				let untranslated = [...c.querySelectorAll("[data-l10n-id]")].filter(e => !e.textContent.trim() && !e.getAttribute("label"));
 				d.untranslated = untranslated.map(e => e.dataset.l10nId);
 				check(!untranslated.length, `untranslated l10n elements: ${d.untranslated.join(", ")}`);
+				// 劃線顏色與意義: one row per Zotero colour (ZoteroBridgePrefs.init); 全文筆記 shows in 研究生引導
+				await waitFor(() => c.querySelectorAll("#zb-colors > li").length === 8, "#zb-colors to list Zotero's 8 highlight colours", 10000);
+				d.colorRows = [...c.querySelectorAll("#zb-colors > li input")].map(i => i.value);
+				eq(d.colorRows[0], "重要發現", "first colour meaning (yellow)");
+				let fullTextBox = c.querySelector('groupbox[data-zb-feature="fullTextMarkdown"]');
+				check(fullTextBox && !fullTextBox.hasAttribute("hidden"), "全文筆記 is on in 研究生引導: its settings section should show");
 				let anthropicBox = c.querySelector("#zb-anthropic-box");
 				check(anthropicBox && !anthropicBox.hidden, "provider anthropic: #zb-anthropic-box should be visible");
 				// 功能: one switch per feature, the preset of this fresh profile, and progressive disclosure

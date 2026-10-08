@@ -124,13 +124,21 @@
 
 	// ---------- literature notes (pure) ----------
 
-	/** The text between the plugin's markers ("" when the markers are missing: then the user owns the body). */
+	/**
+	 * The text between the plugin's markers ("" when the markers are missing: then the user owns the body).
+	 * The literature note keeps its parts in callouts: their "> " is taken off and each callout's title
+	 * line becomes a top-level heading, so a section never runs on into the next callout.
+	 */
 	function managedRegion(text) {
 		let body = core.splitFrontmatter(String(text || "")).body;
 		let start = MARK_START_RE.exec(body);
 		let end = MARK_END_RE.exec(body);
 		if (!start || !end || end.index < start.index) return "";
-		return body.slice(start.index + start[0].length, end.index);
+		return body.slice(start.index + start[0].length, end.index).split("\n").map((line) => {
+			let m = /^>[ \t]?\[![\w-]+\][+-]?[ \t]*(.*)$/.exec(line);
+			if (m) return `# ${m[1]}`;
+			return line.replace(/^>[ \t]?/, "");
+		}).join("\n");
 	}
 
 	/** The body of the first heading matching `re` up to the next heading of the same or a higher level (fences skipped). */
@@ -165,9 +173,12 @@
 		return section === null ? [] : [...new Set(wikilinkTargets(section))];
 	}
 
-	/** The AI note's 「一句話摘要」 ("" without one). */
+	/** The AI note's 「一句話摘要」 ("" without one): the 「重點」 block's 一句話, or the heading in older notes. */
 	function oneLineSummary(text) {
-		let section = headingSection(managedRegion(text), SUMMARY_RE);
+		let region = managedRegion(text);
+		let line = /^\*\*一句話\*\*[：:][ \t]*(.+)$/m.exec(region);
+		if (line) return line[1].replace(/\s+/g, " ").trim();
+		let section = headingSection(region, SUMMARY_RE);
 		if (section === null) return "";
 		let first = section.trim().split(/\n\s*\n/)[0] || "";
 		return first.replace(/\s+/g, " ").trim();

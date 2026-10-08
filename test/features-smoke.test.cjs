@@ -226,7 +226,7 @@ const GATED_IN_GUIDED = {
 test("a fresh profile starts in 研究生引導: the gated menus hide, and come back with 進階 without a restart", async () => {
 	let env = await setup();
 	let F = env.ZB.features;
-	assert.equal(env.prefStore[P + "features.version"], 1, "the migration ran once at startup");
+	assert.equal(env.prefStore[P + "features.version"], F.MIGRATION_VERSION, "the migrations ran once at startup");
 	assert.equal(F.currentPreset(), "guided");
 	let registered = env.menus.map(o => o.menuID);
 	for (let [id, feature] of Object.entries(GATED_IN_GUIDED)) {
@@ -521,4 +521,45 @@ test("settings pane: presets, switches, 自訂, undo and progressive disclosure 
 	assert.equal(env.observerCount(), pluginObservers);
 	env.Zotero.Prefs.set(P + "feature.synthesis", true);
 	assert.deepEqual(env.errors, []);
+});
+
+test("settings pane: 劃線顏色與意義 rows edit, reorder and reset the colour meanings; 全文筆記 shows with its switch", async () => {
+	let env = await setup();
+	let window = openPane(env);
+	let doc = window.document;
+	let rows = () => [...doc.querySelectorAll("#zb-colors > li")];
+	let meanings = () => [...env.ZB.core.colorMeanings(env.prefStore[P + "annotations.colorMeanings"] || "")].map(m => `${m.color} ${m.meaning}`);
+	assert.equal(rows().length, 8);
+	let first = rows()[0];
+	assert.equal(first.querySelector(".zb-color-name").textContent, "黃色");
+	assert.equal(first.querySelector(".zb-color-name").getAttribute("data-l10n-id"), "zotero-bridge-color-name");
+	assert.equal(first.querySelector("input").value, "重要發現");
+	assert.equal(first.querySelector("input").getAttribute("aria-labelledby"), first.querySelector(".zb-color-name").id);
+	assert.equal(first.querySelector(".zb-color-swatch").style.backgroundColor, "rgb(255, 212, 0)");
+	assert.equal(first.querySelectorAll("button")[0].disabled, true, "the first row can't move up");
+	assert.equal(rows()[7].querySelectorAll("button")[1].disabled, true, "the last row can't move down");
+
+	// Rename red, then move it to the top
+	let red = rows()[1].querySelector("input");
+	red.value = "研究缺口";
+	red.dispatchEvent(new window.Event("input"));
+	assert.equal(meanings()[1], "#ff6666 研究缺口");
+	rows()[1].querySelectorAll("button")[0].click();
+	assert.deepEqual(meanings().slice(0, 2), ["#ff6666 研究缺口", "#ffd400 重要發現"]);
+	assert.equal(rows()[0].querySelector("input").value, "研究缺口");
+	assert.equal(doc.activeElement && doc.activeElement.id, "zb-color-down-0", "focus stays on the moved row (up is disabled at the top)");
+	// Restore defaults
+	window.ZoteroBridgePrefs.resetColorMeanings();
+	assert.equal(env.prefStore[P + "annotations.colorMeanings"], "");
+	assert.equal(rows()[0].querySelector("input").value, "重要發現");
+
+	// 全文筆記: on in 研究生引導, its section follows the switch
+	let section = doc.querySelector('[data-zb-feature="fullTextMarkdown"]');
+	assert.equal(section.hasAttribute("hidden"), false);
+	let input = doc.querySelector("#zb-feature-fullTextMarkdown");
+	input.checked = false;
+	input.dispatchEvent(new window.Event("change"));
+	assert.equal(section.hasAttribute("hidden"), true);
+	assert.ok(doc.querySelector('[data-l10n-id="zotero-bridge-notion-rename"]'), "the rename button is in the Notion section");
+	await vm.runInContext("shutdown()", env.context);
 });

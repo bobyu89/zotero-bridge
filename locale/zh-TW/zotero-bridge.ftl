@@ -156,6 +156,8 @@ zotero-bridge-feature-dashboard = 研究儀表板
 zotero-bridge-feature-dashboard-desc = 在 Obsidian 整理閱讀進度、待讀清單和資料缺漏。只讀 vault，不連網。
 zotero-bridge-feature-concepts = 概念卡片
 zotero-bridge-feature-concepts-desc = 把筆記裡的 [[概念]] 整理成卡片和索引，看得出哪些文獻談同一件事。不呼叫 AI。
+zotero-bridge-feature-full-text-markdown = 全文筆記
+zotero-bridge-feature-full-text-markdown-desc = 把 PDF 全文整理成 Markdown 存成一份筆記，你的劃線依顏色標在原文位置；送給 AI 的全文也改用它，省下參考文獻的 token。不呼叫 AI。
 zotero-bridge-feature-search-links = 醫學資料庫搜尋連結
 zotero-bridge-feature-search-links-desc = 把題目、MeSH、PICO 帶到 PubMed、CINAHL、Cochrane、華藝等資料庫。檢索式還是你自己決定。
 zotero-bridge-feature-pubmed-watch = PubMed 新文獻追蹤
@@ -170,6 +172,8 @@ zotero-bridge-feature-ai-notes = AI 文獻筆記
 zotero-bridge-feature-ai-notes-desc = 同步時請 AI 整理研讀筆記（設計、樣本、PICO、評讀初稿），引文會回原文核對。自備 API key。
 zotero-bridge-feature-ai-batch = 批次 API
 zotero-bridge-feature-ai-batch-desc = 一次產生很多篇 AI 筆記時改用 Claude 批次 API：約半價，但最久要等 24 小時。
+zotero-bridge-feature-ai-highlights = AI 標重點
+zotero-bridge-feature-ai-highlights-desc = 產生 AI 筆記時順便請 AI 挑出幾句關鍵原句，核對後用跟你的劃線不同的記號標出，僅供參考。不另外呼叫 AI。
 zotero-bridge-feature-synthesis = 文獻比較表
 zotero-bridge-feature-synthesis-desc = 選幾篇文獻，讓 AI 做比較表、主題整理和研究缺口。
 zotero-bridge-feature-review-draft = 文獻探討草稿
@@ -180,3 +184,37 @@ zotero-bridge-feature-progress-report = 進度報告
 zotero-bridge-feature-progress-report-desc = 整理這段時間讀了什麼、篩選到哪裡、下一步，給指導教授看；可以選擇加上 AI 摘要。
 zotero-bridge-feature-concepts-ai = 概念卡片 AI 綜整
 zotero-bridge-feature-concepts-ai-desc = 讓 AI 為一張概念卡片寫綜整草稿，附數字查核清單。
+
+## Settings → 劃線顏色與意義, 全文筆記, Notion columns (preferences.xhtml, preferences.js)
+zotero-bridge-colors-heading = 劃線顏色與意義
+zotero-bridge-colors-intro = 在 Zotero 用不同顏色劃線時，每個顏色代表什麼。文獻筆記依這個順序把劃線分組，排在前面的會優先放進「重點」。
+zotero-bridge-color-name =
+    { $color ->
+        [yellow] 黃色
+        [red] 紅色
+        [green] 綠色
+        [blue] 藍色
+        [purple] 紫色
+        [magenta] 洋紅
+        [orange] 橘色
+       *[gray] 灰色
+    }
+zotero-bridge-color-up = 上移
+zotero-bridge-color-down = 下移
+zotero-bridge-colors-reset =
+    .label = 恢復預設
+zotero-bridge-fulltext-heading = 全文筆記
+zotero-bridge-fulltext-intro = 每篇文獻旁邊多一份全文筆記（文獻筆記資料夾裡的子資料夾），你的劃線依顏色標在原文位置。它每次同步都會重新產生，想法請寫在文獻筆記。
+zotero-bridge-fulltext-folder = 全文筆記的子資料夾：
+zotero-bridge-fulltext-trim =
+    .label = 送給 AI 前先刪掉參考文獻、誌謝、經費與利益衝突（省 token；同步的進度視窗會顯示省下多少）
+zotero-bridge-fulltext-notion =
+    .label = Notion：在文獻頁面底下另建「全文」子頁面（每篇多幾次 API 呼叫，同步會變慢）
+zotero-bridge-fulltext-markitdown-summary = 選用：用 markitdown 轉換 PDF
+zotero-bridge-fulltext-markitdown-path = markitdown 執行檔（留空 = 只用內建轉換）：
+zotero-bridge-fulltext-markitdown-pick =
+    .label = 選擇檔案…
+zotero-bridge-fulltext-markitdown-hint = markitdown 是 Microsoft 的開源轉換工具，要自己安裝：pip install 'markitdown[pdf]'。它對表格、表單類的頁面有幫助（保留成 Markdown 表格）；一般論文的段落標題與掃描檔 OCR 它不會做，標題仍由外掛偵測。轉換失敗或超過 2 分鐘時自動改用內建轉換。
+zotero-bridge-notion-rename =
+    .label = 把 Notion 欄位改成中文…
+zotero-bridge-notion-columns-hint = 新的資料庫直接用中文欄位（標題、作者、年份、研究設計…）；舊資料庫的英文欄位照樣能用。按「把 Notion 欄位改成中文」會先列出要改的欄位，確認後才改名。
