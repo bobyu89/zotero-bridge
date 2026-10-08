@@ -260,6 +260,7 @@ const TESTS = [
 				dashboard: ["update", "afterSync", "registerMenus"],
 				citationChase: ["chaseCollection", "chaseItems", "importChecked", "registerMenus"],
 				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "registerMenus"],
+				ebhcReport: ["run", "askOptions", "processReport", "buildReportNote"],
 				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly"],
 			};
 			let missing = [];

@@ -348,6 +348,11 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 		// search-links.js
 		"main/library/item", "main/menubar/tools"]);
 	assert.equal(env.panes[0].paneID, "zotero-bridge-ai-note");
+	// The Zotero Bridge submenus (items and collections): the drafts at the end (review-draft.js, ebhc-report.js)
+	for (let i of [0, 1]) {
+		assert.deepEqual([...env.menus[i].menus[0].menus.slice(-4).map(m => m.l10nID || m.menuType)],
+			["separator", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-menu-ebhc-report"]);
+	}
 
 	let { MockItem, addChild } = env;
 	let item = new MockItem("journalArticle", {

@@ -1154,6 +1154,13 @@
 			onCommand: (ev, context) => {
 				ZB.reviewDraft.run(getItems(context), getScope(context), context).catch(e => Zotero.logError(e));
 			},
+		}, {
+			// Evidence-based health care report draft (ebhc-report.js)
+			menuType: "menuitem",
+			l10nID: "zotero-bridge-menu-ebhc-report",
+			onCommand: (ev, context) => {
+				ZB.ebhcReport.run(getItems(context), getScope(context), context).catch(e => Zotero.logError(e));
+			},
 		});
 		return menus;
 	}
