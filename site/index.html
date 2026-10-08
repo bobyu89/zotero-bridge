@@ -304,12 +304,12 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
           <tbody>
             <tr><th scope="row">PubMed 新文獻追蹤<span class="tags"><span class="tagx net">連網</span></span><span class="what">定期把符合你檢索式的新文獻匯入 Zotero。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
             <tr><th scope="row">引文追蹤<span class="tags"><span class="tagx net">連網</span></span><span class="what">從納入研究查它的參考文獻與引用它的文獻（OpenAlex）。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
-            <tr><th scope="row">跨文獻比較表（AI 綜整）<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">AI 讀多篇筆記，寫比較表、主題與研究缺口。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
+            <tr><th scope="row">文獻比較表（AI 綜整）<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">AI 讀多篇筆記，寫比較表、主題與研究缺口。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
             <tr><th scope="row">文獻探討草稿<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">AI 依你的文獻寫第二章初稿。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
             <tr><th scope="row">實證報告（EBHC）草稿<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">依台灣護理學會 A 類綜整文章架構寫報告草稿。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
             <tr><th scope="row">進度報告<span class="tags"><span class="tagx">AI 摘要選用</span></span><span class="what">整理兩次會議之間的進度，給指導教授看。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
             <tr><th scope="row">概念卡片 AI 綜整<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">AI 為一個概念綜整多篇文獻。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
-            <tr><th scope="row">批次 AI<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">一次產生大量 AI 筆記時用批次 API，約半價、最長等 24 小時。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
+            <tr><th scope="row">批次 API<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">一次產生大量 AI 筆記時用批次 API，約半價、最長等 24 小時。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
             <tr class="rest"><th scope="row">其他功能<span class="what">同步、閱讀狀態、評讀表、PRISMA 篩選、資料庫搜尋連結等，兩種組合一樣。</span></th><td class="st"><span class="sw on"><i></i><b>開</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
           </tbody>
         </table>
@@ -400,7 +400,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
           <li><span>清單裡出現 <b>Zotero Bridge</b> 就安裝完成。之後有新版本，Zotero 會自動更新。</span></li>
         </ol>
         <div class="note info"><p>Zotero 介面如果是中文，選單位置相同，只是名稱換成中文。</p></div>
-        <div class="note tip"><p><strong>功能組合：</strong>第一次打開設定頁，組合是「研究生引導」：自動找文獻（PubMed 追蹤、引文追蹤）和 AI 寫作（綜整、草稿、進度報告、概念 AI 綜整、批次 AI）先關著，其他照常可用。需要時再逐一打開，或直接選「進階」全部打開。</p></div>
+        <div class="note tip"><p><strong>功能組合：</strong>第一次打開設定頁，組合是「研究生引導」：自動找文獻（PubMed 追蹤、引文追蹤）和 AI 寫作（文獻比較表、草稿、進度報告、概念卡片 AI 綜整、批次 API）先關著，其他照常可用。需要時再逐一打開，或直接選「進階」全部打開。</p></div>
         <div class="check">
           <h3>打勾確認</h3>
           <label><input type="checkbox" id="c2a"><span class="box"></span><span>外掛清單裡看得到 <b>Zotero Bridge</b>，而且是啟用狀態。</span></label>
@@ -437,14 +437,14 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
         <div class="note info only-ai"><p><b>全文最多送出字元數</b>預設 150,000。設成 0 就只送摘要與劃線，比較省錢；全文被截斷時，筆記會標記 <code>fulltext_truncated</code>。</p></div>
 
         <div class="stack only-noai">
-          <p>在 Zotero 設定 › Zotero Bridge 的「AI 文獻筆記」區塊，<b>取消勾選</b>「同步時用 LLM 產生結構化文獻筆記」。之後想用 AI，回到這一步重新選 Claude 或 OpenAI 即可。</p>
+          <p>在 Zotero 設定 › Zotero Bridge 的「功能」區塊，<b>關掉</b>「AI 文獻筆記」。之後想用 AI，回到這一步重新選 Claude 或 OpenAI 即可。</p>
         </div>
 
         <div class="check">
           <h3>打勾確認</h3>
           <label class="only-ai"><input type="checkbox" id="c3a"><span class="box"></span><span>已在 API 平台儲值，並取得金鑰。</span></label>
           <label class="only-ai"><input type="checkbox" id="c3b"><span class="box"></span><span>金鑰已貼進 Zotero Bridge 設定，服務商選對了。</span></label>
-          <label class="only-noai"><input type="checkbox" id="c3c"><span class="box"></span><span>已取消勾選「同步時用 LLM 產生結構化文獻筆記」。</span></label>
+          <label class="only-noai"><input type="checkbox" id="c3c"><span class="box"></span><span>已在「功能」區塊關掉「AI 文獻筆記」。</span></label>
         </div>
       </section>
 
@@ -584,7 +584,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
 
         <h3>進階功能</h3>
         <ol class="how">
-          <li><span><b>自動同步：</b>設定最下方勾選後，條目、劃線或筆記一變更就自動同步（不會自動呼叫 AI）。</span></li>
+          <li><span><b>自動同步：</b>在設定頁的「自動同步」區塊勾選後，條目、劃線或筆記一變更就自動同步（不會自動呼叫 AI）。</span></li>
           <li class="only-obsidian"><span><b>閱讀進度看板：</b>打開 <code>Zotero/Zotero 文獻庫.base</code>，在「閱讀進度」看板拖曳卡片，就能更新待讀／閱讀中／已讀／已引用。</span></li>
           <li><span><b>研究大腦（選用）：</b>用 Claude Code 或 Codex 讀你的文獻筆記，幫你比對文獻、找研究缺口。請看 <a href="https://github.com/bobyu89/zotero-bridge/tree/main/research-brain" target="_blank" rel="noopener">研究大腦說明</a>。</span></li>
         </ol>

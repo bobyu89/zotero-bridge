@@ -14,7 +14,8 @@
  *
  * Existing installs keep their behaviour: migrate() runs once at startup and, when the profile shows
  * earlier use (a vault, a Notion database, AI usage…), turns the new switches on (advanced) while the
- * prefs that existed before keep their values. A fresh profile stays on the guided defaults.
+ * prefs that existed before keep the values the user gave them (the batch API, off by default, is
+ * turned on unless the user set it). A fresh profile stays on the guided defaults.
  *
  * Pure catalog + functions over a prefs accessor, so Node tests can require this file.
  */
@@ -159,6 +160,7 @@
 		return {
 			get: key => Z.Prefs.get(PREF + key, true),
 			set: (key, value) => Z.Prefs.set(PREF + key, value, true),
+			hasUserValue: key => Services.prefs.prefHasUserValue(PREF + key),
 		};
 	}
 
@@ -247,6 +249,15 @@
 	 * on (advanced), so nothing it did disappears; prefs that existed before keep their values. A fresh
 	 * install keeps the guided defaults. Returns { preset, evidence } the first time, null afterwards.
 	 */
+	function userSet(s, key) {
+		try {
+			return s.hasUserValue ? !!s.hasUserValue(key) : false;
+		}
+		catch (e) {
+			return true;
+		}
+	}
+
 	function migrate() {
 		let s = store();
 		let done = Number(s.get(MIGRATION_PREF)) || 0;
@@ -256,6 +267,9 @@
 			// Written even where the default matches, so a later default change can't switch them off
 			for (let f of FEATURES) {
 				if (!f.reused) setEnabled(f.id, f.presets.advanced);
+				// A reused pref that was off by default (the batch API) is turned on too, unless the
+				// user set it themselves, so an upgrade lands on a clean 進階
+				else if (f.presets.advanced !== f.presets.guided && !userSet(s, f.pref)) setEnabled(f.id, f.presets.advanced);
 			}
 		}
 		s.set(MIGRATION_PREF, MIGRATION_VERSION);

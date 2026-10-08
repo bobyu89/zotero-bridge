@@ -117,7 +117,7 @@ test("applyPreset, currentPreset (自訂 when mixed) and restore for undo", () =
 	assert.throws(() => F.applyPreset("custom"), /Unknown preset/);
 });
 
-test("migrate: a fresh profile stays guided; earlier use turns the new switches on once, reused prefs untouched", () => {
+test("migrate: a fresh profile stays guided; earlier use turns the new switches on once, reused prefs keep the user's values", () => {
 	// Fresh install
 	let s = store();
 	assert.deepEqual(F.migrate(), { preset: "guided", evidence: [] });
@@ -132,10 +132,22 @@ test("migrate: a fresh profile stays guided; earlier use turns the new switches 
 	assert.deepEqual(result.evidence, ["obsidian.vaultPath", "usage.ledger"]);
 	for (let f of F.FEATURES.filter(x => !x.reused)) assert.equal(s.data[f.pref], true, f.pref);
 	assert.equal(s.data["llm.enabled"], false, "the user's own choice is kept");
-	assert.equal(s.data["llm.batchAPI"], undefined, "a reused pref is not written");
+	assert.equal(s.data["llm.batchAPI"], true, "the batch API, never set by the user, is turned on");
 	assert.equal(F.isEnabled("synthesis"), true);
 	assert.equal(F.isEnabled("pubmedWatch"), true);
-	assert.equal(F.currentPreset(), "custom", "AI notes and the batch API stay as they were");
+	assert.equal(F.currentPreset(), "custom", "AI notes stay off as the user set them");
+
+	// Same install with every pref at its default: lands on a clean 進階
+	s = store({ "obsidian.vaultPath": "/vault" });
+	assert.equal(F.migrate().preset, "advanced");
+	assert.equal(F.currentPreset(), "advanced");
+
+	// The user turned the batch API off themselves: kept off
+	s = store({ "obsidian.vaultPath": "/vault", "llm.batchAPI": false });
+	s.hasUserValue = key => key in s.data;
+	F.migrate();
+	assert.equal(s.data["llm.batchAPI"], false, "an explicit choice is kept");
+	assert.equal(F.currentPreset(), "custom");
 
 	// Later: the user picks 研究生引導; a restart must not undo it
 	F.applyPreset("guided");
