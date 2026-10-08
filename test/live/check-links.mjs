@@ -199,6 +199,68 @@ async function render(url) {
 	}
 }
 
+/**
+ * Type the query into the site's own search box and submit: the URL the site lands on shows
+ * whether it has a GET search URL (for the sources that only open their homepage).
+ */
+async function discover(home, query) {
+	if (!browser) return null;
+	let ctx = await browser.newContext({ userAgent: UA, locale: "zh-TW", viewport: { width: 1280, height: 900 } });
+	let page = await ctx.newPage();
+	try {
+		await page.goto(home, { waitUntil: "domcontentloaded", timeout: 30000 });
+		await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+		let selectors = [
+			"input[type=search]:visible",
+			"input[name*=search i]:visible", "input[id*=search i]:visible", "input[placeholder*=search i]:visible",
+			"input[name*=query i]:visible", "input[name*=keyword i]:visible", "input[name=q]:visible",
+			"input[placeholder*=搜尋]:visible", "input[placeholder*=查詢]:visible", "input[placeholder*=檢索]:visible", "input[placeholder*=關鍵]:visible",
+			"input[type=text]:visible",
+		];
+		let box = null;
+		for (let sel of selectors) {
+			let loc = page.locator(sel).first();
+			if (await loc.count().catch(() => 0)) {
+				box = { sel, loc };
+				break;
+			}
+		}
+		if (!box) return { error: "no search box found", finalUrl: page.url() };
+		let before = page.url();
+		await box.loc.fill(query, { timeout: 5000 });
+		await Promise.all([
+			page.waitForLoadState("domcontentloaded", { timeout: 15000 }).catch(() => {}),
+			box.loc.press("Enter"),
+		]);
+		await page.waitForURL(u => String(u) !== before, { timeout: 15000 }).catch(() => {});
+		await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+		await sleep(1500);
+		let pages = ctx.pages();
+		let target = pages[pages.length - 1];
+		let finalUrl = target.url();
+		let text = await target.evaluate(() => (document.body && document.body.innerText || "").slice(0, 200000)).catch(() => "");
+		let title = await target.title().catch(() => "");
+		let enc = encodeURIComponent(query.split(" ")[0]);
+		let inUrl = finalUrl.includes(enc) || decodeURIComponentSafe(finalUrl).includes(query.split(" ")[0]);
+		return { selector: box.sel, finalUrl, title, inUrl, changed: finalUrl !== before, evidence: evidence(query, text, null) };
+	}
+	catch (e) {
+		return { error: String(e.message || e).split("\n")[0], finalUrl: page.url() };
+	}
+	finally {
+		await ctx.close().catch(() => {});
+	}
+}
+
+function decodeURIComponentSafe(s) {
+	try {
+		return decodeURIComponent(s);
+	}
+	catch (e) {
+		return s;
+	}
+}
+
 // ---------------------------------------------------------------------------------------------
 // Classification
 // ---------------------------------------------------------------------------------------------
@@ -282,6 +344,7 @@ function blockedReason(r, text) {
 	let url = r.finalUrl || "";
 	if (h["cf-mitigated"]) return `Cloudflare challenge (cf-mitigated: ${h["cf-mitigated"]})`;
 	if (/<title>\s*Just a moment\.\.\.|cf-browser-verification|cf_chl_opt|Attention Required! \| Cloudflare|challenges\.cloudflare\.com\/turnstile/i.test(body)) return "Cloudflare challenge";
+	if (/google\.[a-z.]+\/(?:sorry|httpservice\/retry\/enablejs)/.test(url) || /\/httpservice\/retry\/enablejs|If you're having trouble accessing Google Search|請按這裡|Please click <a[^>]*>here<\/a> if you are not redirected/i.test(body)) return "Google JavaScript/bot interstitial";
 	if (/google\.[a-z.]+\/sorry\//.test(url) || /unusual traffic from your computer network|detected unusual traffic/i.test(body)) return "Google \"unusual traffic\" / captcha";
 	if (/Incapsula incident|_Incapsula_Resource/i.test(body)) return "Imperva/Incapsula";
 	if (/errors\.edgesuite\.net|Access Denied[\s\S]{0,600}Reference #/i.test(body)) return "Akamai \"Access Denied\"";
@@ -334,21 +397,35 @@ function classify(entry, r, via) {
 		}
 	})();
 	let loginUrl = u && LOGIN_URL_RE.test(u.hostname + u.pathname) && !(entry.key === "cinahl" && /search\.ebscohost\.com$/.test(u.hostname) && /\/login\.aspx$/i.test(u.pathname) && !PASSWORD_RE.test(html || "") && !r.passwords);
-	let loginForm = PASSWORD_RE.test(html || "") || r.passwords > 0;
+	// Many sites carry a sign-in box in the header: only a page titled as a login page counts
+	let loginForm = (PASSWORD_RE.test(html || "") || r.passwords > 0) && (/log\s?in|log\s?on|sign\s?in|登入|帳號|welcome to ovid/i.test(title) || !text.trim() || text.length < 3000);
 	let at = `${via}: HTTP ${r.status}${finalUrl !== entry.url ? ` → ${short(finalUrl)}` : ""}${title ? ` 「${title.slice(0, 70)}」` : ""}`;
 
 	if (r.status === 404 || r.status === 410) return { code: "broken", why: `${at} (not found)` };
-	if (r.status >= 200 && r.status < 300 && entry.kind === "search" && echo && marker && !loginForm) return { code: "ok-search", why: `${at}; query echoed + result marker` };
+	let ev = evidence(entry.query, text, hint);
+	if (r.status >= 200 && r.status < 300 && entry.kind === "search" && echo && marker && !loginForm) return { code: "ok-search", why: `${at}; query echoed + result marker${ev}` };
 	let blocked = blockedReason(r, text);
 	if (blocked) return { code: "blocked", why: `${at}; ${blocked}` };
 	if (loginUrl || (loginForm && !echo)) return { code: entry.needsAccess ? "login-expected" : "login", why: `${at}; ${loginUrl ? "login URL" : "password field"}` };
 	if (r.status >= 500) return { code: "timeout", why: `${at} (server error)` };
 	if (r.status >= 400) return { code: "broken", why: `${at}` };
-	if (entry.kind === "home") return { code: entry.needsAccess && !loginForm ? "login-expected" : "ok-home", why: `${at}${entry.needsAccess ? "; host responds (subscription site)" : ""}` };
-	if (echo) return { code: "ok-echo", why: `${at}; query echoed, no result-count marker` };
+	if (entry.kind === "home") return { code: entry.needsAccess ? "login-expected" : "ok-home", why: `${at}${entry.needsAccess ? "; host responds (subscription site)" : ""}` };
+	if (echo) return { code: "ok-echo", why: `${at}; query echoed, no result-count marker${ev}` };
 	if (entry.needsAccess) return { code: "login-expected", why: `${at}; host responds, query not shown (subscription site)` };
 	if (isHomeUrl(finalUrl, entry.home)) return { code: "homepage", why: `${at}; redirected to the homepage` };
-	return { code: "unclear", why: `${at}; query not found in page` };
+	return { code: "unclear", why: `${at}; query not found in page${ev}` };
+}
+
+/** Short quotes from the page: where the query appears and the first result-count marker. */
+function evidence(q, text, hint) {
+	let t = String(text || "").replace(/\s+/g, " ");
+	let out = [];
+	let needle = /[一-鿿]/.test(q) ? "跌倒" : "fall prevention";
+	let i = t.toLowerCase().indexOf(needle);
+	if (i >= 0) out.push(`echo「${t.slice(Math.max(0, i - 40), i + 70).trim()}」`);
+	let m = COUNT_RE.exec(t) || (hint && hint.exec(t));
+	if (m) out.push(`marker「${t.slice(Math.max(0, m.index - 50), m.index + m[0].length + 50).trim()}」`);
+	return out.length ? "; " + out.join("; ") : "";
 }
 
 function short(url, n = 90) {
@@ -360,6 +437,8 @@ function combine(a, b) {
 	let list = [a, b].filter(Boolean);
 	list.sort((x, y) => VERDICTS[x.code].rank - VERDICTS[y.code].rank);
 	let best = list[0];
+	// A page that merely lacks the query, next to a bot wall seen by the other client, is a bot wall
+	if (best.code === "unclear" && list.some(x => x.code === "blocked")) best = list.find(x => x.code === "blocked");
 	// A 404 from the plain fetch is decisive unless the rendered page found the results (SPA routes)
 	return { code: best.code, why: list.map(x => x.why).join(" | ") };
 }
@@ -461,6 +540,8 @@ const ALTERNATIVES = {
 // ---------------------------------------------------------------------------------------------
 
 const probeCache = new Map();
+// Homepage-only sources whose own search box is tried in the browser
+const DISCOVER = new Set(["airiti", "ndltd", "ncl-periodicals", "ictrp", "cochrane"]);
 
 async function probe(entry) {
 	let cacheKey = `${entry.kind}|${entry.needsAccess}|${entry.url}`;
@@ -530,7 +611,14 @@ async function runCatalogs(report) {
 				log(`    alt ${VERDICTS[r.code].label}  ${short(url, 100)}`);
 			}
 		}
-		let row = { ...e, ...res, label_verdict: VERDICTS[res.code].label, alts, fix: "" };
+		let found = null;
+		if (browser && e.kind === "home" && !e.needsAccess && DISCOVER.has(e.key)) {
+			let key = `discover|${e.home}|${e.query}`;
+			if (!probeCache.has(key)) probeCache.set(key, await discover(e.home || e.url, e.query));
+			found = probeCache.get(key);
+			if (found) log(`    discover: ${found.error || `${found.inUrl ? "query in URL" : "query not in URL"} → ${short(found.finalUrl, 140)} ${found.evidence || ""}`}`);
+		}
+		let row = { ...e, ...res, label_verdict: VERDICTS[res.code].label, alts, discovered: found, fix: "" };
 		row.fix = suggestion(e, res, alts);
 		report.catalog.push(row);
 		log(`  → ${VERDICTS[res.code].label}  ${short(res.why, 220)}`);
@@ -554,17 +642,20 @@ async function runExtraLinks(report) {
 		let f = await fetchTrace(c.url);
 		let text = visibleText(f.body);
 		let echo = text.toLowerCase().includes(c.query.toLowerCase()) || titleOf(f.body).toLowerCase().includes(c.query.toLowerCase());
-		let ok = f.status === 200 && echo;
+		let ok = f.status >= 200 && f.status < 300 && echo;
 		let extra = "";
 		if (c.id === "pubmed-related") {
-			ok = f.status === 200 && /from_uid=12387650|Similar articles|linkname=pubmed_pubmed/i.test(f.body) && /results-amount|docsum-title/.test(f.body);
+			ok = f.status >= 200 && f.status < 300 && /from_uid=12387650|Similar articles|linkname=pubmed_pubmed/i.test(f.body) && /results-amount|docsum-title/.test(f.body);
 			extra = ok ? "results list for Similar articles" : "";
 		}
 		if (c.id === "pubmed-doi" || c.id === "pubmed-title") {
 			// PubMed jumps straight to the record when exactly one paper matches
 			let single = new RegExp(`/${TEST_PMID}/?$`).test(new URL(f.finalUrl).pathname) || f.body.includes(`data-article-pmid="${TEST_PMID}"`) || new RegExp(`<strong class="current-id"[^>]*>${TEST_PMID}<`).test(f.body);
-			ok = f.status === 200 && single;
-			extra = single ? `resolves to PMID ${TEST_PMID}` : "did not resolve to the paper";
+			ok = f.status >= 200 && f.status < 300 && single;
+			let count = (/<span class="value">([\d,]+)<\/span>\s*results/.exec(f.body) || [])[1];
+			let first = (/data-article-id="(\d+)"/.exec(f.body) || /data-chunk-ids="(\d+)/.exec(f.body) || [])[1];
+			if (!single && count && f.body.includes(`/${TEST_PMID}/`)) ok = true;
+			extra = single ? `resolves to PMID ${TEST_PMID}` : `${count || "?"} results${f.body.includes(`/${TEST_PMID}/`) ? `, PMID ${TEST_PMID} listed` : ", target not listed"}${first ? `; first ${first}` : ""}`;
 		}
 		report.extra.push({ ...c, status: f.status, finalUrl: f.finalUrl, ok, why: `${f.error || ""} HTTP ${f.status}; ${titleOf(f.body)} ${extra}`.trim() });
 		log(`[extra] ${c.id}: ${ok ? "OK" : "CHECK"} HTTP ${f.status} ${short(f.finalUrl)}`);
@@ -734,7 +825,7 @@ async function runNCBI(report) {
 
 	let meshIds = [];
 	await s.check("esearch db=mesh (MeSH helper)", async ({ note }) => {
-		let r = await getJSON(pubmedWatch.eutilsURL("esearch", { db: "mesh", term: "fall prevention", retmode: "json", retmax: 5 }, ncbi));
+		let r = await getJSON(pubmedWatch.eutilsURL("esearch", { db: "mesh", term: "accidental falls", retmode: "json", retmax: 5 }, ncbi));
 		expect(r.status === 200 && r.json, `HTTP ${r.status}`);
 		let p = pubmedWatch.parseESearch(r.json);
 		expect(p.ids.length > 0, "no MeSH ids");
@@ -757,13 +848,15 @@ async function runNCBI(report) {
 		note(`parseMeshSummary → ${parsed.map(h => `${h.heading} (${h.ui})`).join("; ")}`);
 	});
 
-	await s.check("suggestMesh() end to end (\"fall prevention, older adults\")", async ({ note, warn }) => {
-		let mesh = await searchLinks.suggestMesh("fall prevention, older adults", { ncbi });
+	await s.check("suggestMesh() end to end (\"falls, older adults\")", async ({ note, warn }) => {
+		let mesh = await searchLinks.suggestMesh("falls, older adults", { ncbi });
 		note(searchLinks.buildMeshQuery(mesh.blocks));
 		note(`${mesh.requests.length} requests`);
 		let heads = mesh.blocks.map(b => b.headings.map(h => h.heading));
 		expect(mesh.blocks.length === 2, `${mesh.blocks.length} concept blocks`);
-		if (!heads[0].includes("Accidental Falls")) warn(`"fall prevention" → ${heads[0].join(", ") || "none"} (Accidental Falls expected)`);
+		if (!heads[0].includes("Accidental Falls")) warn(`"falls" → ${heads[0].join(", ") || "none"} (Accidental Falls expected)`);
+		let other = await searchLinks.suggestMesh("fall prevention, pressure ulcer, nurse-led", { ncbi });
+		note(`"fall prevention, pressure ulcer, nurse-led" → ${other.blocks.map(b => `${b.concept}: ${b.headings.map(h => h.heading).join("/") || "—"}`).join("; ")}`);
 		if (!heads[1].includes("Aged")) warn(`"older adults" → ${heads[1].join(", ") || "none"} (Aged expected)`);
 	});
 }
@@ -898,6 +991,8 @@ function catalogTable(rows) {
 		let http = [r.fetch && r.fetch.status, r.render && r.render.status].filter(x => x !== undefined && x !== null).join(" / ");
 		let fin = (r.render && r.render.finalUrl) || (r.fetch && r.fetch.finalUrl) || r.url;
 		let alt = r.alts && r.alts.length ? "<br>alt: " + r.alts.map(a => `${VERDICTS[a.code].label.split(" ")[0]} \`${cell(short(a.template, 80))}\``).join("<br>alt: ") : "";
+		let d = r.discovered;
+		if (d) alt += `<br>search box → ${d.error ? cell(d.error) : `${d.inUrl ? "query in URL" : "query NOT in URL"}: \`${cell(short(d.finalUrl, 160))}\` ${cell(d.evidence || "")}`}`;
 		lines.push(`| \`${r.id}\` | ${cell(r.name)} | ${cell(r.label)}${r.needsAccess ? " 🔒" : ""} | ${r.kind} | ${cell(http)} | ${cell(short(fin, 70))} | ${VERDICTS[r.code].label} | ${cell(short(r.why, 260))}${r.fix ? `<br>**→ ${cell(r.fix)}**` : ""}${alt} |`);
 	}
 	return lines.join("\n");
