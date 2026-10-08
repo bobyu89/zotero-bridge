@@ -21,6 +21,8 @@
 		"title", "authors", "year", "publication", "item_type", "doi", "url", "citekey",
 		"zotero", "zotero_key", "library", "collections", "tags", "notion",
 		"ai_model", "ai_generated", "fulltext_truncated", "date_added", "last_synced",
+		// Set only while the item is deleted in Zotero (markObsidianNoteDeleted); a re-sync drops them
+		"zotero_deleted", "status_before_delete",
 	];
 
 	// `highlight` is the Obsidian 1.14 highlight color emoji (==🟡text==); "" = theme default.
@@ -38,6 +40,9 @@
 
 	// Reading-status values for the Bases kanban view; only set when a note is first created
 	const STATUSES = ["待讀", "閱讀中", "已讀", "已引用"];
+	// Status given to the note of an item that was trashed or deleted in Zotero
+	const DELETED_STATUS = "已刪除";
+	const DELETED_CALLOUT = "> [!warning] 已從 Zotero 刪除";
 
 	function colorInfo(hex) {
 		return COLORS[String(hex || "").toLowerCase()] || { name: "other", emoji: "⚫", highlight: "", notion: "default" };
@@ -177,6 +182,52 @@
 			}
 		}
 		return blocks.map(b => ({ key: b.key, text: b.lines.join("\n") }));
+	}
+
+	// Unquoted value of a top-level scalar key ("" when missing or not a scalar)
+	function frontmatterScalar(fm, key) {
+		let block = parseFrontmatterBlocks(fm || "").find(b => b.key === key);
+		if (!block) return "";
+		let first = block.text.split(/\r?\n/)[0];
+		let raw = first.slice(first.indexOf(":") + 1).trim();
+		if (/^"/.test(raw)) {
+			try {
+				return String(JSON.parse(raw));
+			}
+			catch (e) {}
+		}
+		return raw.replace(/^'(.*)'$/, "$1");
+	}
+
+	// Replace a top-level key (or append it), keeping every other line as it is
+	function setFrontmatterValue(fm, key, value) {
+		let blocks = parseFrontmatterBlocks(fm || "").filter(b => b.key || b.text.trim());
+		let line = yamlBlock(key, value);
+		let i = blocks.findIndex(b => b.key === key);
+		if (i >= 0) blocks[i] = { key, text: line };
+		else blocks.push({ key, text: line });
+		return blocks.map(b => b.text).join("\n");
+	}
+
+	const ZOTERO_KEY_RE = /^zotero_key:[ \t]*"?([^"\r\n]+?)"?[ \t]*\r?$/m;
+
+	/**
+	 * The `zotero_key` of a note, from its whole text or only its first bytes.
+	 * Returns the key, null when the note has none, or undefined when `text` is a
+	 * truncated head (`complete` false) that ends inside the frontmatter.
+	 */
+	function zoteroKeyFromHead(text, complete = true) {
+		text = String(text || "").replace(/^\ufeff/, "");
+		if (!/^---\r?\n/.test(text)) return null;
+		let { frontmatter } = splitFrontmatter(text);
+		if (frontmatter !== null) {
+			let m = ZOTERO_KEY_RE.exec(frontmatter);
+			return m ? m[1] : null;
+		}
+		if (complete) return null;
+		// Only trust lines that end before the cut
+		let m = ZOTERO_KEY_RE.exec(text.slice(0, text.lastIndexOf("\n") + 1));
+		return m ? m[1] : undefined;
 	}
 
 	function buildFrontmatter(managed, existingFrontmatter) {
@@ -334,6 +385,12 @@
 				+ managed + "\n\n" + USER_SECTION;
 		}
 		let { frontmatter, body } = splitFrontmatter(existing);
+		if (frontmatter && parseFrontmatterBlocks(frontmatter).some(b => b.key === "zotero_deleted")
+				&& frontmatterScalar(frontmatter, "status") === DELETED_STATUS) {
+			// The item came back from the Zotero trash: give the note its reading status back
+			frontmatter = setFrontmatterValue(frontmatter, "status",
+				frontmatterScalar(frontmatter, "status_before_delete") || STATUSES[0]);
+		}
 		let fm = buildFrontmatter(fmObj, frontmatter);
 		let start = MARK_START_RE.exec(body);
 		let end = MARK_END_RE.exec(body);
@@ -347,6 +404,32 @@
 			body = body.slice(0, at) + "\n\n" + managed + "\n" + body.slice(at);
 		}
 		return fm + (body.startsWith("\n") ? body : "\n" + body);
+	}
+
+	/**
+	 * Mark the note of an item that was trashed or deleted in Zotero: `status: "已刪除"` and a
+	 * callout at the top of the managed block. Nothing else changes; marking twice is a no-op.
+	 */
+	function markObsidianNoteDeleted(text, opts = {}) {
+		let { frontmatter, body } = splitFrontmatter(text);
+		if (frontmatter === null) return text;
+		let fm = frontmatter;
+		if (!parseFrontmatterBlocks(fm).some(b => b.key === "zotero_deleted")) {
+			let before = frontmatterScalar(fm, "status");
+			if (before && before !== DELETED_STATUS) fm = setFrontmatterValue(fm, "status_before_delete", before);
+			fm = setFrontmatterValue(fm, "zotero_deleted", opts.now || new Date().toISOString());
+		}
+		if (frontmatterScalar(fm, "status") !== DELETED_STATUS) fm = setFrontmatterValue(fm, "status", DELETED_STATUS);
+		let start = MARK_START_RE.exec(body);
+		let end = MARK_END_RE.exec(body);
+		// Without the markers the user owns the whole body, so only the frontmatter changes
+		if (start && end && end.index > start.index && !body.slice(start.index, end.index).includes(DELETED_CALLOUT)) {
+			let date = String(opts.now || new Date().toISOString()).slice(0, 10);
+			let callout = `${DELETED_CALLOUT}\n> 這篇文獻已於 ${date} 在 Zotero 移到垃圾桶或刪除，Zotero Bridge 不會再更新這份筆記；從垃圾桶還原後重新同步即可恢復。`;
+			let at = start.index + start[0].length;
+			body = body.slice(0, at) + "\n\n" + callout + body.slice(at);
+		}
+		return `---\n${fm}\n---\n` + body;
 	}
 
 	// ---------- Obsidian Bases (1.14+) ----------
@@ -448,6 +531,7 @@
 		noteBasename, splitFolder, demoteHeadings, zoteroSelectURI, annotationURI, obsidianURI, tagToObsidian,
 		yamlScalar, splitFrontmatter, parseFrontmatterBlocks, buildFrontmatter, managedFrontmatter,
 		annotationsMarkdown, buildManagedSection, buildObsidianNote,
-		resolveRoute, parseRules, truncate, buildBaseFile, STATUSES,
+		resolveRoute, parseRules, truncate, buildBaseFile, STATUSES, DELETED_STATUS,
+		frontmatterScalar, setFrontmatterValue, zoteroKeyFromHead, markObsidianNoteDeleted,
 	};
 });

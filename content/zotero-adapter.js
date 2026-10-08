@@ -5,6 +5,8 @@
 (function (root) {
 	const ZB = root.ZB;
 	const AI_NOTE_TAG = "zotero-bridge-ai";
+	// Earlier versions of the AI note, kept when it is regenerated; never synced or sent to the LLM
+	const AI_HISTORY_TAG = "zotero-bridge-ai-history";
 
 	function libraryInfo(libraryID) {
 		let lib = Zotero.Libraries.get(libraryID);
@@ -13,6 +15,12 @@
 			return { path: `groups/${groupID}`, routeID: String(groupID), name: lib.name };
 		}
 		return { path: "library", routeID: "user", name: (lib && lib.name) || "My Library" };
+	}
+
+	/** "library/KEY" or "groups/ID/KEY", as written to Notion and Obsidian; null if the library is gone. */
+	function zoteroKeyFor(libraryID, key) {
+		if (!key || !Zotero.Libraries.get(libraryID)) return null;
+		return `${libraryInfo(libraryID).path}/${key}`;
 	}
 
 	function collectionPath(collection) {
@@ -74,6 +82,10 @@
 		return note.getTags().some(t => t.tag === AI_NOTE_TAG);
 	}
 
+	function isAIHistoryNote(item) {
+		return !!item && item.isNote() && item.getTags().some(t => t.tag === AI_HISTORY_TAG);
+	}
+
 	function getAINote(item) {
 		for (let note of Zotero.Items.get(item.getNotes())) {
 			if (isAINote(note)) return note;
@@ -109,7 +121,7 @@
 			url: safeField(item, "url"),
 			abstract: safeField(item, "abstractNote"),
 			citationKey: citationKey(item),
-			tags: item.getTags().map(t => t.tag).filter(t => t !== AI_NOTE_TAG),
+			tags: item.getTags().map(t => t.tag).filter(t => t !== AI_NOTE_TAG && t !== AI_HISTORY_TAG),
 			collections: Zotero.Collections.get(item.getCollections()).map(collectionPath),
 			// dateAdded is "YYYY-MM-DD HH:MM:SS" in UTC
 			dateAdded: item.dateAdded ? item.dateAdded.replace(" ", "T") + "Z" : "",
@@ -162,6 +174,9 @@
 			if (isAINote(note)) {
 				data.aiNote = { key: note.key, html: note.getNote() };
 			}
+			else if (isAIHistoryNote(note)) {
+				continue;
+			}
 			else {
 				data.notes.push({ key: note.key, title: note.getNoteTitle(), html: note.getNote() });
 			}
@@ -169,18 +184,43 @@
 		return data;
 	}
 
-	/** Create or overwrite the AI note under the item. */
+	function localStamp(date) {
+		let p = n => String(n).padStart(2, "0");
+		return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())} ${p(date.getHours())}:${p(date.getMinutes())}`;
+	}
+
+	/**
+	 * Create or overwrite the AI note under the item. The content being replaced is first kept
+	 * as a separate child note ("🤖 AI 文獻筆記（舊版 <date>）", tag AI_HISTORY_TAG).
+	 * Returns { note, history } (history is null when there was nothing to keep).
+	 */
 	async function saveAINote(item, html) {
 		let note = getAINote(item);
+		let history = null;
 		if (!note) {
 			note = new Zotero.Item("note");
 			note.libraryID = item.libraryID;
 			note.parentID = item.id;
 			note.addTag(AI_NOTE_TAG);
 		}
+		else {
+			let old = note.getNote();
+			if (old && old !== html) {
+				// dateModified is "YYYY-MM-DD HH:MM:SS" in UTC: when the old version was last written
+				let when = note.dateModified ? new Date(note.dateModified.replace(" ", "T") + "Z") : new Date();
+				if (isNaN(when.getTime())) when = new Date();
+				history = new Zotero.Item("note");
+				history.libraryID = item.libraryID;
+				history.parentID = item.id;
+				history.addTag(AI_HISTORY_TAG);
+				history.setNote(ZB.markdown.retitleNoteHTML(old, `🤖 AI 文獻筆記（舊版 ${localStamp(when)}）`));
+				// If the backup can't be saved, the old note is not overwritten either
+				await history.saveTx();
+			}
+		}
 		note.setNote(html);
 		await note.saveTx();
-		return note;
+		return { note, history };
 	}
 
 	function itemsInCollection(collection, includeSubcollections) {
@@ -203,7 +243,7 @@
 	}
 
 	ZB.adapter = {
-		AI_NOTE_TAG, libraryInfo, collectionPath, toRegularItems, extractItemData,
-		saveAINote, getAINote, isAINote, itemsInCollection, listLibraries,
+		AI_NOTE_TAG, AI_HISTORY_TAG, libraryInfo, zoteroKeyFor, collectionPath, toRegularItems, extractItemData,
+		saveAINote, getAINote, isAINote, isAIHistoryNote, itemsInCollection, listLibraries,
 	};
 })(this);

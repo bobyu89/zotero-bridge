@@ -158,6 +158,29 @@
 			return (res.results && res.results[0]) || null;
 		}
 
+		/** Every page whose "Zotero Key" is one of `zoteroKeys` (one query per 50 keys). */
+		async findPagesByZoteroKeys(dataSourceId, zoteroKeys) {
+			let pages = [];
+			for (let i = 0; i < zoteroKeys.length; i += 50) {
+				let filter = {
+					or: zoteroKeys.slice(i, i + 50).map(key => ({ property: "Zotero Key", rich_text: { equals: key } })),
+				};
+				let cursor;
+				do {
+					let res = await this.request("POST", `data_sources/${dataSourceId}/query`,
+						Object.assign({ filter, page_size: 100 }, cursor ? { start_cursor: cursor } : {}));
+					pages.push(...(res.results || []));
+					cursor = res.has_more ? res.next_cursor : null;
+				} while (cursor);
+			}
+			return pages;
+		}
+
+		/** Move a page to the Notion trash, where the user can still restore it. */
+		async trashPage(pageId) {
+			return this.request("PATCH", `pages/${pageId}`, { in_trash: true });
+		}
+
 		async listChildren(blockId) {
 			let all = [];
 			let cursor;

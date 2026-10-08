@@ -13,6 +13,8 @@
 	let notifierID = null;
 	let autoSyncTimer = null;
 	let autoSyncQueue = new Set();
+	// Items trashed or deleted in Zotero: zotero key → item ID (null once the item is gone)
+	let archiveQueue = new Map();
 	// Item IDs we just wrote ourselves (AI notes), so auto-sync doesn't react to them
 	let selfModified = new Set();
 	let running = Promise.resolve();
@@ -58,6 +60,13 @@
 
 	function nowISO() {
 		return new Date().toISOString();
+	}
+
+	function markSelfModified(...ids) {
+		for (let id of ids) {
+			selfModified.add(id);
+			setTimeout(() => selfModified.delete(id), AUTO_SYNC_DELAY_MS * 2);
+		}
 	}
 
 	// ---------- AI note ----------
@@ -108,9 +117,11 @@
 				}, (url, init) => fetch(url, init));
 				let at = nowISO();
 				ai = { md: result.text.trim(), model: result.model || settings.llm.model, at };
-				let note = await ZB.adapter.saveAINote(item, aiNoteHTML(ai.md, ai.model, at));
-				selfModified.add(note.id);
-				setTimeout(() => selfModified.delete(note.id), AUTO_SYNC_DELAY_MS * 2);
+				// Saving a child note also reports a change of the item itself, and Zotero notifies
+				// before saveTx() returns: mark the item first (the notes are checked again at flush time)
+				markSelfModified(item.id);
+				let saved = await ZB.adapter.saveAINote(item, aiNoteHTML(ai.md, ai.model, at));
+				markSelfModified(saved.note.id);
 			}
 			catch (e) {
 				errors.push(`AI 筆記：${e.message || e}`);
@@ -125,7 +136,10 @@
 		let basename = ZB.core.noteBasename(data, settings.filenameFormat);
 		let obsidian = null;
 		if (settings.vaultPath) {
-			obsidian = await resolveObsidianPath(settings, folderParts, basename, data);
+			// A changed citekey/title renames the existing note, but only when this run writes Obsidian
+			obsidian = await resolveObsidianPath(settings, folderParts, basename, data, {
+				index: ctx.obsidianIndex, rename: action.targets.has("obsidian"),
+			});
 		}
 
 		let notionUrl = null;
@@ -146,6 +160,7 @@
 			ctx.status("寫入 Obsidian…");
 			try {
 				await writeObsidian(obsidian, data, { ai, notesMarkdown, notionUrl });
+				if (ctx.obsidianIndex) ctx.obsidianIndex.add(`${data.libraryPath}/${data.key}`, obsidian.path, obsidian.relParts);
 			}
 			catch (e) {
 				errors.push(`Obsidian：${e.message || e}`);
@@ -155,26 +170,155 @@
 		return { route, notionUrl, obsidianPath: obsidian && obsidian.relPath, generated: !!ai && needAI };
 	}
 
-	async function resolveObsidianPath(settings, folderParts, basename, data) {
-		let zoteroKey = `${data.libraryPath}/${data.key}`;
-		let dir = PathUtils.join(settings.vaultPath, ...folderParts);
-		let name = basename;
-		let path = PathUtils.join(dir, name + ".md");
-		// Two items with the same citekey/title must not overwrite each other
-		if (await IOUtils.exists(path)) {
-			let text = await IOUtils.readUTF8(path);
-			let fm = ZB.core.splitFrontmatter(text).frontmatter || "";
-			let m = /^zotero_key:\s*"?([^"\n]+)"?\s*$/m.exec(fm);
-			if (m && m[1] !== zoteroKey) {
-				name = `${basename} (${data.key})`;
-				path = PathUtils.join(dir, name + ".md");
+	// ---------- Obsidian note lookup ----------
+
+	// Enough for the plugin's frontmatter up to zotero_key unless the author list is very long
+	const HEAD_BYTES = 4096;
+	const MAX_FOLDER_DEPTH = 16;
+
+	/** The zotero_key in a note's frontmatter (null if none), reading only its head when that suffices. */
+	async function readZoteroKey(path) {
+		let bytes = await IOUtils.read(path, { maxBytes: HEAD_BYTES });
+		let key = ZB.core.zoteroKeyFromHead(new TextDecoder().decode(bytes), bytes.length < HEAD_BYTES);
+		if (key !== undefined) return key;
+		return ZB.core.zoteroKeyFromHead(await IOUtils.readUTF8(path));
+	}
+
+	// null: no such file; "": a note without zotero_key; otherwise the item that owns it
+	async function noteOwner(path) {
+		if (!(await IOUtils.exists(path))) return null;
+		return (await readZoteroKey(path)) || "";
+	}
+
+	/** Folders the plugin writes notes to (default and rule folders), minus those inside another one. */
+	function pluginFolders(settings) {
+		let all = [settings.defaults.obsidianFolder, ...settings.rules.map(r => r.obsidianFolder).filter(Boolean)]
+			.map(f => ZB.core.splitFolder(f));
+		let within = (a, b) => b.length <= a.length && b.every((part, i) => part === a[i]);
+		return all.filter((a, i) => !all.some((b, j) => j !== i && within(a, b) && (b.length < a.length || j < i)));
+	}
+
+	function addIndexEntry(index, key, path, relParts) {
+		let list = index.get(key) || [];
+		if (!list.some(e => e.path === path)) list.push({ path, relParts });
+		index.set(key, list);
+	}
+
+	/** zotero_key → [{ path, relParts }] for every .md file under the plugin folders (recursively). */
+	async function buildObsidianIndex(settings) {
+		let index = new Map();
+		let visit = async (dir, relParts) => {
+			let children;
+			try {
+				children = await IOUtils.getChildren(dir);
 			}
+			catch (e) {
+				return; // the folder doesn't exist yet
+			}
+			for (let child of children) {
+				let name = PathUtils.filename(child);
+				// .obsidian, .trash and other hidden folders
+				if (name.startsWith(".")) continue;
+				try {
+					if (/\.md$/i.test(name)) {
+						let key = await readZoteroKey(child);
+						if (key) addIndexEntry(index, key, child, [...relParts, name]);
+					}
+					else if (relParts.length < MAX_FOLDER_DEPTH && (await IOUtils.stat(child)).type === "directory") {
+						await visit(child, [...relParts, name]);
+					}
+				}
+				catch (e) {
+					Zotero.debug(`Zotero Bridge: skipped ${child}: ${e}`);
+				}
+			}
+		};
+		for (let parts of pluginFolders(settings)) {
+			await visit(PathUtils.join(settings.vaultPath, ...parts), parts);
 		}
-		let relPath = [...folderParts, name + ".md"].join("/");
+		return index;
+	}
+
+	/** The vault index for one run: built on first use, then kept up to date with the notes the run writes. */
+	function obsidianIndexCache(settings) {
+		let index = null;
 		return {
-			dir, path, relPath,
+			async get() {
+				if (!index) index = await buildObsidianIndex(settings);
+				return index;
+			},
+			add(key, path, relParts) {
+				if (index) addIndexEntry(index, key, path, relParts);
+			},
+		};
+	}
+
+	function obsidianTarget(settings, folderParts, name) {
+		let relParts = [...folderParts, name + ".md"];
+		let relPath = relParts.join("/");
+		return {
+			dir: PathUtils.join(settings.vaultPath, ...folderParts),
+			path: PathUtils.join(settings.vaultPath, ...relParts),
+			relParts,
+			relPath,
 			uri: settings.vaultName ? ZB.core.obsidianURI(settings.vaultName, relPath) : "",
 		};
+	}
+
+	/**
+	 * Find the item's note. Usually it is <folder>/<basename>.md, or "<basename> (KEY).md" when
+	 * another item has that name. Otherwise (citekey or title changed, or the user moved the note)
+	 * it is looked up by zotero_key in opts.index and, with opts.rename, renamed in its folder.
+	 * Without an existing note, returns where a new one goes.
+	 */
+	async function resolveObsidianPath(settings, folderParts, basename, data, opts = {}) {
+		let zoteroKey = `${data.libraryPath}/${data.key}`;
+		let altName = `${basename} (${data.key})`;
+		let dir = PathUtils.join(settings.vaultPath, ...folderParts);
+		let owner = await noteOwner(PathUtils.join(dir, basename + ".md"));
+		if (owner === zoteroKey) return obsidianTarget(settings, folderParts, basename);
+		if (owner && (await noteOwner(PathUtils.join(dir, altName + ".md"))) === zoteroKey) {
+			return obsidianTarget(settings, folderParts, altName);
+		}
+		if (opts.index) {
+			let notes = (await opts.index.get()).get(zoteroKey) || [];
+			let fileName = n => n.relParts[n.relParts.length - 1].replace(/\.md$/i, "");
+			let found = notes.find(n => fileName(n) === basename || fileName(n) === altName) || notes[0];
+			if (found) {
+				let name = fileName(found);
+				if (opts.rename && name !== basename && name !== altName) {
+					name = (await renameNote(found, basename, altName, zoteroKey)) || name;
+				}
+				return obsidianTarget(settings, found.relParts.slice(0, -1), name);
+			}
+		}
+		// A new note: two items with the same citekey/title must not overwrite each other
+		return obsidianTarget(settings, folderParts, owner ? altName : basename);
+	}
+
+	/** Rename an indexed note to its new basename in the same folder; returns the new name or null. */
+	async function renameNote(entry, basename, altName, zoteroKey) {
+		let dir = PathUtils.parent(entry.path);
+		for (let name of [basename, altName]) {
+			let to = PathUtils.join(dir, name + ".md");
+			let owner = await noteOwner(to);
+			// Taken by another item, or by a note of the user's
+			if (owner !== null && owner !== zoteroKey) continue;
+			if (owner === null) {
+				try {
+					await IOUtils.move(entry.path, to, { noOverwrite: true });
+				}
+				catch (e) {
+					Zotero.logError(e);
+					return null;
+				}
+				Zotero.debug(`Zotero Bridge: renamed ${entry.path} → ${to}`);
+			}
+			entry.path = to;
+			entry.relParts = [...entry.relParts.slice(0, -1), name + ".md"];
+			return name;
+		}
+		return null;
 	}
 
 	async function writeObsidian(obsidian, data, opts) {
@@ -329,6 +473,7 @@
 		let clients = new Map();
 		let ctx = {
 			schemaCache: new Map(),
+			obsidianIndex: settings.vaultPath ? obsidianIndexCache(settings) : null,
 			notion(token) {
 				if (!clients.has(token)) clients.set(token, new ZB.notion.NotionClient({ token, fetch: (u, i) => fetch(u, i) }));
 				return clients.get(token);
@@ -383,6 +528,103 @@
 		pw.addDescription(text);
 		pw.show();
 		pw.startCloseTimer(10000);
+	}
+
+	// ---------- deleted items ----------
+
+	/**
+	 * Items trashed or deleted in Zotero: move their Notion pages to the Notion trash and mark their
+	 * Obsidian notes as deleted (the files are kept). `keys` are zotero keys as written to Notion and
+	 * Obsidian ("library/KEY", "groups/ID/KEY"). Runs after any sync in progress; returns counts.
+	 */
+	function archiveItems(keys) {
+		let p = running.then(() => archiveNow(keys));
+		running = p.catch(() => {});
+		return p;
+	}
+
+	async function archiveNow(keys) {
+		keys = [...new Set((keys || []).filter(k => typeof k === "string" && k))];
+		let counts = { notion: 0, obsidian: 0 };
+		if (!keys.length) return counts;
+		let settings;
+		try {
+			settings = readSettings();
+		}
+		catch (e) {
+			Zotero.logError(e);
+			return counts;
+		}
+		let errors = [];
+		if (settings.notionToken) {
+			try {
+				counts.notion = await trashNotionPages(settings, keys, errors);
+			}
+			catch (e) {
+				errors.push(`Notion：${e.message || e}`);
+			}
+		}
+		if (settings.vaultPath) {
+			try {
+				counts.obsidian = await markObsidianNotesDeleted(settings, keys);
+			}
+			catch (e) {
+				errors.push(`Obsidian：${e.message || e}`);
+			}
+		}
+		if (errors.length) {
+			errors.forEach(e => Zotero.logError(new Error(e)));
+			notify("Zotero Bridge：刪除的文獻同步失敗", errors.slice(0, 3).join("\n"));
+		}
+		return counts;
+	}
+
+	async function trashNotionPages(settings, keys, errors) {
+		let client = new ZB.notion.NotionClient({ token: settings.notionToken, fetch: (u, i) => fetch(u, i) });
+		// A deleted item's collections (and so its route) are unknown: look in every configured database
+		let databases = new Set([settings.defaults.notionDatabase, ...settings.rules.map(r => r.notionDatabase)].filter(Boolean));
+		let dataSources = new Set();
+		for (let db of databases) {
+			try {
+				dataSources.add(await client.resolveDataSourceId(db));
+			}
+			catch (e) {
+				errors.push(`Notion：${e.message || e}`);
+			}
+		}
+		let count = 0;
+		for (let dsId of dataSources) {
+			try {
+				// A database the plugin never wrote to has no "Zotero Key" column and none of our pages
+				let schema = await client.getSchema(dsId);
+				if (schema.props["Zotero Key"] !== "rich_text") continue;
+				for (let page of await client.findPagesByZoteroKeys(dsId, keys)) {
+					await client.trashPage(page.id);
+					count++;
+				}
+			}
+			catch (e) {
+				errors.push(`Notion：${e.message || e}`);
+			}
+		}
+		return count;
+	}
+
+	async function markObsidianNotesDeleted(settings, keys) {
+		let index = await buildObsidianIndex(settings);
+		let now = nowISO();
+		let count = 0;
+		for (let key of keys) {
+			for (let { path } of index.get(key) || []) {
+				let text = await IOUtils.readUTF8(path);
+				let marked = ZB.core.markObsidianNoteDeleted(text, { now });
+				if (marked !== text) {
+					await IOUtils.writeUTF8(path, marked);
+					count++;
+				}
+			}
+		}
+		return count;
 	}
 
 	// ---------- cross-paper synthesis ----------
@@ -474,10 +716,11 @@
 				try {
 					// Link each source to its literature note when that note exists in the vault
 					let linkTargets = {};
+					let index = obsidianIndexCache(settings);
 					for (let [i, src] of sources.entries()) {
 						let route = ZB.core.resolveRoute(src.data, settings.rules, settings.defaults);
 						let target = await resolveObsidianPath(settings, ZB.core.splitFolder(route.obsidianFolder),
-							ZB.core.noteBasename(src.data, settings.filenameFormat), src.data);
+							ZB.core.noteBasename(src.data, settings.filenameFormat), src.data, { index });
 						if (await IOUtils.exists(target.path)) linkTargets[entries[i].id] = target.relPath.replace(/\.md$/i, "");
 					}
 					let dir = PathUtils.join(settings.vaultPath, ...ZB.core.splitFolder(settings.defaults.obsidianFolder), "文獻比較");
@@ -742,16 +985,44 @@
 
 	// ---------- auto-sync ----------
 
+	// Our own writes and the AI note backups never trigger a sync
+	function wantsAutoSync(id) {
+		return !selfModified.has(id) && !ZB.adapter.isAIHistoryNote(Zotero.Items.get(id));
+	}
+
 	function registerNotifier() {
 		notifierID = Zotero.Notifier.registerObserver({
-			notify: (event, type, ids) => {
+			notify: (event, type, ids, extraData) => {
 				if (!pref("autoSync")) return;
-				if (!["add", "modify"].includes(event)) return;
-				for (let id of ids) {
-					if (selfModified.has(id)) continue;
-					autoSyncQueue.add(id);
+				if (event === "add" || event === "modify") {
+					for (let id of ids) {
+						if (wantsAutoSync(id)) autoSyncQueue.add(id);
+					}
 				}
-				if (!autoSyncQueue.size) return;
+				else if (event === "trash") {
+					for (let id of ids) {
+						let item = Zotero.Items.get(id);
+						if (!item) continue;
+						if (item.isRegularItem()) {
+							let key = ZB.adapter.zoteroKeyFor(item.libraryID, item.key);
+							if (key) archiveQueue.set(key, id);
+						}
+						// A trashed note or attachment changes what its parent item shows
+						else if (wantsAutoSync(id)) {
+							autoSyncQueue.add(id);
+						}
+					}
+				}
+				else if (event === "delete") {
+					// The items are gone by now; Zotero passes { libraryID, key } per ID. Child items
+					// (notes, annotations) can't be told apart and simply match no page or note.
+					for (let id of ids) {
+						let info = extraData && extraData[id];
+						let key = info && ZB.adapter.zoteroKeyFor(info.libraryID, info.key);
+						if (key) archiveQueue.set(key, null);
+					}
+				}
+				if (!autoSyncQueue.size && !archiveQueue.size) return;
 				if (autoSyncTimer) clearTimeout(autoSyncTimer);
 				autoSyncTimer = setTimeout(flushAutoSync, AUTO_SYNC_DELAY_MS);
 			},
@@ -760,10 +1031,18 @@
 
 	function flushAutoSync() {
 		autoSyncTimer = null;
-		let items = Zotero.Items.get([...autoSyncQueue].filter(id => Zotero.Items.exists(id)));
+		// Skip trashed items that were restored before the timer fired
+		let archive = [...archiveQueue].filter(([, id]) => {
+			let item = id !== null && Zotero.Items.get(id);
+			return !item || item.deleted;
+		}).map(([key]) => key);
+		archiveQueue.clear();
+		// Checked again here: Zotero reports a new note before saveTx() returns its ID to us
+		let items = Zotero.Items.get([...autoSyncQueue].filter(id => Zotero.Items.exists(id) && wantsAutoSync(id)));
 		autoSyncQueue.clear();
+		if (archive.length) archiveItems(archive).catch(e => Zotero.logError(e));
 		// Auto-sync never spends LLM tokens: it reuses the stored AI note
-		run(items, { targets: ["notion", "obsidian"], ai: "reuse", silent: true }).catch(e => Zotero.logError(e));
+		if (items.length) run(items, { targets: ["notion", "obsidian"], ai: "reuse", silent: true }).catch(e => Zotero.logError(e));
 	}
 
 	// ---------- lifecycle ----------
@@ -784,7 +1063,10 @@
 		if (notifierID) Zotero.Notifier.unregisterObserver(notifierID);
 		notifierID = null;
 		if (autoSyncTimer) clearTimeout(autoSyncTimer);
+		autoSyncTimer = null;
+		autoSyncQueue.clear();
+		archiveQueue.clear();
 	}
 
-	ZB.main = { init, shutdown, run, runSynthesis, renderPane, testNotion, readSettings, readAINote };
+	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, renderPane, testNotion, readSettings, readAINote };
 })(this);

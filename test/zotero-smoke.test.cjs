@@ -13,8 +13,11 @@ const { AI_MD } = require("./fixtures.cjs");
 const ROOT = path.join(__dirname, "..");
 const ROOT_URI = "file://" + ROOT + "/";
 
-function makeEnv({ prefs, fetch }) {
+// `timers`, when given, collects the plugin's long setTimeout callbacks (auto-sync debounce,
+// self-modified expiry) so a test can fire them itself
+function makeEnv({ prefs, fetch, timers }) {
 	let items = new Map();
+	let observers = [];
 	let nextID = 100;
 	let menus = [];
 	let progressLines = [];
@@ -35,10 +38,12 @@ function makeEnv({ prefs, fetch }) {
 			this.annotations = [];
 			this.noteHTML = "";
 			this.dateAdded = "2024-05-01 08:00:00";
+			this.dateModified = "2024-05-02 08:00:00";
 			items.set(this.id, this);
 		}
 		get parentItem() { return this.parentID ? items.get(this.parentID) : undefined; }
 		isRegularItem() { return !["note", "attachment", "annotation"].includes(this.itemType); }
+		isNote() { return this.itemType === "note"; }
 		isFileAttachment() { return this.itemType === "attachment"; }
 		isPDFAttachment() { return this.itemType === "attachment"; }
 		get attachmentContentType() { return "application/pdf"; }
@@ -77,7 +82,10 @@ function makeEnv({ prefs, fetch }) {
 			registerMenu: (opts) => { menus.push(opts); return opts.menuID; },
 			unregisterMenu: () => true,
 		},
-		Notifier: { registerObserver: () => "obs", unregisterObserver: () => {} },
+		Notifier: {
+			registerObserver: (ref, types) => { observers.push({ ref, types }); return "obs"; },
+			unregisterObserver: () => { observers.length = 0; },
+		},
 		ItemPaneManager: {
 			registerSection: (opts) => { panes.push(opts); return opts.paneID; },
 			unregisterSection: () => true,
@@ -125,13 +133,28 @@ function makeEnv({ prefs, fetch }) {
 		readUTF8: async p => fsp.readFile(p, "utf8"),
 		writeUTF8: async (p, t) => fsp.writeFile(p, t, "utf8"),
 		makeDirectory: async p => fsp.mkdir(p, { recursive: true }),
+		read: async (p, opts = {}) => {
+			let buf = await fsp.readFile(p);
+			return new Uint8Array(opts.maxBytes == null ? buf : buf.subarray(0, opts.maxBytes));
+		},
+		getChildren: async p => (await fsp.readdir(p)).map(name => path.join(p, name)),
+		stat: async (p) => {
+			let st = await fsp.stat(p);
+			return { path: p, type: st.isDirectory() ? "directory" : st.isFile() ? "regular" : "other", size: st.size };
+		},
+		move: async (from, to, opts = {}) => {
+			if (opts.noOverwrite && fs.existsSync(to)) throw new Error("NoModificationAllowedError: " + to);
+			await fsp.rename(from, to);
+		},
 	};
-	let PathUtils = { join: (...parts) => path.join(...parts), filename: p => path.basename(p) };
+	let PathUtils = { join: (...parts) => path.join(...parts), filename: p => path.basename(p), parent: p => path.dirname(p) };
 
 	let context = vm.createContext({
-		Zotero, IOUtils, PathUtils, fetch, console,
+		Zotero, IOUtils, PathUtils, fetch, console, TextDecoder,
 		DOMParser: new JSDOM("").window.DOMParser,
-		setTimeout, clearTimeout,
+		// Short waits (Notion rate limiting) run for real
+		setTimeout: timers ? (fn, ms) => (ms >= 8000 ? timers.push({ fn, ms }) : setTimeout(fn, ms)) : setTimeout,
+		clearTimeout: timers ? (id) => (typeof id === "number" ? timers[id - 1].cleared = true : clearTimeout(id)) : clearTimeout,
 		Services: {
 			scriptloader: {
 				loadSubScript: (url) => {
@@ -143,11 +166,12 @@ function makeEnv({ prefs, fetch }) {
 		},
 	});
 	vm.runInContext(fs.readFileSync(path.join(ROOT, "bootstrap.js"), "utf8"), context, { filename: "bootstrap.js" });
-	return { context, Zotero, MockItem, addChild, menus, progressLines, items, prefStore, errors, panes };
+	return { context, Zotero, MockItem, addChild, menus, progressLines, items, prefStore, errors, panes, observers };
 }
 
-function notionMock(log) {
-	let pages = new Map();
+// One data source (ds-1); pages are created as page-1, page-2… and can be moved to the trash
+function notionMock(log, pages = new Map()) {
+	let schemaPatched = false;
 	return async (url, init) => {
 		let body = init.body ? JSON.parse(init.body) : undefined;
 		let ok = json => ({ status: 200, ok: true, headers: { get: () => null }, text: async () => JSON.stringify(json) });
@@ -160,24 +184,34 @@ function notionMock(log) {
 		if (p.startsWith("databases/")) return ok({ data_sources: [{ id: "ds-1" }] });
 		if (p === "data_sources/ds-1" && init.method === "GET") {
 			let props = { Name: { type: "title" } };
-			if (log.some(l => l.method === "PATCH" && l.path === "data_sources/ds-1")) {
+			if (schemaPatched) {
 				for (let [k, v] of Object.entries(require("../content/notion.js").PROPERTY_SCHEMA)) props[k] = { type: Object.keys(v)[0] };
 			}
 			return ok({ properties: props });
 		}
-		if (p === "data_sources/ds-1") return ok({});
+		if (p === "data_sources/ds-1") {
+			schemaPatched = true;
+			return ok({});
+		}
 		if (p === "data_sources/ds-1/query") {
-			let key = body.filter.rich_text.equals;
-			return ok({ results: pages.has(key) ? [pages.get(key)] : [] });
+			// Like Notion, a query doesn't return pages in the trash
+			let keys = body.filter.or ? body.filter.or.map(f => f.rich_text.equals) : [body.filter.rich_text.equals];
+			return ok({ results: keys.filter(k => pages.has(k) && !pages.get(k).in_trash).map(k => pages.get(k)), has_more: false });
 		}
 		if (p === "pages" && init.method === "POST") {
-			let page = { id: "page-1", url: "https://www.notion.so/page-1" };
+			let id = `page-${pages.size + 1}`;
+			let page = { id, url: `https://www.notion.so/${id}` };
 			pages.set(body.properties["Zotero Key"].rich_text[0].text.content, page);
 			return ok(page);
 		}
-		if (p.startsWith("pages/")) return ok({ id: "page-1", url: "https://www.notion.so/page-1" });
-		if (p.startsWith("blocks/page-1/children?")) return ok({ results: [], has_more: false });
-		if (p === "blocks/page-1/children") return ok({ results: [{ id: "container-1" }] });
+		let m = /^pages\/([^/?]+)$/.exec(p);
+		if (m) {
+			let page = [...pages.values()].find(pg => pg.id === m[1]);
+			if (body && body.in_trash !== undefined) page.in_trash = body.in_trash;
+			return ok(page);
+		}
+		if (/^blocks\/page-\d+\/children\?/.test(p)) return ok({ results: [], has_more: false });
+		if (/^blocks\/page-\d+\/children$/.test(p)) return ok({ results: [{ id: "container-1" }] });
 		return { status: 404, ok: false, headers: { get: () => null }, text: async () => JSON.stringify({ message: p }) };
 	};
 }
@@ -417,4 +451,278 @@ test("item pane shows the AI note; synthesis from a collection writes Obsidian, 
 	assert.deepEqual(synNote.collectionsAdded, [7]);
 	assert.deepEqual(synNote.related.sort(), [a.key, b.key].sort());
 	assert.match(synNote.noteHTML, /<table>/);
+});
+
+function basePrefs(vault, extra = {}) {
+	return Object.assign({
+		"extensions.zotero-bridge.obsidian.vaultPath": vault,
+		"extensions.zotero-bridge.obsidian.vaultName": "Vault",
+		"extensions.zotero-bridge.obsidian.folder": "Zotero",
+		"extensions.zotero-bridge.obsidian.filenameFormat": "citekey",
+		"extensions.zotero-bridge.obsidian.createBase": false,
+		"extensions.zotero-bridge.notion.token": "ntn_test",
+		"extensions.zotero-bridge.notion.database": "https://www.notion.so/ws/Default-11111111111111111111111111111111",
+		"extensions.zotero-bridge.routing.rules": JSON.stringify([
+			{ name: "thesis", library: "user", collection: "碩論", obsidianFolder: "Thesis" },
+		]),
+		"extensions.zotero-bridge.llm.enabled": false,
+	}, extra);
+}
+
+// .md files under `dir` (recursively, hidden folders included) whose frontmatter has `zoteroKey`
+function notesWithKey(dir, zoteroKey) {
+	return fs.readdirSync(dir, { recursive: true })
+		.filter(f => f.endsWith(".md") && fs.readFileSync(path.join(dir, f), "utf8").includes(`zotero_key: "${zoteroKey}"`))
+		.sort();
+}
+
+test("a changed citekey renames the item's existing note instead of writing a second one", async () => {
+	let vault = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-vault-"));
+	let log = [];
+	let env = makeEnv({ fetch: notionMock(log), prefs: basePrefs(vault) });
+	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
+	let creators = [{ lastName: "Chen", creatorType: "author" }];
+	let a = new env.MockItem("journalArticle", { title: "A", year: "2024", citationKey: "chen2024", creators });
+	let b = new env.MockItem("journalArticle", { title: "B", year: "2021", citationKey: "lee2021", creators });
+	let c = new env.MockItem("journalArticle", { title: "C", year: "2023", citationKey: "wang2023", creators, collectionIDs: [7] });
+	let sync = (items, targets = ["notion", "obsidian"]) => env.context.ZB.main.run(items, { targets, ai: "none" });
+	await sync([a, b, c]);
+	let zdir = path.join(vault, "Zotero");
+	assert.deepEqual(fs.readdirSync(zdir).sort(), ["chen2024.md", "lee2021.md"]);
+	assert.deepEqual(fs.readdirSync(path.join(vault, "Thesis")), ["wang2023.md"]);
+	// Things the index must skip: a copy in a hidden folder, and the user's own notes
+	fs.mkdirSync(path.join(zdir, ".trash"));
+	fs.copyFileSync(path.join(zdir, "chen2024.md"), path.join(zdir, ".trash", "chen2024.md"));
+	fs.writeFileSync(path.join(zdir, "my idea.md"), "# idea\n");
+	fs.appendFileSync(path.join(zdir, "chen2024.md"), "\n我的心得\n");
+
+	a.fields.citationKey = "chen2024b";
+	log.length = 0;
+	await sync([a]);
+	assert.deepEqual(env.errors, []);
+	assert.deepEqual(fs.readdirSync(zdir).sort(), [".trash", "chen2024b.md", "lee2021.md", "my idea.md"]);
+	let text = fs.readFileSync(path.join(zdir, "chen2024b.md"), "utf8");
+	assert.match(text, /我的心得/);
+	assert.match(text, /^citekey: "chen2024b"$/m);
+	let patch = log.find(l => l.method === "PATCH" && l.path === "pages/page-1");
+	assert.equal(patch.body.properties.Obsidian.url, "obsidian://open?vault=Vault&file=Zotero%2Fchen2024b");
+
+	// Rule folders are searched too
+	c.fields.citationKey = "wang2023b";
+	await sync([c], ["obsidian"]);
+	assert.deepEqual(fs.readdirSync(path.join(vault, "Thesis")), ["wang2023b.md"]);
+
+	// A Notion-only sync doesn't rename; its Obsidian link points to the note as it is
+	a.fields.citationKey = "chen2024c";
+	log.length = 0;
+	await sync([a], ["notion"]);
+	assert.ok(fs.existsSync(path.join(zdir, "chen2024b.md")));
+	patch = log.find(l => l.method === "PATCH" && l.path === "pages/page-1");
+	assert.equal(patch.body.properties.Obsidian.url, "obsidian://open?vault=Vault&file=Zotero%2Fchen2024b");
+
+	// The new name belongs to another item: same collision rule as for new notes
+	a.fields.citationKey = "lee2021";
+	await sync([a], ["obsidian"]);
+	assert.deepEqual(fs.readdirSync(zdir).filter(f => f.endsWith(".md")).sort(), [`lee2021 (${a.key}).md`, "lee2021.md", "my idea.md"]);
+	assert.match(fs.readFileSync(path.join(zdir, "lee2021.md"), "utf8"), new RegExp(`zotero_key: "library/${b.key}"`));
+	// Syncing again keeps that name
+	await sync([a], ["obsidian"]);
+	assert.ok(fs.existsSync(path.join(zdir, `lee2021 (${a.key}).md`)));
+
+	// The user filed the note in a subfolder: it is renamed there, not recreated at the top
+	fs.mkdirSync(path.join(zdir, "讀完"));
+	fs.renameSync(path.join(zdir, `lee2021 (${a.key}).md`), path.join(zdir, "讀完", `lee2021 (${a.key}).md`));
+	a.fields.citationKey = "chen2025";
+	log.length = 0;
+	await sync([a]);
+	assert.deepEqual(env.errors, []);
+	assert.ok(!fs.existsSync(path.join(zdir, "chen2025.md")));
+	text = fs.readFileSync(path.join(zdir, "讀完", "chen2025.md"), "utf8");
+	assert.match(text, /我的心得/);
+	patch = log.find(l => l.method === "PATCH" && l.path === "pages/page-1");
+	assert.equal(patch.body.properties.Obsidian.url, "obsidian://open?vault=Vault&file=Zotero%2F%E8%AE%80%E5%AE%8C%2Fchen2025");
+	assert.deepEqual(notesWithKey(vault, `library/${a.key}`), ["Zotero/.trash/chen2024.md", "Zotero/讀完/chen2025.md"]);
+	assert.equal((text.match(/zotero-bridge:start/g) || []).length, 1);
+});
+
+test("trashed and deleted items: Notion page to the trash, Obsidian note marked, restore undoes it", async () => {
+	let vault = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-vault-"));
+	let log = [];
+	let pages = new Map();
+	let timers = [];
+	let env = makeEnv({ fetch: notionMock(log, pages), timers, prefs: basePrefs(vault, { "extensions.zotero-bridge.autoSync": true }) });
+	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
+	let ZB = env.context.ZB;
+	let creators = [{ lastName: "Chen", creatorType: "author" }];
+	let a = new env.MockItem("journalArticle", { title: "A", year: "2024", citationKey: "chen2024", creators });
+	let b = new env.MockItem("journalArticle", { title: "B", year: "2021", citationKey: "lee2021", creators });
+	let c = new env.MockItem("journalArticle", { title: "C", year: "2023", citationKey: "wang2023", creators, collectionIDs: [7] });
+	let child = new env.MockItem("note");
+	child.noteHTML = "<p>child note</p>";
+	env.addChild(b, child);
+	await ZB.main.run([a, b, c], { targets: ["notion", "obsidian"], ai: "none" });
+	assert.deepEqual([...pages.values()].map(p => p.id), ["page-1", "page-2", "page-3"]);
+	let fileA = path.join(vault, "Zotero", "chen2024.md");
+	let fileB = path.join(vault, "Zotero", "lee2021.md");
+	let fileC = path.join(vault, "Thesis", "wang2023.md");
+	fs.appendFileSync(fileA, "\n我的心得\n");
+
+	let observer = env.observers[0];
+	assert.deepEqual([...observer.types], ["item"]);
+	let flush = async () => {
+		let pending = timers.filter(t => t.ms === 8000 && !t.cleared && !t.fired);
+		assert.equal(pending.length, 1, "one debounced flush");
+		pending[0].fired = true;
+		pending[0].fn();
+		await ZB.main.run([], {}); // wait for the queued work
+	};
+
+	// Move A to the trash: Zotero sends modify + trash
+	a.deleted = true;
+	observer.ref.notify("modify", "item", [a.id], {});
+	observer.ref.notify("trash", "item", [a.id], {});
+	log.length = 0;
+	await flush();
+	assert.deepEqual(env.errors, []);
+	let query = log.find(l => l.path === "data_sources/ds-1/query");
+	assert.deepEqual(query.body.filter.or, [{ property: "Zotero Key", rich_text: { equals: `library/${a.key}` } }]);
+	assert.deepEqual(log.filter(l => l.method === "PATCH" && l.path.startsWith("pages/")).map(l => [l.path, l.body]),
+		[["pages/page-1", { in_trash: true }]], "only archived, the trashed item itself is not synced");
+	let text = fs.readFileSync(fileA, "utf8");
+	assert.match(text, /^status: "已刪除"$/m);
+	assert.match(text, /^status_before_delete: "待讀"$/m);
+	assert.match(text, /> \[!warning\] 已從 Zotero 刪除/);
+	assert.match(text, /我的心得/);
+	assert.match(fs.readFileSync(fileB, "utf8"), /^status: "待讀"$/m);
+
+	// A trashed child note re-syncs its parent instead of archiving anything
+	child.deleted = true;
+	b.children = b.children.filter(id => id !== child.id);
+	observer.ref.notify("trash", "item", [child.id], {});
+	log.length = 0;
+	await flush();
+	assert.ok(log.some(l => l.method === "PATCH" && l.path === "pages/page-2" && l.body.properties));
+	assert.ok(!log.some(l => l.body && l.body.in_trash));
+	assert.doesNotMatch(fs.readFileSync(fileB, "utf8"), /child note/);
+
+	// B deleted for good (e.g. emptied from the trash): only libraryID/key are left
+	env.items.delete(b.id);
+	observer.ref.notify("delete", "item", [b.id], { [b.id]: { libraryID: 1, key: b.key } });
+	log.length = 0;
+	await flush();
+	assert.deepEqual(log.filter(l => l.body && l.body.in_trash).map(l => l.path), ["pages/page-2"]);
+	assert.match(fs.readFileSync(fileB, "utf8"), /^status: "已刪除"$/m);
+	assert.ok(fs.existsSync(fileB), "the user's file is kept");
+
+	// Trashed, then restored before the timer fired: nothing is archived and the item syncs
+	c.deleted = true;
+	observer.ref.notify("trash", "item", [c.id], {});
+	c.deleted = false;
+	observer.ref.notify("modify", "item", [c.id], {});
+	log.length = 0;
+	await flush();
+	assert.ok(!log.some(l => l.body && l.body.in_trash));
+	assert.ok(log.some(l => l.method === "PATCH" && l.path === "pages/page-3" && l.body.properties));
+	assert.match(fs.readFileSync(fileC, "utf8"), /^status: "待讀"$/m);
+
+	// A restored from the trash later: a sync gives the note its status back
+	a.deleted = false;
+	await ZB.main.run([a], { targets: ["obsidian"], ai: "none" });
+	text = fs.readFileSync(fileA, "utf8");
+	assert.match(text, /^status: "待讀"$/m);
+	assert.doesNotMatch(text, /已從 Zotero 刪除|zotero_deleted/);
+	assert.match(text, /我的心得/);
+
+	// archiveItems can be called directly; already-archived items are no-ops
+	let counts = await ZB.main.archiveItems([`library/${b.key}`, "library/NOSUCHKEY"]);
+	assert.deepEqual({ ...counts }, { notion: 0, obsidian: 0 });
+
+	// Nothing happens while auto-sync is off
+	env.prefStore["extensions.zotero-bridge.autoSync"] = false;
+	let before = timers.length;
+	observer.ref.notify("trash", "item", [c.id], {});
+	assert.equal(timers.length, before);
+	assert.deepEqual(env.errors, []);
+});
+
+test("regenerating the AI note keeps the previous version as a history note that is never synced", async () => {
+	let vault = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-vault-"));
+	let log = [];
+	let timers = [];
+	let env = makeEnv({
+		fetch: notionMock(log), timers,
+		prefs: basePrefs(vault, {
+			"extensions.zotero-bridge.autoSync": true,
+			"extensions.zotero-bridge.llm.enabled": true,
+			"extensions.zotero-bridge.llm.provider": "anthropic",
+			"extensions.zotero-bridge.llm.anthropicKey": "sk-ant-test",
+			"extensions.zotero-bridge.llm.anthropicModel": "claude-opus-5-5",
+			"extensions.zotero-bridge.includeNotes": true,
+		}),
+	});
+	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
+	let ZB = env.context.ZB;
+	let item = new env.MockItem("journalArticle", { title: "A", year: "2024", citationKey: "chen2024", creators: [{ lastName: "Chen", creatorType: "author" }] });
+	let own = new env.MockItem("note");
+	own.noteHTML = "<p>My own note</p>";
+	env.addChild(item, own);
+	let notes = () => env.Zotero.Items.get(item.getNotes());
+
+	await ZB.main.run([item], { targets: ["notion", "obsidian"], ai: "missing" });
+	let aiNote = notes().find(n => n.tags.includes("zotero-bridge-ai"));
+	assert.ok(aiNote);
+	aiNote.noteHTML = aiNote.noteHTML.replace("</h1>", "</h1><p>使用者在 Zotero 改過的第一版</p>");
+
+	log.length = 0;
+	await ZB.main.run([item], { targets: ["notion", "obsidian"], ai: "regenerate" });
+	assert.deepEqual(env.errors, []);
+	let history = notes().filter(n => n.tags.includes("zotero-bridge-ai-history"));
+	assert.equal(history.length, 1);
+	assert.deepEqual(history[0].tags, ["zotero-bridge-ai-history"]);
+	assert.equal(history[0].parentID, item.id);
+	assert.match(history[0].noteHTML, /^<h1>🤖 AI 文獻筆記（舊版 \d{4}-\d{2}-\d{2} \d{2}:\d{2}）<\/h1>/);
+	assert.match(history[0].noteHTML, /使用者在 Zotero 改過的第一版/);
+	assert.equal(notes().filter(n => n.tags.includes("zotero-bridge-ai")).length, 1, "still one current AI note");
+	assert.doesNotMatch(aiNote.noteHTML, /第一版/, "the AI note itself was overwritten");
+
+	// Once it exists, the history note is not sent to Notion, Obsidian or the LLM; the user's own note is
+	log.length = 0;
+	await ZB.main.run([item], { targets: ["notion", "obsidian"], ai: "reuse" });
+	let container = log.find(l => l.method === "PATCH" && /^blocks\/page-\d+\/children$/.test(l.path));
+	assert.match(JSON.stringify(container.body), /My own note/);
+	assert.doesNotMatch(JSON.stringify(container.body), /舊版|第一版/);
+	let text = fs.readFileSync(path.join(vault, "Zotero", "chen2024.md"), "utf8");
+	assert.match(text, /My own note/);
+	assert.doesNotMatch(text, /舊版|第一版/);
+
+	// Regenerating again adds another history note
+	log.length = 0;
+	await ZB.main.run([item], { targets: ["obsidian"], ai: "regenerate" });
+	assert.equal(notes().filter(n => n.tags.includes("zotero-bridge-ai-history")).length, 2);
+	let prompt = log.find(l => l.api === "anthropic").body.messages[0].content;
+	assert.match(prompt, /My own note/);
+	assert.doesNotMatch(prompt, /舊版|第一版/);
+
+	// Zotero reports the saves (new history note, AI note, and the parent item): no auto-sync follows
+	let historyIDs = notes().filter(n => n.tags.includes("zotero-bridge-ai-history")).map(n => n.id);
+	let observer = env.observers[0].ref;
+	observer.notify("add", "item", historyIDs, {});
+	observer.notify("modify", "item", [aiNote.id, item.id], {});
+	let flushes = () => timers.filter(t => t.ms === 8000 && !t.cleared && !t.fired);
+	assert.equal(flushes().length, 0, "nothing queued");
+	// A history note the user edits later doesn't trigger a sync either
+	for (let t of timers.filter(t => t.ms === 16000)) t.fn();
+	observer.notify("modify", "item", historyIDs, {});
+	assert.equal(flushes().length, 0);
+	// …while a real change to the item does
+	observer.notify("modify", "item", [item.id], {});
+	assert.equal(flushes().length, 1);
+	log.length = 0;
+	let t = flushes()[0];
+	t.fired = true;
+	t.fn();
+	await ZB.main.run([], {});
+	assert.equal(log.filter(l => l.api === "anthropic").length, 0, "auto-sync never calls the LLM");
+	assert.ok(log.some(l => l.method === "PATCH" && l.path === "pages/page-1" && l.body.properties));
+	assert.deepEqual(env.errors, []);
 });

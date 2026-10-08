@@ -21,7 +21,7 @@
 | Zotero | MCP 工具 `zotero_search_items`、`zotero_item_metadata`、`zotero_item_fulltext` | 搜尋文獻庫、讀完整書目與 PDF 全文 |
 | Notion | Notion MCP | 「📚 Zotero 文獻資料庫」與比較表頁面 |
 
-文獻筆記 frontmatter 主要欄位：`title`、`authors`、`year`、`publication`、`doi`、`citekey`、`zotero_key`、`collections`、`tags`、`status`（待讀／閱讀中／已讀／已引用）、`notion`、`ai_model`。
+文獻筆記 frontmatter 主要欄位：`title`、`authors`、`year`、`publication`、`doi`、`citekey`、`zotero_key`、`collections`、`tags`、`status`（待讀／閱讀中／已讀／已引用；`已刪除` 表示文獻已從 Zotero 刪除，比較與引用時略過）、`notion`、`ai_model`。
 
 每篇的 AI 文獻筆記固定包含：一句話摘要、研究背景與目的、研究設計與方法、主要結果、作者結論、研究限制、證據等級、對我的研究的啟發、關鍵概念 `[[…]]`、可引用的句子。
 
