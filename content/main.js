@@ -1135,6 +1135,13 @@
 			onCommand: (ev, context) => {
 				runSynthesis(getItems(context), getScope(context)).catch(e => Zotero.logError(e));
 			},
+		}, {
+			// Literature review draft (review-draft.js)
+			menuType: "menuitem",
+			l10nID: "zotero-bridge-menu-review-draft",
+			onCommand: (ev, context) => {
+				ZB.reviewDraft.run(getItems(context), getScope(context), context).catch(e => Zotero.logError(e));
+			},
 		});
 		return menus;
 	}
@@ -1234,6 +1241,8 @@
 		menuIDs = [itemMenu, collectionMenu, toolsMenu].filter(Boolean);
 		// Bibliography export (export.js): Tools menu + collection context menu
 		menuIDs.push(...ZB.bibliography.registerMenus({ pluginID, icon }));
+		// Systematic/scoping review screening (screening.js): item, collection and Tools menus
+		menuIDs.push(...ZB.screening.registerMenus({ pluginID, icon }));
 	}
 
 	// ---------- item pane: AI note section ----------
@@ -1244,6 +1253,7 @@
 	function renderPane({ doc, body, item, setSectionSummary }) {
 		body.replaceChildren();
 		ZB.status.renderPaneRow(doc, body, item);
+		ZB.screening.renderPaneRow(doc, body, item);
 		let el = (tag, text, style) => {
 			let e = doc.createElement(tag);
 			if (text !== undefined) e.textContent = text;
@@ -1430,5 +1440,7 @@
 
 	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime,
 		// for status.js
-		enqueue, notify, buildObsidianIndex, saveQuietly };
+		enqueue, notify, buildObsidianIndex, saveQuietly,
+		// for review-draft.js
+		recordAIUsage, runUsageLine, retryStatus };
 })(this);

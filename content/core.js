@@ -3,14 +3,13 @@
  * Loaded into the plugin scope by bootstrap.js and required directly by the Node tests.
  */
 (function (root, factory) {
-	const api = factory();
 	if (typeof module === "object" && module.exports) {
-		module.exports = api;
+		module.exports = factory(require("./apa-zh.js"));
 	}
 	else {
-		(root.ZB = root.ZB || {}).core = api;
+		(root.ZB = root.ZB || {}).core = factory(root.ZB.apaZh);
 	}
-})(this, function () {
+})(this, function (apaZh) {
 	const MARK_START = "%% zotero-bridge:start — 此區塊由 Zotero Bridge 自動產生，重新同步時會覆寫 %%";
 	const MARK_END = "%% zotero-bridge:end %%";
 	const MARK_START_RE = /^%% zotero-bridge:start.*%%[ \t]*$/m;
@@ -73,6 +72,9 @@
 	}
 
 	function creatorName(c) {
+		// Chinese names in full: 陳美玲, not "陳, 美玲" (apa-zh.js)
+		let zh = apaZh && apaZh.zhPersonName(c);
+		if (zh) return zh;
 		if (c.name) return c.name;
 		return [c.lastName, c.firstName].filter(Boolean).join(", ");
 	}
@@ -374,7 +376,7 @@
 		if (data.doi) rows.push(`**DOI**: [${data.doi}](https://doi.org/${encodeURI(data.doi)})`);
 		rows.push(`**Zotero**: [開啟](${zoteroSelectURI(data)})`);
 		if (opts.notionUrl) rows.push(`**Notion**: [開啟](${opts.notionUrl})`);
-		if (data.apa) rows.push(`**APA 7**: ${data.apa}`);
+		if (data.apa) rows.push(`**APA 7**: ${data.apaMarkdown || data.apa}`);
 		return "> [!info] 書目資訊\n" + rows.map(r => `> ${r}`).join("  \n");
 	}
 

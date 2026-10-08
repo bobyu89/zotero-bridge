@@ -34,4 +34,17 @@ pref("extensions.zotero-bridge.usage.ledger", "{}");
 pref("extensions.zotero-bridge.usage.prices", "");
 pref("extensions.zotero-bridge.export.autoUpdate", false);
 pref("extensions.zotero-bridge.export.bibtex", false);
+// Chinese-language items in Chinese APA 7 (content/apa-zh.js); style "thesis" (。) or "twna" (．)
+pref("extensions.zotero-bridge.apaZh.enabled", true);
+pref("extensions.zotero-bridge.apaZh.style", "thesis");
+pref("extensions.zotero-bridge.apaZh.chineseFirst", true);
 pref("extensions.zotero-bridge.batch.pending", "");
+// Systematic/scoping review screening (content/screening.js): Zotero tag prefixes, exclusion
+// reasons (one per line; empty = built-in list) and the Notion parent page for review pages
+pref("extensions.zotero-bridge.screening.tagPrefix", "篩選/");
+pref("extensions.zotero-bridge.screening.reasonPrefix", "排除原因/");
+pref("extensions.zotero-bridge.screening.sourcePrefix", "來源/");
+pref("extensions.zotero-bridge.screening.reasons", "");
+pref("extensions.zotero-bridge.screening.notionParent", "");
+// Review page per collection ("library/collections/KEY" → Notion page ID), so a rerun updates it
+pref("extensions.zotero-bridge.screening.notionPages", "{}");

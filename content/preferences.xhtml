@@ -111,6 +111,22 @@
 	</groupbox>
 
 	<groupbox>
+		<label><html:h2>中文文獻與中文 APA</html:h2></label>
+		<description>標題是中文的文獻（或沒有標題、作者是中文姓名）改用中文 APA 7：作者全名以「、」相連、（年份）全形括號、內文引用「陳美玲等，2023」。用在筆記的 APA 7、Notion 的 APA 欄位、文獻比較表的引文與參考文獻；references.json 裡的中文姓名會寫成完整姓名。不會修改 Zotero 條目。</description>
+		<checkbox label="中文文獻使用中文 APA 格式" preference="extensions.zotero-bridge.apaZh.enabled"/>
+		<hbox align="center">
+			<label value="標點："/>
+			<menulist preference="extensions.zotero-bridge.apaZh.style" native="true">
+				<menupopup>
+					<menuitem label="陳美玲（2023）。題目。護理雜誌，70(2)，45–56。（各校論文 APA 7 指引常用）" value="thesis"/>
+					<menuitem label="陳美玲（2023）．題目．護理雜誌，70(2)，45–56。（台灣護理學會期刊）" value="twna"/>
+				</menupopup>
+			</menulist>
+		</hbox>
+		<checkbox label="中文文獻排在英文前（中文依筆畫、英文依字母；用於文獻比較表的參考文獻）" preference="extensions.zotero-bridge.apaZh.chineseFirst"/>
+	</groupbox>
+
+	<groupbox>
 		<label><html:h2>Notion</html:h2></label>
 		<label value="Integration token（notion.so/profile/integrations 建立，並把資料庫分享給這個 integration）："/>
 		<html:input id="zb-notion-token" type="password" placeholder="ntn_..." autocomplete="off"/>
@@ -143,6 +159,27 @@
 		</hbox>
 		<checkbox label="標籤加上 emoji（例如「狀態/已讀 ✅」），Zotero 會把它顯示在條目清單的標題旁" preference="extensions.zotero-bridge.status.tagEmoji"/>
 		<description class="zb-hint">Zotero 用標籤（每篇只留一個）、Notion 用 Status 欄位、Obsidian 用 frontmatter 的 status。每次同步時，哪一邊改過就以那一邊為準；同時在不同地方改成不同狀態時，依 Obsidian &gt; Zotero &gt; Notion 採用並在進度視窗提示（自動同步時 Zotero 優先）。Notion／Obsidian 的修改會在下一次同步時帶回，或用 工具 → 同步閱讀狀態 一次更新全部。</description>
+	</groupbox>
+
+	<groupbox>
+		<label><html:h2>系統性／範圍回顧篩選</html:h2></label>
+		<description>篩選決定存成 Zotero 標籤：在條目上按右鍵 → Zotero Bridge：篩選；在回顧專案的分類上按右鍵可找重複、產生 PRISMA 流程圖與證據表（存到 Obsidian 預設子資料夾的 Reviews/）。</description>
+		<label value="全文排除原因（一行一個，會成為標籤「排除原因/…」與右鍵選單；留空 = 內建清單）："/>
+		<html:textarea id="zb-screening-reasons" rows="7" preference="extensions.zotero-bridge.screening.reasons" placeholder="族群不符（wrong population）&#10;介入不符（wrong intervention）&#10;結果指標不符（wrong outcome）&#10;研究設計不符（wrong study design）&#10;非全文／研討會摘要（conference abstract）&#10;語言不符（language）&#10;重複發表（duplicate publication）"/>
+		<hbox>
+			<button label="載入內建排除原因來修改" oncommand="ZoteroBridgePrefs.loadDefaultReasons()"/>
+		</hbox>
+		<hbox align="center">
+			<label value="篩選標籤前綴："/>
+			<html:input type="text" preference="extensions.zotero-bridge.screening.tagPrefix" placeholder="篩選/"/>
+			<label value="排除原因前綴："/>
+			<html:input type="text" preference="extensions.zotero-bridge.screening.reasonPrefix" placeholder="排除原因/"/>
+			<label value="資料庫來源前綴："/>
+			<html:input type="text" preference="extensions.zotero-bridge.screening.sourcePrefix" placeholder="來源/"/>
+		</hbox>
+		<label value="PRISMA 頁面的 Notion 父頁面（選填；留空時使用文獻比較表的父頁面，頁面也要分享給 integration）："/>
+		<html:input type="text" preference="extensions.zotero-bridge.screening.notionParent" placeholder="https://www.notion.so/..."/>
+		<description class="zb-hint">改了前綴或排除原因後，舊標籤不會自動改名。資料庫來源：在匯入的文獻加上標籤「來源/PubMed」等；沒有標籤時使用條目的「圖書館目錄」（Library Catalog）欄位（例如從 PubMed 匯入的是「PubMed」）。</description>
 	</groupbox>
 
 	<groupbox>
