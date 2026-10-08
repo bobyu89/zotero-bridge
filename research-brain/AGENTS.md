@@ -26,7 +26,7 @@
 
 每篇的 AI 文獻筆記固定包含：一句話摘要、研究背景與目的、研究設計與方法、主要結果、作者結論、研究限制、嚴格評讀（JBI 清單逐題評讀與整體評價）、證據等級、對我的研究的啟發、關鍵概念 `[[…]]`、可引用的句子。可引用的句子已和全文比對：✅ 表示在全文或劃線中找到；⚠️ 表示沒找到或沒有全文可查，引用前必須回原文確認，不可直接當作原文引用。
 
-系統性／範圍回顧筆記（`type: review-screening`）的 frontmatter 有 PRISMA 2020 計數：`prisma_identified`、`prisma_duplicates`、`prisma_screened`、`prisma_excluded_screening`、`prisma_awaiting_screening`、`prisma_sought`、`prisma_not_retrieved`、`prisma_assessed`、`prisma_excluded_fulltext`（各排除原因的篇數在筆記的計數表）、`prisma_awaiting_fulltext`、`prisma_included`，以及 `zotero_collection`、`evidence_csv`、`last_generated`。這些數字只能照抄，不可自行推算或修改；`prisma_awaiting_*` 不是 0 表示篩選還沒完成，「一致性檢查」有 ⚠️ 時要先提醒 BOB 修正 Zotero 標籤（`篩選/…`、`排除原因/…`）再重新產生，不要直接改筆記的數字。
+系統性／範圍回顧筆記（`type: review-screening`）的 frontmatter 有 PRISMA 2020 計數：`prisma_identified`、`prisma_duplicates`、`prisma_screened`、`prisma_excluded_screening`、`prisma_awaiting_screening`、`prisma_sought`、`prisma_not_retrieved`、`prisma_assessed`、`prisma_excluded_fulltext`（各排除原因的篇數在筆記的計數表）、`prisma_awaiting_fulltext`、`prisma_included`，以及 `zotero_collection`、`evidence_csv`、`last_generated`。這些數字只能照抄，不可自行推算或修改；`prisma_awaiting_*` 不是 0 表示篩選還沒完成，「一致性檢查」有 ⚠️ 時要先提醒 BOB 修正 Zotero 標籤（`篩選/…`、`排除原因/…`）再重新產生，不要直接改筆記的數字。有其他方法（引文追蹤、網站等）找到的文獻時，另有 `prisma_other_identified`、`prisma_other_sought`、`prisma_other_not_retrieved`、`prisma_other_assessed`、`prisma_other_excluded`、`prisma_other_included`（PRISMA 右側欄），此時 `prisma_included` 是兩欄合計，其餘 `prisma_*` 只算資料庫與登錄庫。同資料夾的 `type: citation-chase` 筆記是引文追蹤的候選清單，不是納入研究。
 
 ## 工作方式
 1. **先讀 vault 裡已整理好的筆記**（便宜、快、已含 BOB 的劃線），不夠時才用 Zotero MCP 讀 PDF 全文。

@@ -3,6 +3,8 @@ pref("extensions.zotero-bridge.obsidian.vaultName", "");
 pref("extensions.zotero-bridge.obsidian.folder", "Zotero");
 pref("extensions.zotero-bridge.obsidian.filenameFormat", "citekey");
 pref("extensions.zotero-bridge.obsidian.createBase", true);
+// Rebuild <folder>/研究儀表板.md after each manual sync (content/dashboard.js)
+pref("extensions.zotero-bridge.dashboard.autoUpdate", true);
 pref("extensions.zotero-bridge.includeNotes", true);
 pref("extensions.zotero-bridge.images.export", true);
 pref("extensions.zotero-bridge.images.sendToAI", false);
@@ -48,3 +50,22 @@ pref("extensions.zotero-bridge.screening.reasons", "");
 pref("extensions.zotero-bridge.screening.notionParent", "");
 // Review page per collection ("library/collections/KEY" → Notion page ID), so a rerun updates it
 pref("extensions.zotero-bridge.screening.notionPages", "{}");
+// PubMed new-literature watch (content/pubmed-watch.js): saved searches (JSON array), per-watch
+// state (last check, PMIDs seen, queue), contact email for NCBI, PMIDs imported per watch and check,
+// automatic checks every N hours, AI notes for new papers after a manual check, daily Obsidian list
+pref("extensions.zotero-bridge.pubmedWatch.watches", "[]");
+pref("extensions.zotero-bridge.pubmedWatch.state", "{}");
+pref("extensions.zotero-bridge.pubmedWatch.email", "");
+pref("extensions.zotero-bridge.pubmedWatch.maxPerWatch", "50");
+pref("extensions.zotero-bridge.pubmedWatch.autoCheck", false);
+pref("extensions.zotero-bridge.pubmedWatch.intervalHours", "24");
+pref("extensions.zotero-bridge.pubmedWatch.runAI", false);
+pref("extensions.zotero-bridge.pubmedWatch.digest", true);
+// 來源/<name> tags counted as "other methods" in PRISMA 2020 (one per line or comma-separated; empty = 引文追蹤, 網站, 機構)
+pref("extensions.zotero-bridge.screening.otherSources", "");
+// Citation searching with OpenAlex (content/citation-chase.js): email for the polite pool, requests
+// per run, works per study and direction, direction "both" | "backward" | "forward"
+pref("extensions.zotero-bridge.citationChase.email", "");
+pref("extensions.zotero-bridge.citationChase.maxRequests", "100");
+pref("extensions.zotero-bridge.citationChase.maxPerSeed", "200");
+pref("extensions.zotero-bridge.citationChase.direction", "both");

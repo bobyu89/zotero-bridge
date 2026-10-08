@@ -8,6 +8,7 @@
  *   排除原因/<reason>                   why a report was excluded at full text (one per item)
  *   篩選/重複                           duplicate record, removed before screening
  *   來源/<database>                     where a record was found (else the item's Library Catalog)
+ *   來源/引文追蹤｜網站｜機構           found by other methods: the PRISMA 2020 right-hand column (a setting)
  * The newest decision wins: a full-text decision means the record passed title/abstract
  * screening, and excluding at title/abstract drops any full-text decision.
  *
@@ -48,6 +49,9 @@
 	const MAX_MENU_REASONS = 20;
 	const NO_REASON = "未註明原因";
 	const NO_SOURCE = "未標示來源";
+	// 來源/<name> tags that mean "other methods" in PRISMA 2020 (citation searching, websites, organisations)
+	const DEFAULT_OTHER_SOURCES = ["引文追蹤", "網站", "機構"];
+	const OTHER_SOURCE_LABELS = { 引文追蹤: "Citation searching", 網站: "Websites", 機構: "Organisations" };
 	// Shorter normalized titles ("Editorial", "Letter") match too easily
 	const MIN_TITLE_CHARS = 10;
 	const REVIEW_FOLDER = "Reviews";
@@ -79,7 +83,18 @@
 			reasonPrefix: text(cfg.reasonPrefix, DEFAULT_REASON_PREFIX),
 			sourcePrefix: text(cfg.sourcePrefix, DEFAULT_SOURCE_PREFIX),
 			reasons: Array.isArray(cfg.reasons) && cfg.reasons.length ? cfg.reasons.slice() : DEFAULT_REASONS.slice(),
+			otherSources: Array.isArray(cfg.otherSources) && cfg.otherSources.length ? cfg.otherSources.slice() : DEFAULT_OTHER_SOURCES.slice(),
 		};
+	}
+
+	/** Other-method sources from the settings: one per line or comma-separated; empty = the defaults. */
+	function parseSourceList(text) {
+		return parseReasons(String(text || "").replace(/[,，、]/g, "\n"));
+	}
+
+	/** A record found only by other methods (all its 來源/ tags are other-method sources) goes to the right-hand column. */
+	function isOtherMethod(state, cfg) {
+		return state.sources.length > 0 && state.sources.every(s => cfg.otherSources.includes(s));
 	}
 
 	function stageTag(cfg, stage, decision) {
@@ -354,24 +369,37 @@
 		return known[0] || reasons.slice().sort((a, b) => a.localeCompare(b))[0];
 	}
 
+	function emptyCounts(identified) {
+		return {
+			identified, duplicates: 0, screened: 0, taExcluded: 0, taPending: 0,
+			sought: 0, notRetrieved: 0, assessed: 0, ftExcluded: 0, ftPending: 0, included: 0,
+		};
+	}
+
 	/**
-	 * Count the PRISMA 2020 flow of a review's records (new review, databases and registers).
+	 * Count the PRISMA 2020 flow of a review's records (new review). Records whose 來源/ tags are all
+	 * other-method sources (cfg.otherSources: citation searching, websites, …) are counted in `other`,
+	 * the right-hand column; everything else in `counts` (databases and registers).
 	 * @param {object[]} records { id, title, tags, catalog, … }
-	 * @returns {{ counts, sources: [name, n][], reasons: [reason, n][], issues, included }}
+	 * @returns {{ counts, sources: [name, n][], reasons: [reason, n][], other: null | { counts, sources, reasons },
+	 *   totalIncluded, issues, included }}
 	 */
 	function computePrisma(records, cfg) {
 		cfg = normalizeConfig(cfg);
-		let c = {
-			identified: records.length, duplicates: 0, screened: 0, taExcluded: 0, taPending: 0,
-			sought: 0, notRetrieved: 0, assessed: 0, ftExcluded: 0, ftPending: 0, included: 0,
-		};
-		let sources = new Map();
-		let reasons = new Map();
+		let rows = records.map((r) => {
+			let s = readState(r.tags, cfg);
+			return { r, s, other: isOtherMethod(s, cfg) };
+		});
+		let column = n => ({ c: emptyCounts(n), sources: new Map(), reasons: new Map() });
+		let otherCount = rows.filter(x => x.other).length;
+		let columns = { db: column(rows.length - otherCount), other: column(otherCount) };
 		let found = new Map(ISSUES.map(([code]) => [code, []]));
 		let included = [];
 		let issue = (code, r) => found.get(code).push(r);
-		for (let r of records) {
-			let s = readState(r.tags, cfg);
+		for (let { r, s, other: isOther } of rows) {
+			let col = isOther ? columns.other : columns.db;
+			let c = col.c;
+			let { sources, reasons } = col;
 			let from = s.sources.length ? s.sources : [String(r.catalog || "").trim() || NO_SOURCE];
 			for (let src of from) sources.set(src, (sources.get(src) || 0) + 1);
 			if (s.taAll.length > 1) issue("taConflict", r);
@@ -382,7 +410,8 @@
 				continue;
 			}
 			c.screened++;
-			if (s.ft && s.ta !== "include") issue("ftWithoutTA", r);
+			// Other methods have no title/abstract stage in PRISMA 2020: going straight to full text is fine
+			if (s.ft && s.ta !== "include" && !isOther) issue("ftWithoutTA", r);
 			if (s.reasons.length && s.ft !== "exclude") issue("reasonWithoutExclude", r);
 			let ta = s.ft ? "include" : s.ta;
 			if (ta === "exclude") {
@@ -416,16 +445,25 @@
 				issue("ftPending", r);
 			}
 		}
-		let reasonList = [...reasons].sort((a, b) => {
+		let reasonList = col => [...col.reasons].sort((a, b) => {
 			let rank = ([name]) => (name === NO_REASON ? 1e6 : cfg.reasons.includes(name) ? cfg.reasons.indexOf(name) : 1e5);
 			return rank(a) - rank(b) || a[0].localeCompare(b[0]);
 		});
-		let sourceList = [...sources].sort((a, b) => (a[0] === NO_SOURCE) - (b[0] === NO_SOURCE) || b[1] - a[1] || a[0].localeCompare(b[0]));
-		let mismatch = checkCounts(c, reasonList);
+		let sourceList = col => [...col.sources].sort((a, b) => (a[0] === NO_SOURCE) - (b[0] === NO_SOURCE) || b[1] - a[1] || a[0].localeCompare(b[0]));
+		let db = columns.db;
+		let other = otherCount
+			? { counts: columns.other.c, sources: sourceList(columns.other), reasons: reasonList(columns.other) }
+			: null;
+		let mismatch = checkCounts(db.c, reasonList(db));
+		if (other) mismatch.push(...checkCounts(other.counts, other.reasons).map(m => `其他方法：${m}`));
 		let issues = ISSUES.map(([code, level, message]) => ({ code, level, message, records: found.get(code) }))
 			.filter(i => i.records.length);
 		if (mismatch.length) issues.push({ code: "countMismatch", level: "warn", message: `計數不一致：${mismatch.join("；")}`, records: [] });
-		return { counts: c, sources: sourceList, reasons: reasonList, issues, included };
+		return {
+			counts: db.c, sources: sourceList(db), reasons: reasonList(db), other,
+			totalIncluded: db.c.included + (other ? other.counts.included : 0),
+			issues, included,
+		};
 	}
 
 	/** The PRISMA arithmetic; returns the equations that don't hold (none for computePrisma's own counts). */
@@ -447,9 +485,18 @@
 		return `["${lines.map(esc).join("<br/>")}"]`;
 	}
 
-	/** PRISMA 2020 flow diagram (new review, databases and registers only) as a Mermaid flowchart. */
+	function otherSourceLabel(name) {
+		return OTHER_SOURCE_LABELS[name] || name;
+	}
+
+	/**
+	 * PRISMA 2020 flow diagram (new review) as a Mermaid flowchart: databases and registers, plus the
+	 * "other methods" column when some records came from citation searching, websites, ….
+	 */
 	function buildMermaid(result) {
 		let c = result.counts;
+		let o = result.other ? result.other.counts : null;
+		let total = result.totalIncluded === undefined ? c.included : result.totalIncluded;
 		let n = v => `(n = ${v})`;
 		let out = ["flowchart TD"];
 		let node = (id, lines, cls) => out.push(`    ${id}${mermaidLabel(lines)}${cls ? ":::" + cls : ""}`);
@@ -458,6 +505,15 @@
 		node("identified", ["Records identified from databases and registers", n(c.identified),
 			...(named ? result.sources.map(([s, v]) => `${s} ${n(v)}`) : [])]);
 		node("removed", ["Records removed before screening:", `Duplicate records removed ${n(c.duplicates)}`]);
+		if (o) {
+			node("otherIdentified", ["Records identified from:", ...result.other.sources.map(([s, v]) => `${otherSourceLabel(s)} ${n(v)}`)]);
+			// Not a box in the PRISMA 2020 template; shown only when needed so the column adds up
+			let notSought = [
+				o.duplicates ? `Duplicate records removed ${n(o.duplicates)}` : "",
+				o.taExcluded ? `Records excluded ${n(o.taExcluded)}` : "",
+			].filter(Boolean);
+			if (notSought.length) node("otherRemoved", notSought);
+		}
 		out.push("    end");
 		out.push("    subgraph screening[\"Screening\"]");
 		node("screened", ["Records screened", n(c.screened)]);
@@ -469,9 +525,18 @@
 			...result.reasons.map(([r, v]) => `${r} ${n(v)}`)]);
 		if (c.taPending) node("taPending", ["Records awaiting screening", n(c.taPending)], "pending");
 		if (c.ftPending) node("ftPending", ["Reports awaiting assessment", n(c.ftPending)], "pending");
+		if (o) {
+			node("otherSought", ["Reports sought for retrieval", n(o.sought)]);
+			node("otherNotRetrieved", ["Reports not retrieved", n(o.notRetrieved)]);
+			node("otherAssessed", ["Reports assessed for eligibility", n(o.assessed)]);
+			node("otherExcluded", [`Reports excluded ${n(o.ftExcluded)}${result.other.reasons.length ? ":" : ""}`,
+				...result.other.reasons.map(([r, v]) => `${r} ${n(v)}`)]);
+			if (o.taPending) node("otherTaPending", ["Records awaiting screening", n(o.taPending)], "pending");
+			if (o.ftPending) node("otherFtPending", ["Reports awaiting assessment", n(o.ftPending)], "pending");
+		}
 		out.push("    end");
 		out.push("    subgraph includedStage[\"Included\"]");
-		node("included", ["Studies included in review", n(c.included), `Reports of included studies ${n(c.included)}`]);
+		node("included", ["Studies included in review", n(total), `Reports of included studies ${n(total)}`]);
 		out.push("    end");
 		out.push(
 			"    identified --> removed",
@@ -485,12 +550,45 @@
 		);
 		if (c.taPending) out.push("    screened -.-> taPending");
 		if (c.ftPending) out.push("    assessed -.-> ftPending");
-		if (c.taPending || c.ftPending) out.push("    classDef pending stroke-dasharray: 5 5");
+		if (o) {
+			if (o.duplicates || o.taExcluded) out.push("    otherIdentified --> otherRemoved");
+			out.push(
+				"    otherIdentified --> otherSought",
+				"    otherSought --> otherNotRetrieved",
+				"    otherSought --> otherAssessed",
+				"    otherAssessed --> otherExcluded",
+				"    otherAssessed --> included",
+			);
+			if (o.taPending) out.push("    otherIdentified -.-> otherTaPending");
+			if (o.ftPending) out.push("    otherAssessed -.-> otherFtPending");
+		}
+		if (c.taPending || c.ftPending || (o && (o.taPending || o.ftPending))) out.push("    classDef pending stroke-dasharray: 5 5");
 		return out.join("\n");
 	}
 
 	function cell(v) {
 		return String(v === undefined || v === null ? "" : v).replace(/\r?\n+/g, " ").replace(/\|/g, "\\|").trim();
+	}
+
+	// The "other methods" column of the counts table (none without such records)
+	function otherRows(other) {
+		if (!other) return [];
+		let o = other.counts;
+		let stage = "其他方法";
+		return [
+			[stage, "Records identified from other methods（引文追蹤、網站等）", o.identified],
+			...other.sources.map(([s, v]) => ["", `└ ${s}${OTHER_SOURCE_LABELS[s] ? `（${OTHER_SOURCE_LABELS[s]}）` : ""}`, v]),
+			...(o.duplicates ? [[stage, "Duplicate records removed（重複）", o.duplicates]] : []),
+			...(o.taExcluded ? [[stage, "Records excluded（標題摘要排除）", o.taExcluded]] : []),
+			...(o.taPending ? [[stage, "Records awaiting screening（尚未篩選／待定）", o.taPending]] : []),
+			[stage, "Reports sought for retrieval", o.sought],
+			[stage, "Reports not retrieved（無法取得全文）", o.notRetrieved],
+			[stage, "Reports assessed for eligibility", o.assessed],
+			[stage, "Reports excluded", o.ftExcluded],
+			...other.reasons.map(([r, v]) => ["", `└ ${r}`, v]),
+			...(o.ftPending ? [[stage, "Reports awaiting assessment（尚未有全文決定）", o.ftPending]] : []),
+			[stage, "Studies included（其他方法）", o.included],
+		];
 	}
 
 	function countsTable(result) {
@@ -508,7 +606,9 @@
 			["全文", "Reports excluded", c.ftExcluded],
 			...result.reasons.map(([r, v]) => ["", `└ ${r}`, v]),
 			...(c.ftPending ? [["全文", "Reports awaiting assessment（尚未有全文決定）", c.ftPending]] : []),
-			["納入", "Studies included in review", c.included],
+			...otherRows(result.other),
+			["納入", "Studies included in review", result.totalIncluded === undefined ? c.included : result.totalIncluded],
+			...(result.other ? [["", "└ 資料庫與登錄庫／其他方法", `${c.included}／${result.other.counts.included}`]] : []),
 		];
 		return ["| 階段 | PRISMA 2020 | n |", "|---|---|---:|", ...rows.map(r => `| ${r.map(cell).join(" | ")} |`)].join("\n");
 	}
@@ -627,6 +727,19 @@
 		].join("\n\n");
 	}
 
+	function otherFrontmatter(other) {
+		if (!other) return {};
+		let o = other.counts;
+		return {
+			prisma_other_identified: o.identified,
+			prisma_other_sought: o.sought,
+			prisma_other_not_retrieved: o.notRetrieved,
+			prisma_other_assessed: o.assessed,
+			prisma_other_excluded: o.ftExcluded,
+			prisma_other_included: o.included,
+		};
+	}
+
 	function frontmatterFor(result, meta) {
 		let c = result.counts;
 		return {
@@ -645,7 +758,8 @@
 			prisma_assessed: c.assessed,
 			prisma_excluded_fulltext: c.ftExcluded,
 			prisma_awaiting_fulltext: c.ftPending,
-			prisma_included: c.included,
+			prisma_included: result.totalIncluded === undefined ? c.included : result.totalIncluded,
+			...otherFrontmatter(result.other),
 			evidence_csv: meta.csvPath || "",
 			notion: meta.notionUrl || "",
 			last_generated: meta.generatedAt || "",
@@ -703,6 +817,7 @@
 			reasonPrefix: get("screening.reasonPrefix"),
 			sourcePrefix: get("screening.sourcePrefix"),
 			reasons: parseReasons(get("screening.reasons")),
+			otherSources: parseSourceList(get("screening.otherSources")),
 		});
 	}
 
@@ -1052,12 +1167,15 @@
 				}
 			}
 			let c = result.counts;
-			line.setText(`辨識 ${c.identified} → 重複 ${c.duplicates} → 篩選 ${c.screened} → 全文評估 ${c.assessed} → 納入 ${c.included}`);
+			let o = result.other && result.other.counts;
+			line.setText(`辨識 ${c.identified} → 重複 ${c.duplicates} → 篩選 ${c.screened} → 全文評估 ${c.assessed} → 納入 ${c.included}`
+				+ (o ? `｜其他方法：辨識 ${o.identified} → 全文評估 ${o.assessed} → 納入 ${o.included}（共納入 ${result.totalIncluded}）` : ""));
 			pw.addDescription(`已寫入：${outputs.join("、") || "（無）"}`);
 			let warns = result.issues.filter(i => i.level === "warn");
 			if (warns.length) pw.addDescription(`⚠️ 一致性檢查有 ${warns.length} 項問題，詳見筆記的「一致性檢查」`);
-			let pending = c.taPending + c.ftPending;
-			if (pending) pw.addDescription(`還有 ${pending} 筆尚未完成篩選（標題摘要 ${c.taPending}、全文 ${c.ftPending}）`);
+			let taPending = c.taPending + (o ? o.taPending : 0);
+			let ftPending = c.ftPending + (o ? o.ftPending : 0);
+			if (taPending + ftPending) pw.addDescription(`還有 ${taPending + ftPending} 筆尚未完成篩選（標題摘要 ${taPending}、全文 ${ftPending}）`);
 			if (settings.notionToken && !useNotion) pw.addDescription("想同步到 Notion：請在設定填入「PRISMA 頁面的 Notion 父頁面」（或文獻比較表的父頁面）。");
 			if (errors.length) {
 				line.setError();
@@ -1194,10 +1312,10 @@
 
 	return {
 		DEFAULT_PREFIX, DEFAULT_REASON_PREFIX, DEFAULT_SOURCE_PREFIX, DEFAULT_REASONS, MAX_MENU_REASONS, NO_REASON, NO_SOURCE,
-		NOTION_ANCHOR, REVIEW_FOLDER,
-		parseReasons, normalizeConfig, stageTag, duplicateTag, reasonTag, decisionTags, readState, isScreeningTag, hasDecision,
+		NOTION_ANCHOR, REVIEW_FOLDER, DEFAULT_OTHER_SOURCES,
+		parseReasons, parseSourceList, isOtherMethod, normalizeConfig, stageTag, duplicateTag, reasonTag, decisionTags, readState, isScreeningTag, hasDecision,
 		planChange, describeState, describeChange,
-		normalizeDOI, normalizeTitle, findDuplicates,
+		normalizeDOI, normalizeTitle, yearOf, findDuplicates,
 		computePrisma, checkCounts, buildMermaid, countsTable, issuesMarkdown, evidenceRow, sortRows, evidenceTable,
 		csvCell, buildCSV, buildReviewSection, frontmatterFor, buildReviewNote, notionBlocks,
 		config, itemRecord, setDecision, renderPaneRow, dedupCollection, generateReport, registerMenus,

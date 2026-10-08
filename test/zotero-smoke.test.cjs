@@ -342,6 +342,8 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	});
 	await vm.runInContext(`startup({ id: "zotero-bridge@bobyu89.github.io", version: "0.1.0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
 	assert.deepEqual(env.menus.map(m => m.target), ["main/library/item", "main/library/collection", "main/menubar/tools", "main/menubar/tools", "main/library/collection",
+		"main/library/item", "main/library/collection", "main/menubar/tools", "main/menubar/tools", "main/menubar/tools",
+		// citation-chase.js
 		"main/library/item", "main/library/collection", "main/menubar/tools"]);
 	assert.equal(env.panes[0].paneID, "zotero-bridge-ai-note");
 
@@ -812,7 +814,8 @@ test("keys come from the login manager; batch confirm shows a cost estimate; 529
 test("settings pane loads and saves secrets through the login manager, never prefs", async () => {
 	let xhtml = fs.readFileSync(path.join(ROOT, "content", "preferences.xhtml"), "utf8");
 	let passwords = [...xhtml.matchAll(/<html:input[^>]*type="password"[^>]*>/g)].map(m => m[0]);
-	assert.equal(passwords.length, 3);
+	// Claude, OpenAI, Notion, NCBI (PubMed watch)
+	assert.equal(passwords.length, 4);
 	for (let tag of passwords) assert.doesNotMatch(tag, /preference=/, tag);
 	assert.doesNotMatch(xhtml, /llm\.anthropicKey|llm\.openaiKey|notion\.token/);
 
@@ -960,6 +963,8 @@ function basePrefs(vault, extra = {}) {
 		"extensions.zotero-bridge.obsidian.folder": "Zotero",
 		"extensions.zotero-bridge.obsidian.filenameFormat": "citekey",
 		"extensions.zotero-bridge.obsidian.createBase": false,
+		// No 研究儀表板.md in the folder listings below (test/dashboard-smoke.test.cjs covers it)
+		"extensions.zotero-bridge.dashboard.autoUpdate": false,
 		"extensions.zotero-bridge.notion.token": "ntn_test",
 		"extensions.zotero-bridge.notion.database": "https://www.notion.so/ws/Default-11111111111111111111111111111111",
 		"extensions.zotero-bridge.routing.rules": JSON.stringify([
@@ -1632,10 +1637,13 @@ test("settings pane: closing it saves a pending key and unregisters its pref obs
 	</div>`);
 	let paneScope = vm.createContext({ Zotero: env.Zotero, window, document: window.document, Event: window.Event, setTimeout, clearTimeout });
 	vm.runInContext(fs.readFileSync(path.join(ROOT, "content", "preferences.js"), "utf8"), paneScope);
+	// Observers the plugin itself keeps until shutdown (e.g. pubmed-watch.js) aren't the pane's
+	let pluginObservers = new Set(registered);
 	window.ZoteroBridgePrefs.init();
 	await env.context.ZB.secrets.get("notionToken");
 	await new Promise(r => setTimeout(r, 0));
-	assert.equal(registered.size, 3, "provider + two usage pref observers");
+	let paneObservers = () => [...registered].filter(o => !pluginObservers.has(o)).length;
+	assert.equal(paneObservers(), 3, "provider + two usage pref observers");
 
 	// Typed, and the window closed before the 600 ms save delay
 	let input = window.document.getElementById("zb-openai-key");
@@ -1643,5 +1651,6 @@ test("settings pane: closing it saves a pending key and unregisters its pref obs
 	input.dispatchEvent(new window.Event("input"));
 	window.document.getElementById("zotero-bridge-prefs").dispatchEvent(new window.Event("unload"));
 	assert.equal(await env.context.ZB.secrets.get("openaiKey"), "sk-typed-then-closed");
-	assert.equal(registered.size, 0, "pref observers left registered after the pane closed");
+	assert.equal(paneObservers(), 0, "pref observers left registered after the pane closed");
+	assert.equal(registered.size, pluginObservers.size, "the plugin's own observers stay until shutdown");
 });

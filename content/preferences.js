@@ -11,6 +11,7 @@
 		"zb-anthropic-key": "anthropicKey",
 		"zb-openai-key": "openaiKey",
 		"zb-notion-token": "notionToken",
+		"zb-ncbi-key": "ncbiKey",
 	};
 	const SAVE_DELAY_MS = 600;
 
@@ -201,9 +202,16 @@
 
 	let observers = null;
 
+	// PubMed watches: the list is drawn by pubmed-watch.js
+	function renderWatches() {
+		let bridge = Zotero.ZoteroBridge;
+		if (bridge && bridge.pubmedWatch) bridge.pubmedWatch.renderPrefs(document);
+	}
+
 	window.ZoteroBridgePrefs = {
 		init() {
 			renderRules();
+			renderWatches();
 			updateProviderBoxes();
 			renderUsage();
 			loadSecrets();
@@ -240,6 +248,21 @@
 			if (!bridge || !ta) return;
 			ta.value = JSON.stringify(bridge.usage.DEFAULT_PRICES, null, 2);
 			ta.dispatchEvent(new Event("input"));
+		},
+
+		addWatch() {
+			let bridge = Zotero.ZoteroBridge;
+			if (!bridge) return;
+			bridge.pubmedWatch.addWatch();
+			renderWatches();
+		},
+
+		async checkWatchesNow() {
+			let bridge = Zotero.ZoteroBridge;
+			if (!bridge) return;
+			await flushSecrets();
+			await bridge.pubmedWatch.runAll();
+			renderWatches();
 		},
 
 		addRule() {

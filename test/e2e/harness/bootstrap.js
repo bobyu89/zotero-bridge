@@ -256,6 +256,9 @@ const TESTS = [
 				status: ["runPass", "prepare", "setItemStatus"],
 				reviewDraft: ["run"],
 				screening: ["setDecision", "generateReport", "registerMenus"],
+				pubmedWatch: ["init", "shutdown", "runAll", "registerMenus"],
+				dashboard: ["update", "afterSync", "registerMenus"],
+				citationChase: ["chaseCollection", "chaseItems", "importChecked", "registerMenus"],
 				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly"],
 			};
 			let missing = [];
@@ -333,6 +336,11 @@ const TESTS = [
 				"zotero-bridge-screening-item": "main/library/item",
 				"zotero-bridge-screening-collection": "main/library/collection",
 				"zotero-bridge-screening-tools": "main/menubar/tools",
+				"zotero-bridge-pubmed-watch-tools": "main/menubar/tools",
+				"zotero-bridge-dashboard-tools": "main/menubar/tools",
+				"zotero-bridge-chase-item": "main/library/item",
+				"zotero-bridge-chase-collection": "main/library/collection",
+				"zotero-bridge-chase-tools": "main/menubar/tools",
 			};
 			d.registered = mine.map(o => `${o.menuID} → ${o.target}`);
 			let problems = [];

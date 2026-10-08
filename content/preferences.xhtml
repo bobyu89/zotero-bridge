@@ -101,6 +101,7 @@
 		<checkbox label="一併同步 Zotero 子筆記" preference="extensions.zotero-bridge.includeNotes"/>
 		<checkbox label="匯出圖片劃線（PDF 圖片／手繪註記的截圖：Obsidian 存到筆記旁的 attachments 資料夾，Notion 上傳成圖片）" preference="extensions.zotero-bridge.images.export"/>
 		<checkbox label="建立「Zotero 文獻庫.base」總表（表格 + 閱讀進度看板，需要 Obsidian 1.14 以上）" preference="extensions.zotero-bridge.obsidian.createBase"/>
+		<checkbox label="手動同步後更新「研究儀表板」筆記（只讀 vault 裡的筆記，不連網、不呼叫 AI；也可從 工具 → 更新研究儀表板）" preference="extensions.zotero-bridge.dashboard.autoUpdate"/>
 	</groupbox>
 
 	<groupbox>
@@ -180,6 +181,60 @@
 		<label value="PRISMA 頁面的 Notion 父頁面（選填；留空時使用文獻比較表的父頁面，頁面也要分享給 integration）："/>
 		<html:input type="text" preference="extensions.zotero-bridge.screening.notionParent" placeholder="https://www.notion.so/..."/>
 		<description class="zb-hint">改了前綴或排除原因後，舊標籤不會自動改名。資料庫來源：在匯入的文獻加上標籤「來源/PubMed」等；沒有標籤時使用條目的「圖書館目錄」（Library Catalog）欄位（例如從 PubMed 匯入的是「PubMed」）。</description>
+		<label value="其他方法的來源（PRISMA 流程圖右側欄；以逗號分隔，留空 = 引文追蹤、網站、機構）："/>
+		<html:input type="text" preference="extensions.zotero-bridge.screening.otherSources" placeholder="引文追蹤, 網站, 機構"/>
+	</groupbox>
+
+	<groupbox>
+		<label><html:h2>引文追蹤（OpenAlex）</html:h2></label>
+		<description>從納入研究查詢參考文獻（往回）與引用它的文獻（往前），列成 Obsidian 候選清單；勾選後再匯入 Zotero。OpenAlex 免費、不需要 API key。</description>
+		<hbox align="center">
+			<label value="Email（OpenAlex polite pool，建議填）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.citationChase.email" placeholder="you@example.com"/>
+		</hbox>
+		<hbox align="center">
+			<label value="方向："/>
+			<menulist preference="extensions.zotero-bridge.citationChase.direction" native="true">
+				<menupopup>
+					<menuitem label="往回＋往前（預設）" value="both"/>
+					<menuitem label="只查參考文獻（往回）" value="backward"/>
+					<menuitem label="只查引用它的文獻（往前）" value="forward"/>
+				</menupopup>
+			</menulist>
+			<label value="每次最多請求："/>
+			<html:input type="text" preference="extensions.zotero-bridge.citationChase.maxRequests" placeholder="100" size="5"/>
+			<label value="每篇每個方向最多："/>
+			<html:input type="text" preference="extensions.zotero-bridge.citationChase.maxPerSeed" placeholder="200" size="5"/>
+		</hbox>
+	</groupbox>
+
+	<groupbox>
+		<label><html:h2>PubMed 新文獻追蹤</html:h2></label>
+		<description>儲存 PubMed 檢索式（可用 MeSH、欄位標記等完整語法），定期把新文獻匯入 Zotero 分類，加上標籤「新文獻」「追蹤/名稱」「來源/PubMed」。手動檢查：工具 → 檢查新文獻（PubMed 追蹤）。</description>
+		<html:div id="zb-pubmed-watches"/>
+		<hbox>
+			<button label="新增追蹤" oncommand="ZoteroBridgePrefs.addWatch()"/>
+			<button label="立即檢查全部" oncommand="ZoteroBridgePrefs.checkWatchesNow()"/>
+		</hbox>
+		<hbox align="center">
+			<label value="Email（NCBI 要求附上聯絡信箱）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.pubmedWatch.email" placeholder="you@example.com"/>
+		</hbox>
+		<label value="NCBI API key（選填；ncbi.nlm.nih.gov 帳號設定 → API Key Management，每秒可查詢 10 次而非 3 次）："/>
+		<html:input id="zb-ncbi-key" type="password" autocomplete="off"/>
+		<hbox align="center">
+			<label value="每個追蹤每次最多匯入："/>
+			<html:input type="number" min="1" max="200" preference="extensions.zotero-bridge.pubmedWatch.maxPerWatch" style="min-width: 5em; width: 5em"/>
+			<label value="篇（其餘留待下次檢查）"/>
+		</hbox>
+		<hbox align="center">
+			<checkbox label="自動檢查：Zotero 啟動後與每隔" preference="extensions.zotero-bridge.pubmedWatch.autoCheck"/>
+			<html:input type="number" min="1" preference="extensions.zotero-bridge.pubmedWatch.intervalHours" style="min-width: 4em; width: 4em"/>
+			<label value="小時"/>
+		</hbox>
+		<checkbox label="在 Obsidian 建立每日新文獻清單（預設子資料夾的 新文獻/YYYY-MM-DD.md）" preference="extensions.zotero-bridge.pubmedWatch.digest"/>
+		<checkbox label="手動檢查後為新文獻產生 AI 筆記並同步（會產生 API 費用；自動檢查不會呼叫 AI）" preference="extensions.zotero-bridge.pubmedWatch.runAI"/>
+		<description class="zb-hint">已在文獻庫的文獻（Extra 有相同 PMID 或 DOI 相同）不會重複匯入；匯入後移到垃圾桶的也不會再匯入。每次只查上次檢查之後加入 PubMed 的文獻（Entrez Date）。</description>
 	</groupbox>
 
 	<groupbox>
