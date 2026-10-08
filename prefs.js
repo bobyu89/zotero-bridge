@@ -16,6 +16,10 @@ pref("extensions.zotero-bridge.llm.effort", "medium");
 pref("extensions.zotero-bridge.llm.openaiModel", "gpt-5.5");
 pref("extensions.zotero-bridge.llm.openaiBaseURL", "");
 pref("extensions.zotero-bridge.llm.fullTextLimit", "150000");
+// Scanned PDFs without a text layer are sent to the AI as a file, up to these limits (content/scanned.js)
+pref("extensions.zotero-bridge.llm.sendScannedPDF", true);
+pref("extensions.zotero-bridge.llm.pdfMaxMB", "20");
+pref("extensions.zotero-bridge.llm.pdfMaxPages", "100");
 pref("extensions.zotero-bridge.llm.systemPrompt", "");
 pref("extensions.zotero-bridge.llm.synthesisPrompt", "");
 pref("extensions.zotero-bridge.autoSync", false);

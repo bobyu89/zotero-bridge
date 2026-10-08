@@ -39,6 +39,17 @@
 		"Citation Key": { rich_text: {} },
 		"Zotero Key": { rich_text: {} },
 		"Summary": { rich_text: {} },
+		// Full-text status (scanned.js): is the PDF a scan without a text layer?
+		"Full Text": {
+			select: {
+				options: [
+					{ name: "ok", color: "green" },
+					{ name: "partial", color: "yellow" },
+					{ name: "none", color: "red" },
+					{ name: "no_pdf", color: "gray" },
+				],
+			},
+		},
 		// Structured data from the AI note (filter e.g. Study Design = RCT and Sample Size > 100)
 		"Study Design": { select: {} },
 		"Sample Size": { number: {} },
@@ -295,7 +306,8 @@
 	 * Build page properties, only for properties that exist in the schema with the expected type.
 	 * values: { title, authors, year, date, publication, volume, issue, pages, publisher, itemType, doi,
 	 *           url, abstract, zotero, obsidian, tags, collections, library, citationKey, zoteroKey,
-	 *           summary, apa, dateAdded, lastSynced, study }
+	 *           summary, apa, dateAdded, lastSynced, study, fullText }
+	 * fullText: full-text status of the PDF ("ok" | "partial" | "none" | "no_pdf", scanned.js)
 	 * study: normalised structured data from the AI note (ZB.llm.normalizeStudyData). When it is
 	 * absent the structured columns are left untouched, so a note without the JSON block doesn't
 	 * wipe values from an earlier sync.
@@ -329,6 +341,7 @@
 		set("Citation Key", "rich_text", { rich_text: rt(v.citationKey) });
 		set("Zotero Key", "rich_text", { rich_text: rt(v.zoteroKey) });
 		set("Summary", "rich_text", { rich_text: rt(v.summary) });
+		set("Full Text", "select", { select: v.fullText ? { name: optionName(v.fullText) } : null });
 		let s = v.study;
 		if (s) {
 			let select = x => ({ select: x ? { name: optionName(x) } : null });

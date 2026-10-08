@@ -83,7 +83,7 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 - 「Codex」系列是寫程式專用模型。整理文獻用一般模型效果較好，所以預設 `gpt-5.5`；想用 Codex 模型可以自行填入模型名稱。
 - **全文最多送出字元數**：預設 150,000 字元。超過會截斷，筆記的 frontmatter 會標記 `fulltext_truncated: true`，也會告訴 LLM 後段沒有提供。設成 0 表示只送摘要與註記，較省錢。
 - **AI 也看圖片劃線**（預設關閉）：把圖片劃線與手繪註記的截圖一起傳給 Claude，見[圖片劃線](#圖片劃線表格圖)。
-- 一次替超過 5 篇文獻產生 AI 筆記前會先跳出確認視窗；有用量紀錄時會附上預估費用（依過去呼叫的平均 tokens 估算）。
+- 一次替超過 5 篇文獻產生 AI 筆記前會先跳出確認視窗；有用量紀錄時會附上預估費用（依過去呼叫的平均 tokens 估算；掃描版 PDF 直接傳給 AI 時用量大得多，預估可能偏低，見[掃描版 PDF](#掃描版-pdf沒有文字層)）。
 - API 暫時忙碌或網路中斷（HTTP 408／409／429／500／502／503／504、Claude 的 529 overloaded）會自動重試最多 4 次，間隔以指數退避並遵守伺服器的 `retry-after`；金鑰錯誤（401）、請求錯誤（400）或模型拒絕處理不會重試。
 - **本月 AI 用量**：設定頁顯示本月呼叫次數、tokens 與估計費用（美元），可重設；每次 AI 執行後，進度視窗也會顯示一行用量摘要。價格表（每百萬 tokens 美元）內建 `claude-opus-5-5` $4／$20、`claude-sonnet-5-5` $2／$10、`claude-haiku-4-5` $1／$5，可以在設定修改；OpenAI 模型沒有內建價格，只顯示 tokens（可自行加入價格）。估計值僅供參考，實際金額以服務商帳單為準。
 
@@ -122,6 +122,27 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 - **不想接續**：**工具 → 放棄未完成的 Zotero Bridge 同步**。
 
 開始新的多篇同步時，會取代上一次未完成的紀錄。單篇同步和自動同步不會記錄。
+
+### 掃描版 PDF（沒有文字層）
+
+舊文獻、圖書館掃描或部分出版社的 PDF 只是一張張頁面影像，Zotero 讀不到文字。以前這種文獻的 AI 筆記只靠摘要寫成，看起來卻像讀過全文；現在插件會先判斷每篇文獻的全文狀況：
+
+| `full_text`（Obsidian）／「Full Text」（Notion） | 意思 | 判斷方式 |
+|---|---|---|
+| `ok` | 有全文 | PDF（或 EPUB、網頁快照）有文字層 |
+| `partial` | 部分掃描 | 平均每頁不到 600 個字元（不含空白），通常是大部分頁面為掃描影像 |
+| `none` | 掃描版（沒有文字層） | 平均每頁不到 100 個字元：完全沒有文字，或只有出版社的下載浮水印 |
+| `no_pdf` | 沒有 PDF | 沒有 PDF／EPUB／網頁快照附件，或檔案不在這台電腦上 |
+
+- 頁數取自 Zotero 的全文索引；還沒建索引的 PDF 由 Zotero 的 PDF 工具讀頁數。讀不到頁數時，只有幾乎完全沒有文字（少於 20 字元）才判為 `none`。一篇文獻有多個附件時取最好的那個（例如本文有文字、補充資料是掃描檔 → `ok`）。
+- 每次同步都會更新 `full_text` 與 Notion 的「Full Text」欄位（由插件管理，手動修改會被覆寫），可以在 Obsidian Bases 或 Notion 篩選出需要處理的掃描檔。舊的 Notion 資料庫按設定裡的「測試連線並補齊資料庫欄位」即可加上這個欄位。
+- 產生 AI 筆記時，進度視窗會在該篇顯示 ⚠️，例如「掃描版 PDF（沒有文字層），AI 只讀了摘要與劃線」或「沒有 PDF 全文，AI 只讀了摘要」。
+- **掃描版 PDF 直接傳給 AI 讀**（設定，預設開啟）：`none` 或 `partial` 的 PDF 會把檔案本身傳給 AI，由 AI 看每一頁的影像（Claude；OpenAI 官方 API 也支援，使用自訂 API base URL 時不傳）。上限 20 MB、100 頁（低於 Claude API 的 32 MB 請求上限與 200k context 模型的 100 頁上限），超過就改用摘要與劃線並在進度視窗說明；上限可在 Zotero 的進階設定（Config Editor）修改 `extensions.zotero-bridge.llm.pdfMaxMB`、`extensions.zotero-bridge.llm.pdfMaxPages`。API 仍拒絕這份 PDF 時（例如頁數超過模型上限），會自動改用摘要與劃線重跑一次。
+  - **比較耗 token**：每一頁都會轉成影像送給 AI 計費，比只送文字貴得多，頁數越多越明顯。批次確認視窗的預估費用是依過去呼叫的平均用量估算，遇到掃描檔可能**低估**。
+  - AI 讀的是頁面影像，插件沒有文字可以比對，所以「可引用的句子」中在摘要與劃線裡也找不到的句子會標 ⚠️ 無全文可查證（不是 ✅ 也不是「未在全文中找到」），請自行對照原文。
+- **比較省錢的做法是讓 PDF 有文字層**：用 OCR 工具（例如 [OCRmyPDF](https://ocrmypdf.readthedocs.io/)：`ocrmypdf --language eng+chi_tra 掃描.pdf 輸出.pdf`，或 Adobe Acrobat 的「辨識文字」）處理後放回 Zotero 取代原檔，或從出版社／資料庫重新下載有文字的版本。Zotero 重新建立全文索引後（必要時在附件上按右鍵 → 重新索引項目），再「重新產生 AI 筆記」即可。
+- **沒有東西可讀就不呼叫 AI**：沒有全文、沒有傳 PDF、沒有摘要，也沒有劃線或筆記時，插件會略過這篇的 AI 筆記（進度視窗顯示原因），避免 AI 只憑標題編出內容；Notion／Obsidian 仍照常同步。
+- 「全文最多送出字元數」設成 0 時，表示你選擇不送全文，插件也不會傳 PDF，也不顯示上述提示。
 
 ### 圖片劃線（表格、圖）
 
@@ -260,6 +281,7 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi
 | `content/zotero-adapter.js` | 讀取 Zotero 條目、註記、全文、APA；存 AI 筆記 |
 | `content/llm.js` | 筆記模板、嚴格評讀與結構化資料的提示詞、JSON 區塊解析、Claude／OpenAI API（重試、token 用量） |
 | `content/verify.js` | 可引用句查證（與全文、劃線比對） |
+| `content/scanned.js` | 掃描版 PDF：全文狀態判斷（`full_text`）、傳 PDF 給 AI、沒有內容時略過 AI |
 | `content/secrets.js` | API key／Notion token 存取（Gecko 密碼管理員） |
 | `content/usage.js` | AI 用量月報、價格表與費用估算 |
 | `content/notion.js` | Notion API（2025-09-03，data sources） |
