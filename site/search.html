@@ -216,6 +216,8 @@ tr:last-child td { border-bottom: 0; }
 .st.sure { background: var(--ok-soft); color: var(--ok); }
 .st.guess { background: var(--warn-soft); color: var(--warn); }
 .st.home { background: var(--chip); color: var(--muted); }
+.ci { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.ci.blocked { color: var(--warn); }
 
 #toast {
   position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); transform: translate(-50%, 16px);
@@ -360,7 +362,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
         </div>
         <div class="out">
           <div class="oh"><h3>CINAHL（EBSCO）</h3>
-            <div class="row"><button class="btn small ghost" type="button" data-copy="cinahl">複製</button><button class="btn small ghost" type="button" id="runCinahl">複製並開啟 CINAHL</button></div>
+            <div class="row"><button class="btn small ghost" type="button" data-copy="cinahl">複製</button><button class="btn small ghost" type="button" id="runCinahl">在 CINAHL 執行</button></div>
           </div>
           <pre class="q empty" id="out-cinahl">—</pre>
           <ul id="cinahlNotes"></ul>
@@ -426,7 +428,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
   <details class="more statuscard" id="statusCard">
     <summary>網址格式與狀態（連結壞了請回報）</summary>
     <div class="body">
-      <p>這些搜尋網址是依各網站公開的格式寫的，開發時無法逐一連線實測。<span class="st sure">確定</span>＝網站公開或長期通用的搜尋網址；<span class="st guess">推測</span>＝依網站目前的網址推測，同時會複製檢索詞，網址失效時直接貼上即可；<span class="st home">首頁</span>＝網站沒有可靠的搜尋網址，開首頁並複製檢索詞。發現打不開或沒帶入檢索詞，請到 <a href="https://github.com/bobyu89/zotero-bridge/issues" target="_blank" rel="noopener">GitHub Issues</a> 回報。</p>
+      <p>每個網址都在 GitHub Actions 上實際連線測試（<span id="ciDate">2026-10-08</span>，之後每週自動重測）。<span class="st sure">確定</span>＝實測帶得進檢索詞的搜尋網址；<span class="st guess">推測</span>＝要先登入、無法實測到結果頁，開啟時也會複製檢索詞，沒帶入就直接貼上；<span class="st home">首頁</span>＝網站沒有可靠的搜尋網址，開首頁並複製檢索詞。「CI 實測」：OK＝有結果頁（首頁類＝首頁可開）；需登入＝轉到訂閱資料庫的登入頁（預期）；被擋＝網站擋掉雲端主機的自動連線，無法自動判斷，在一般瀏覽器通常正常。發現打不開或沒帶入檢索詞，請到 <a href="https://github.com/bobyu89/zotero-bridge/issues" target="_blank" rel="noopener">GitHub Issues</a> 回報。</p>
       <div class="table-wrap"><table id="statusTable"><thead><tr><th>資料庫</th><th>狀態</th><th>權限</th><th>開啟的網址（{q}＝檢索詞）</th></tr></thead><tbody></tbody></table></div>
     </div>
   </details>
@@ -442,30 +444,34 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
 <script>
 /*
  * 醫學文獻快速搜尋：資料庫網址格式與狀態
- * 開發環境無法連到這些網站，所有網址都沒有實際連線測試。
- *   確定 = 網站公開或長期通用的搜尋網址（GET 參數帶入檢索詞）
- *   推測 = 依目前網址推測；開啟搜尋網址，同時把檢索詞複製到剪貼簿當備案
+ * 每個網址都由 test/live/check-links.mjs 實際連線測試（.github/workflows/link-check.yml，每週一次；
+ * 外掛 content/search-links.js 的同名資料庫用同一個網址）。ci = 最近一次（CI_DATE）的結果：
+ *   ok 有搜尋結果頁（首頁類＝首頁可開）／login 轉到訂閱登入頁（預期）／blocked 網站擋雲端主機，無法自動判斷
+ *   確定 = 網站公開或長期通用、且實測帶得進檢索詞的搜尋網址（GET 參數帶入檢索詞）
+ *   推測 = 無法實測到結果頁（例如要先登入）；開啟搜尋網址，同時把檢索詞複製到剪貼簿當備案
  *   首頁 = 沒有可靠的 GET 搜尋網址（需登入、需學校代碼、或用 session）；開首頁＋複製檢索詞
  *
- *   PubMed                 確定  https://pubmed.ncbi.nlm.nih.gov/?term={q}
- *   MeSH Database          確定  https://www.ncbi.nlm.nih.gov/mesh/?term={q}
- *   CINAHL (EBSCO)         首頁  https://search.ebscohost.com/                 需機構權限（搜尋連結需要學校的 EBSCO 資料庫代碼）
- *   Embase                 首頁  https://www.embase.com/                       需機構權限
- *   Google Scholar         確定  https://scholar.google.com/scholar?q={q}
- *   Europe PMC             確定  https://europepmc.org/search?query={q}
- *   Semantic Scholar       確定  https://www.semanticscholar.org/search?q={q}
- *   Cochrane Library       首頁  https://www.cochranelibrary.com/advanced-search  摘要免費、全文需訂閱
- *   TRIP Database          推測  https://www.tripdatabase.com/Searchresult?criteria={q}
- *   JBI EBP Database       首頁  https://ovidsp.ovid.com/                      需機構權限（Ovid 平台）
- *   UpToDate               推測  https://www.uptodate.com/contents/search?search={q}  需機構權限
- *   NICE                   推測  https://www.nice.org.uk/search?q={q}
- *   CDC                    推測  https://search.cdc.gov/search/?query={q}       （CDC 網站搜尋表單以 GET 送出 query 欄位）
- *   Google 指引 PDF        確定  https://www.google.com/search?q={q} guideline filetype:pdf
- *   華藝線上圖書館         首頁  https://www.airitilibrary.com/                 摘要免費、全文需訂閱
- *   臺灣博碩士論文知識加值系統 首頁 https://ndltd.ncl.edu.tw/                  （網址含 session，無固定搜尋網址）
- *   國家圖書館期刊文獻資訊網 首頁 https://tpl.ncl.edu.tw/
- *   ClinicalTrials.gov     確定  https://clinicaltrials.gov/search?term={q}
- *   WHO ICTRP              首頁  https://trialsearch.who.int/                   （搜尋用表單回傳，無 GET 網址）
+ *   PubMed                 確定  https://pubmed.ncbi.nlm.nih.gov/?term={q}                    CI：OK
+ *   MeSH Database          確定  https://www.ncbi.nlm.nih.gov/mesh/?term={q}                  CI：OK
+ *   CINAHL (EBSCO)         推測  https://search.ebscohost.com/login.aspx?direct=true&db=rzh&bquery={q}&type=1&searchMode=And&site=ehost-live
+ *                                需機構權限；CI：轉到 EBSCO 登入（預期）。db=rzh 是 CINAHL Plus with Full Text
+ *   Embase                 首頁  https://www.embase.com/                                     需機構權限；CI：需登入
+ *   Google Scholar         確定  https://scholar.google.com/scholar?q={q}                     CI：OK（常被擋）
+ *   Europe PMC             確定  https://europepmc.org/search?query={q}                       CI：被擋（Cloudflare）
+ *   Semantic Scholar       確定  https://www.semanticscholar.org/search?q={q}                 CI：被擋（AWS WAF）
+ *   Cochrane Library       確定  https://www.cochranelibrary.com/search?p_p_id=scolarissearchresultsportlet_WAR_scolarissearchresults&p_p_lifecycle=0&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchType=basic&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchBy=6&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchText={q}
+ *                                CI：OK（Liferay 搜尋參數，和外掛相同）；摘要免費、全文需訂閱
+ *   TRIP Database          確定  https://www.tripdatabase.com/Searchresult?criteria={q}       CI：OK
+ *   JBI EBP Database       首頁  https://ovidsp.ovid.com/                                    需機構權限（Ovid）；CI：需登入
+ *   UpToDate               確定  https://www.uptodate.com/contents/search?search={q}          需機構權限（結果清單免登入）；CI：OK
+ *   NICE                   確定  https://www.nice.org.uk/search?q={q}                         CI：OK
+ *   CDC                    確定  https://search.cdc.gov/search/?query={q}                     CI：OK
+ *   Google 指引 PDF        確定  https://www.google.com/search?q={q} guideline filetype:pdf   CI：被擋（Google）
+ *   華藝線上圖書館         首頁  https://www.airitilibrary.com/                 搜尋網址是含時間戳記的 JSON，沒有固定格式；CI：OK
+ *   臺灣博碩士論文知識加值系統 首頁 https://ndltd.ncl.edu.tw/                  （網址含 session 與驗證碼，無固定搜尋網址）；CI：OK
+ *   國家圖書館期刊文獻資訊網 首頁 https://tpl.ncl.edu.tw/                       CI：被擋（擋境外連線）
+ *   ClinicalTrials.gov     確定  https://clinicaltrials.gov/search?term={q}                   CI：OK
+ *   WHO ICTRP              首頁  https://trialsearch.who.int/                   （?SearchAll= 只找到完全相符的片語，結果遠少於搜尋框）；CI：OK
  *
  * EZproxy 前綴只套用到 access === 'inst'（需機構權限）的來源。
  */
@@ -481,29 +487,30 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
 
   // access: free 免費／partial 摘要免費、全文需訂閱／inst 需機構權限
   // status: sure 確定／guess 推測（開搜尋網址＋複製）／home 開首頁＋複製
+  // ci: 最近一次實際連線測試（CI_DATE）的結果 ok／login（需登入，預期）／blocked（網站擋雲端主機，無法判斷）
   var SOURCES = [
-    { id: 'pubmed', name: 'PubMed', group: 'en', access: 'free', status: 'sure', home: 'https://pubmed.ncbi.nlm.nih.gov/', search: 'https://pubmed.ncbi.nlm.nih.gov/?term={q}' },
-    { id: 'mesh', name: 'MeSH Database', group: 'en', access: 'free', status: 'sure', home: 'https://www.ncbi.nlm.nih.gov/mesh/', search: 'https://www.ncbi.nlm.nih.gov/mesh/?term={q}', meta: '查標準主題詞' },
-    { id: 'cinahl', name: 'CINAHL', group: 'en', access: 'inst', status: 'home', home: 'https://search.ebscohost.com/', meta: 'EBSCO' },
-    { id: 'embase', name: 'Embase', group: 'en', access: 'inst', status: 'home', home: 'https://www.embase.com/' },
-    { id: 'scholar', name: 'Google Scholar', group: 'en', access: 'free', status: 'sure', home: 'https://scholar.google.com/', search: 'https://scholar.google.com/scholar?q={q}' },
-    { id: 'europepmc', name: 'Europe PMC', group: 'en', access: 'free', status: 'sure', home: 'https://europepmc.org/', search: 'https://europepmc.org/search?query={q}', meta: '含免費全文' },
-    { id: 'semantic', name: 'Semantic Scholar', group: 'en', access: 'free', status: 'sure', home: 'https://www.semanticscholar.org/', search: 'https://www.semanticscholar.org/search?q={q}' },
+    { id: 'pubmed', name: 'PubMed', group: 'en', access: 'free', status: 'sure', ci: 'ok', home: 'https://pubmed.ncbi.nlm.nih.gov/', search: 'https://pubmed.ncbi.nlm.nih.gov/?term={q}' },
+    { id: 'mesh', name: 'MeSH Database', group: 'en', access: 'free', status: 'sure', ci: 'ok', home: 'https://www.ncbi.nlm.nih.gov/mesh/', search: 'https://www.ncbi.nlm.nih.gov/mesh/?term={q}', meta: '查標準主題詞' },
+    { id: 'cinahl', name: 'CINAHL', group: 'en', access: 'inst', status: 'guess', ci: 'login', home: 'https://search.ebscohost.com/', search: 'https://search.ebscohost.com/login.aspx?direct=true&db=rzh&bquery={q}&type=1&searchMode=And&site=ehost-live', meta: 'EBSCO・CINAHL Plus' },
+    { id: 'embase', name: 'Embase', group: 'en', access: 'inst', status: 'home', ci: 'login', home: 'https://www.embase.com/' },
+    { id: 'scholar', name: 'Google Scholar', group: 'en', access: 'free', status: 'sure', ci: 'ok', home: 'https://scholar.google.com/', search: 'https://scholar.google.com/scholar?q={q}' },
+    { id: 'europepmc', name: 'Europe PMC', group: 'en', access: 'free', status: 'sure', ci: 'blocked', home: 'https://europepmc.org/', search: 'https://europepmc.org/search?query={q}', meta: '含免費全文' },
+    { id: 'semantic', name: 'Semantic Scholar', group: 'en', access: 'free', status: 'sure', ci: 'blocked', home: 'https://www.semanticscholar.org/', search: 'https://www.semanticscholar.org/search?q={q}' },
 
-    { id: 'cochrane', name: 'Cochrane Library', group: 'ebp', access: 'partial', status: 'home', home: 'https://www.cochranelibrary.com/advanced-search', meta: '開進階搜尋' },
-    { id: 'trip', name: 'TRIP Database', group: 'ebp', access: 'free', status: 'guess', home: 'https://www.tripdatabase.com/', search: 'https://www.tripdatabase.com/Searchresult?criteria={q}' },
-    { id: 'jbi', name: 'JBI EBP Database', group: 'ebp', access: 'inst', status: 'home', home: 'https://ovidsp.ovid.com/', meta: 'Ovid' },
-    { id: 'uptodate', name: 'UpToDate', group: 'ebp', access: 'inst', status: 'guess', home: 'https://www.uptodate.com/', search: 'https://www.uptodate.com/contents/search?search={q}' },
-    { id: 'nice', name: 'NICE', group: 'ebp', access: 'free', status: 'guess', home: 'https://www.nice.org.uk/', search: 'https://www.nice.org.uk/search?q={q}', meta: '英國臨床指引' },
-    { id: 'cdc', name: 'CDC', group: 'ebp', access: 'free', status: 'guess', home: 'https://www.cdc.gov/', search: 'https://search.cdc.gov/search/?query={q}', meta: '美國疾管署' },
-    { id: 'gguide', name: 'Google 指引 PDF', group: 'ebp', access: 'free', status: 'sure', home: 'https://www.google.com/', search: 'https://www.google.com/search?q={q}', suffix: ' guideline filetype:pdf', meta: '加上 guideline filetype:pdf' },
+    { id: 'cochrane', name: 'Cochrane Library', group: 'ebp', access: 'partial', status: 'sure', ci: 'ok', home: 'https://www.cochranelibrary.com/', search: 'https://www.cochranelibrary.com/search?p_p_id=scolarissearchresultsportlet_WAR_scolarissearchresults&p_p_lifecycle=0&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchType=basic&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchBy=6&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchText={q}', meta: '系統性回顧' },
+    { id: 'trip', name: 'TRIP Database', group: 'ebp', access: 'free', status: 'sure', ci: 'ok', home: 'https://www.tripdatabase.com/', search: 'https://www.tripdatabase.com/Searchresult?criteria={q}' },
+    { id: 'jbi', name: 'JBI EBP Database', group: 'ebp', access: 'inst', status: 'home', ci: 'login', home: 'https://ovidsp.ovid.com/', meta: 'Ovid' },
+    { id: 'uptodate', name: 'UpToDate', group: 'ebp', access: 'inst', status: 'sure', ci: 'ok', home: 'https://www.uptodate.com/', search: 'https://www.uptodate.com/contents/search?search={q}' },
+    { id: 'nice', name: 'NICE', group: 'ebp', access: 'free', status: 'sure', ci: 'ok', home: 'https://www.nice.org.uk/', search: 'https://www.nice.org.uk/search?q={q}', meta: '英國臨床指引' },
+    { id: 'cdc', name: 'CDC', group: 'ebp', access: 'free', status: 'sure', ci: 'ok', home: 'https://www.cdc.gov/', search: 'https://search.cdc.gov/search/?query={q}', meta: '美國疾管署' },
+    { id: 'gguide', name: 'Google 指引 PDF', group: 'ebp', access: 'free', status: 'sure', ci: 'blocked', home: 'https://www.google.com/', search: 'https://www.google.com/search?q={q}', suffix: ' guideline filetype:pdf', meta: '加上 guideline filetype:pdf' },
 
-    { id: 'airiti', name: '華藝線上圖書館', group: 'zh', access: 'partial', status: 'home', home: 'https://www.airitilibrary.com/', meta: 'Airiti Library' },
-    { id: 'ndltd', name: '臺灣博碩士論文知識加值系統', group: 'zh', access: 'free', status: 'home', home: 'https://ndltd.ncl.edu.tw/', meta: '國圖・學位論文' },
-    { id: 'tpi', name: '國家圖書館期刊文獻資訊網', group: 'zh', access: 'free', status: 'home', home: 'https://tpl.ncl.edu.tw/', meta: '國圖・期刊索引' },
+    { id: 'airiti', name: '華藝線上圖書館', group: 'zh', access: 'partial', status: 'home', ci: 'ok', home: 'https://www.airitilibrary.com/', meta: 'Airiti Library' },
+    { id: 'ndltd', name: '臺灣博碩士論文知識加值系統', group: 'zh', access: 'free', status: 'home', ci: 'ok', home: 'https://ndltd.ncl.edu.tw/', meta: '國圖・學位論文' },
+    { id: 'tpi', name: '國家圖書館期刊文獻資訊網', group: 'zh', access: 'free', status: 'home', ci: 'blocked', home: 'https://tpl.ncl.edu.tw/', meta: '國圖・期刊索引' },
 
-    { id: 'ctgov', name: 'ClinicalTrials.gov', group: 'trials', access: 'free', status: 'sure', home: 'https://clinicaltrials.gov/', search: 'https://clinicaltrials.gov/search?term={q}' },
-    { id: 'ictrp', name: 'WHO ICTRP', group: 'trials', access: 'free', status: 'home', home: 'https://trialsearch.who.int/', meta: '各國試驗登錄' }
+    { id: 'ctgov', name: 'ClinicalTrials.gov', group: 'trials', access: 'free', status: 'sure', ci: 'ok', home: 'https://clinicaltrials.gov/', search: 'https://clinicaltrials.gov/search?term={q}' },
+    { id: 'ictrp', name: 'WHO ICTRP', group: 'trials', access: 'free', status: 'home', ci: 'ok', home: 'https://trialsearch.who.int/', meta: '各國試驗登錄' }
   ];
 
   var PRESETS = [
@@ -517,6 +524,8 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
   var ACCESS_LABEL = { free: '免費', partial: '摘要免費・全文需訂閱', inst: '🔒 需機構權限' };
   var CHIP_ACCESS = { free: '免費', partial: '摘要免費', inst: '🔒 需權限' };
   var STATUS_LABEL = { sure: '確定', guess: '推測', home: '首頁' };
+  var CI_DATE = '2026-10-08';
+  var CI_LABEL = { ok: 'OK', login: '需登入', blocked: '被擋' };
 
   // 常見護理詞對照：只用來提示英文關鍵字，不是翻譯
   var GLOSSARY = [
@@ -721,7 +730,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
   }
 
   var api = {
-    GROUPS: GROUPS, SOURCES: SOURCES, PRESETS: PRESETS, GLOSSARY: GLOSSARY, KEYS: KEYS,
+    GROUPS: GROUPS, SOURCES: SOURCES, PRESETS: PRESETS, GLOSSARY: GLOSSARY, KEYS: KEYS, CI_DATE: CI_DATE, CI_LABEL: CI_LABEL,
     hasCJK: hasCJK, getSource: getSource, needsProxy: needsProxy, wrapProxy: wrapProxy, buildUrl: buildUrl,
     splitTerms: splitTerms, buildPico: buildPico, glossaryHints: glossaryHints,
     normalizeSaved: normalizeSaved, mergeSaved: mergeSaved,
@@ -980,7 +989,7 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
     var copied = copyText(lastPico.cinahl);
     var w = api.open(r.url);
     copied.then(function (ok) {
-      toast(!w ? '瀏覽器擋下了新分頁，請允許彈出式視窗' : ok ? '已複製檢索詞，登入 EBSCO 選 CINAHL 後貼上' : '已開啟 EBSCO；無法自動複製，請手動複製檢索式');
+      toast(!w ? '瀏覽器擋下了新分頁，請允許彈出式視窗' : ok ? '已開啟 CINAHL 並複製檢索式；登入後沒有帶入檢索式就貼上' : '已開啟 CINAHL；無法自動複製，請手動複製檢索式');
     });
   });
   $('usePlainBtn').addEventListener('click', function () {
@@ -1091,11 +1100,13 @@ footer { font-size: 13px; color: var(--muted); display: grid; gap: 4px; }
   });
 
   // ---------- 網址格式表 ----------
+  $('ciDate').textContent = CI_DATE;
   var tb = $('statusTable').tBodies[0];
   SOURCES.forEach(function (s) {
     var tr = doc.createElement('tr');
     var td1 = doc.createElement('td'); td1.textContent = s.name;
     var td2 = doc.createElement('td'); var st = doc.createElement('span'); st.className = 'st ' + s.status; st.textContent = STATUS_LABEL[s.status]; td2.appendChild(st);
+    if (CI_LABEL[s.ci]) { var ci = doc.createElement('span'); ci.className = 'ci ' + s.ci; ci.textContent = 'CI 實測：' + CI_LABEL[s.ci]; td2.appendChild(ci); }
     var td3 = doc.createElement('td'); td3.textContent = CHIP_ACCESS[s.access].replace('🔒 ', '');
     var td4 = doc.createElement('td'); var c = doc.createElement('code');
     c.textContent = s.status === 'home' || !s.search ? s.home : s.search + (s.suffix ? '（＋' + s.suffix.trim() + '）' : '');

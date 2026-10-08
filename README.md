@@ -293,6 +293,7 @@ PRISMA 2020 要求報告「其他方法」找到的文獻，最常見的是引�
 - 以 DOI（或 Extra 欄的 `PMID: …`）找到該研究在 OpenAlex 的資料，再查它引用的文獻與引用它的文獻；兩者都沒有的研究會標示「沒有 DOI 或 PMID，無法查詢」。
 - 查詢在背景進行（每秒最多 5 次請求），進度視窗顯示目前查到第幾篇，不會卡住 Zotero。每次最多 100 次請求，每篇研究每個方向最多 200 篇（依被引次數由高到低）；超過時會在筆記標示「已達上限」。可在 設定 → 引文追蹤（OpenAlex）調整，也可以只查往回或往前。
 - 建議在設定填入 email：OpenAlex 會把帶 email 的請求放到回應較穩定的 polite pool（email 只會送給 OpenAlex）。
+- CI 實測 2026-10-08：不需 API key 仍可使用；OpenAlex 的回應標頭顯示每個 IP 每天 1000 次請求的免費額度（插件每次最多 100 次）。用到的查詢方式（`works/doi:`、`works/pmid:`、`filter=cites:`／`cited_by:`、`select=`、`sort=cited_by_count:desc`、`per-page=200`、cursor 分頁、`mailto=`）都實際連線驗證過。
 
 **2. 候選清單**：`Zotero/Reviews/<分類名稱> 引文追蹤.md`
 - **查詢結果**：每篇納入研究找到幾篇參考文獻／被引文獻、有沒有查詢失敗
@@ -315,7 +316,7 @@ PRISMA 2020 要求報告「其他方法」找到的文獻，最常見的是引�
 把常用的醫學資料庫做成一鍵搜尋連結，不用每次開資料庫、貼題名或重打關鍵字。連結出現在四個地方：
 
 **1. 條目右鍵 → 在醫學資料庫搜尋**：用這篇文獻找它在各資料庫的紀錄（找全文、看被引用、確認收錄）。
-- PubMed：有 PMID（Extra 欄的 `PMID: …`）直接開啟該篇；沒有時用 DOI（`10.xxxx/…[doi]`），再沒有就用題名（`"題名"[ti]`）。
+- PubMed：有 PMID（Extra 欄的 `PMID: …`）直接開啟該篇；沒有時用 DOI（`10.xxxx/…[doi]`），再沒有就用題名的每個字（`Hospital[ti] AND nurse[ti] AND staffing[ti] …`，最多 10 個字）。整句題名加引號（`"題名"[ti]`）在 PubMed 只比對片語索引，實測連原文題名都找不到，所以不用。
 - Europe PMC 用 PMID／DOI／題名；CINAHL 用 `TI "題名"`；其他資料庫用加引號的題名。
 - **PubMed 相似文獻**（有 PMID 時）：PubMed 的 Similar articles。
 - 選單只列前 8 個（可在設定改成更少）；其他在「**更多資料庫…**」清單，選一個開啟後會回到清單，可以連續開好幾個，按取消結束。
@@ -332,37 +333,37 @@ PRISMA 2020 要求報告「其他方法」找到的文獻，最常見的是引�
   Notion 頁面也有這一段（顯示成引言區塊，連結可以點）。不想要時在設定取消勾選，下次同步就會移除。
 
 **4. 工具 → 醫學文獻快速搜尋…**：輸入關鍵字（中文或英文；不同概念用逗號分隔，例如 `fall prevention, older adults`），出現資料庫清單，選一個就開啟，開啟後會回到清單。
-- **英文關鍵字**：先向 NCBI 查 MeSH 主題詞建議（每個概念一次），組成 `("Accidental Falls"[Mesh] OR "fall prevention"[tiab]) AND ("Aged"[Mesh] OR "older adults"[tiab])`，清單第一項就是用這個檢索式開 PubMed；也可以「複製 PubMed 檢索式」，或「**存成 PubMed 新文獻追蹤**」（輸入名稱後加進[PubMed 新文獻追蹤](#pubmed-新文獻追蹤)，之後自動匯入新文獻）。MeSH 查詢使用 PubMed 新文獻追蹤設定的 Email 與 NCBI API key，速率限制相同；查不到時改用原本的關鍵字。
+- **英文關鍵字**：先向 NCBI 查 MeSH 主題詞建議（每個概念一次），例如 `falls, older adults` 組成 `("Accidental Falls"[Mesh] OR falls[tiab]) AND ("Frail Elderly"[Mesh] OR "Aged"[Mesh] OR "older adults"[tiab])`（CI 實測的結果），清單第一項就是用這個檢索式開 PubMed；也可以「複製 PubMed 檢索式」，或「**存成 PubMed 新文獻追蹤**」（輸入名稱後加進[PubMed 新文獻追蹤](#pubmed-新文獻追蹤)，之後自動匯入新文獻）。MeSH 查詢使用 PubMed 新文獻追蹤設定的 Email 與 NCBI API key，速率限制相同；查不到時改用原本的關鍵字。
 - **中文關鍵字**：華藝、博碩士論文、國圖期刊、衛福部／國健署排在前面，英文資料庫在後（建議改用英文關鍵字）。
-- MeSH 建議只是起點：請到 MeSH Database 看定義（Scope Note）與樹狀結構，確認主題詞真的符合你的概念。
+- MeSH 建議只是起點：請到 MeSH Database 看定義（Scope Note）與樹狀結構，確認主題詞真的符合你的概念。NCBI 的 MeSH 資料庫要所有字都出現在同一個主題詞紀錄裡才找得到，所以「`fall prevention`」這種「主題＋目的」的片語常查不到（實測：沒有建議），改用核心詞（`falls`）就會對到 `Accidental Falls`。
 
 #### 資料庫清單
 
-「網址格式」說明這個連結的可靠程度。開發時的環境無法連到這些網站，**以下格式都沒有在開發時實際連線測試**；「常見公開格式」是網站長期使用、廣為引用的搜尋網址，「推測格式」是依記憶寫的、最可能失效。沒有公開搜尋網址的資料庫會開啟首頁，並把檢索詞（或題名）複製到剪貼簿，貼上即可。
+每個網址都由 GitHub Actions 實際連線測試（`.github/workflows/link-check.yml`，每週一次，也可以手動執行；結果在該次執行的摘要與 `link-check-report` 附件）。「CI 實測 2026-10-08」：**OK**＝有搜尋結果頁（開首頁的資料庫＝首頁可開）；**需登入**＝轉到訂閱資料庫的登入頁（預期，在校內網路或經 EZproxy 才進得去）；**被擋**＝網站擋掉雲端主機的自動連線，無法自動判斷，在一般瀏覽器通常正常。「網址格式」：**實測可帶入檢索詞**＝測試時看到檢索詞與結果數；**常見公開格式**＝網站長期使用的搜尋網址，但測試被擋；**依圖書館指南範例格式**＝EBSCO 官方的直接連結格式（測試會先轉到登入頁，看不到結果）；**開首頁＋複製檢索詞**＝沒有公開搜尋網址，開首頁並把檢索詞（或題名）複製到剪貼簿，貼上即可。
 
-| ID | 資料庫 | 需機構權限 | 網址格式 | 搜尋網址 |
-|---|---|---|---|---|
-| `pubmed` | PubMed（預設 Best Match 排序） | 否 | 常見公開格式 | `https://pubmed.ncbi.nlm.nih.gov/?term={q}`；單篇 `…/<PMID>/`；相似文獻 `…/?linkname=pubmed_pubmed&from_uid=<PMID>` |
-| `pubmed-cq` | PubMed Clinical Queries | 否 | 推測格式，未驗證 | `https://pubmed.ncbi.nlm.nih.gov/clinical/?term={q}` |
-| `mesh` | MeSH Database | 否 | 常見公開格式 | `https://www.ncbi.nlm.nih.gov/mesh/?term={q}` |
-| `cochrane` | Cochrane Library | 否（全文部分需訂閱） | 推測格式，未驗證 | `https://www.cochranelibrary.com/search?…searchText={q}`（Liferay 搜尋參數） |
-| `cinahl` | CINAHL（EBSCOhost） | 是 | 依圖書館指南範例格式 | `https://search.ebscohost.com/login.aspx?direct=true&db=rzh&bquery={q}&type=1&searchMode=And&site=ehost-live` |
-| `embase` | Embase | 是 | 開首頁＋複製檢索詞 | `https://www.embase.com/` |
-| `scholar` | Google Scholar | 否 | 常見公開格式 | `https://scholar.google.com/scholar?hl=zh-TW&q={q}` |
-| `europepmc` | Europe PMC | 否 | 常見公開格式 | `https://europepmc.org/search?query={q}` |
-| `semantic` | Semantic Scholar | 否 | 常見公開格式 | `https://www.semanticscholar.org/search?q={q}` |
-| `trip` | TRIP Database | 否（Pro 功能需註冊） | 推測格式，未驗證 | `https://www.tripdatabase.com/Searchresult?criteria={q}` |
-| `jbi` | JBI EBP Database（Ovid） | 是 | 開首頁＋複製檢索詞 | `https://ovidsp.ovid.com/ovidweb.cgi?T=JS&NEWS=N&PAGE=main&D=jbi` |
-| `clinicaltrials` | ClinicalTrials.gov | 否 | 常見公開格式 | `https://clinicaltrials.gov/search?term={q}` |
-| `ictrp` | WHO ICTRP | 否 | 開首頁＋複製檢索詞 | `https://trialsearch.who.int/` |
-| `uptodate` | UpToDate | 是 | 推測格式，未驗證 | `https://www.uptodate.com/contents/search?search={q}` |
-| `airiti` | 華藝線上圖書館 | 否（全文多需訂閱） | 開首頁＋複製檢索詞 | `https://www.airitilibrary.com/` |
-| `ndltd` | 臺灣博碩士論文知識加值系統 | 否 | 開首頁＋複製檢索詞（網址含連線代碼，沒有固定的搜尋網址） | `https://ndltd.ncl.edu.tw/` |
-| `ncl-periodicals` | 國家圖書館期刊文獻資訊網 | 否 | 開首頁＋複製檢索詞 | `https://tpl.ncl.edu.tw/` |
-| `guideline-pdf` | Google 指引 PDF | 否 | 常見公開格式 | `https://www.google.com/search?q={q} (guideline OR 指引 OR 指南) filetype:pdf` |
-| `tw-gov` | 衛福部／國健署（Google 站內搜尋） | 否 | 常見公開格式 | `https://www.google.com/search?q={q} site:mohw.gov.tw OR site:hpa.gov.tw` |
-| `nice` | NICE | 否 | 常見公開格式 | `https://www.nice.org.uk/search?q={q}` |
-| `cdc` | CDC | 否 | 推測格式，未驗證 | `https://search.cdc.gov/search/?query={q}` |
+| ID | 資料庫 | 需機構權限 | 網址格式 | CI 實測 2026-10-08 | 搜尋網址 |
+|---|---|---|---|---|---|
+| `pubmed` | PubMed（預設 Best Match 排序） | 否 | 實測可帶入檢索詞 | OK | `https://pubmed.ncbi.nlm.nih.gov/?term={q}`；單篇 `…/<PMID>/`；相似文獻 `…/?linkname=pubmed_pubmed&from_uid=<PMID>`（都實測過） |
+| `pubmed-cq` | PubMed Clinical Queries | 否 | 實測可帶入檢索詞 | OK | `https://pubmed.ncbi.nlm.nih.gov/clinical/?term={q}` |
+| `mesh` | MeSH Database | 否 | 實測可帶入檢索詞 | OK | `https://www.ncbi.nlm.nih.gov/mesh/?term={q}` |
+| `cochrane` | Cochrane Library | 否（全文部分需訂閱） | 實測可帶入檢索詞 | OK | `https://www.cochranelibrary.com/search?…searchText={q}`（Liferay 搜尋參數；實測顯示「1087 Cochrane Reviews matching …」） |
+| `cinahl` | CINAHL（EBSCOhost） | 是 | 依圖書館指南範例格式 | 需登入 | `https://search.ebscohost.com/login.aspx?direct=true&db=rzh&bquery={q}&type=1&searchMode=And&site=ehost-live`（EBSCO 接受這個連結，依 IP／帳號驗證後才進入搜尋） |
+| `embase` | Embase | 是 | 開首頁＋複製檢索詞 | 需登入 | `https://www.embase.com/` |
+| `scholar` | Google Scholar | 否 | 實測可帶入檢索詞 | OK（常被擋） | `https://scholar.google.com/scholar?hl=zh-TW&q={q}` |
+| `europepmc` | Europe PMC | 否 | 常見公開格式 | 被擋 | `https://europepmc.org/search?query={q}`（「找這篇」的 `EXT_ID:…`、`DOI:"…"`、`TITLE:"…"` 語法經 Europe PMC API 實測可找到該篇） |
+| `semantic` | Semantic Scholar | 否 | 常見公開格式 | 被擋 | `https://www.semanticscholar.org/search?q={q}` |
+| `trip` | TRIP Database | 否（Pro 功能需註冊） | 實測可帶入檢索詞 | OK | `https://www.tripdatabase.com/Searchresult?criteria={q}` |
+| `jbi` | JBI EBP Database（Ovid） | 是 | 開首頁＋複製檢索詞 | 需登入 | `https://ovidsp.ovid.com/ovidweb.cgi?T=JS&NEWS=N&PAGE=main&D=jbi` |
+| `clinicaltrials` | ClinicalTrials.gov | 否 | 實測可帶入檢索詞 | OK | `https://clinicaltrials.gov/search?term={q}` |
+| `ictrp` | WHO ICTRP | 否 | 開首頁＋複製檢索詞 | OK | `https://trialsearch.who.int/`（`?SearchAll=` 雖然能帶入，但只找完全相符的片語：實測 1 筆，搜尋框 186 筆，所以不用） |
+| `uptodate` | UpToDate | 是 | 實測可帶入檢索詞 | OK | `https://www.uptodate.com/contents/search?search={q}`（結果清單免登入，內文需訂閱） |
+| `airiti` | 華藝線上圖書館 | 否（全文多需訂閱） | 開首頁＋複製檢索詞 | OK | `https://www.airitilibrary.com/`（搜尋後的網址是含時間戳記的 JSON，沒有固定格式） |
+| `ndltd` | 臺灣博碩士論文知識加值系統 | 否 | 開首頁＋複製檢索詞（網址含連線代碼與驗證碼，沒有固定的搜尋網址） | OK | `https://ndltd.ncl.edu.tw/` |
+| `ncl-periodicals` | 國家圖書館期刊文獻資訊網 | 否 | 開首頁＋複製檢索詞 | 被擋（不接受境外連線） | `https://tpl.ncl.edu.tw/` |
+| `guideline-pdf` | Google 指引 PDF | 否 | 常見公開格式 | 被擋 | `https://www.google.com/search?q={q} (guideline OR 指引 OR 指南) filetype:pdf` |
+| `tw-gov` | 衛福部／國健署（Google 站內搜尋） | 否 | 常見公開格式 | 被擋 | `https://www.google.com/search?q={q} site:mohw.gov.tw OR site:hpa.gov.tw` |
+| `nice` | NICE | 否 | 實測可帶入檢索詞 | OK | `https://www.nice.org.uk/search?q={q}` |
+| `cdc` | CDC | 否 | 實測可帶入檢索詞 | OK | `https://search.cdc.gov/search/?query={q}` |
 
 `{q}` 是 URL 編碼後的檢索詞（中文、引號、括號、`[Mesh]` 都會編碼）。連結裡只有檢索詞，不會帶入你的 email、API key 或其他資料。CINAHL 預設是 CINAHL Plus with Full Text（資料庫代碼 `rzh`）；學校訂的是 CINAHL Complete 時，用下面的自訂資料庫把 `cinahl` 改成 `db=ccm`。學校改用新版 EBSCO 介面（research.ebsco.com）時，這個舊介面連結可能會轉到登入頁；最穩的作法是在 EBSCO 搜尋一次後用「分享 → 永久連結」複製網址，把檢索詞換成 `{q}` 存成自訂資料庫。
 
@@ -586,21 +587,27 @@ citekey 和筆記檔名不受影響：自動產生的 citekey 仍然用 Zotero �
 - **已存檢索**：檢索詞與 PICO 存在這台裝置的瀏覽器，可匯出／匯入 JSON 換電腦使用。無痕視窗不能儲存時會提醒你先匯出。
 - 本頁不會把檢索詞送到任何伺服器，只是開啟各資料庫的搜尋網址。
 
-各資料庫的搜尋網址：開發時無法逐一連線實測。**確定**＝網站公開或長期通用的搜尋網址；**推測**＝依網站目前的網址推測，開啟時也會複製檢索詞，網址失效就直接貼上；**首頁**＝網站沒有可靠的搜尋網址（需要登入、學校代碼或 session），開首頁並複製檢索詞。打不開或沒帶入檢索詞，請到 [Issues](https://github.com/bobyu89/zotero-bridge/issues) 回報。
+各資料庫的搜尋網址都在 GitHub Actions 實際連線測試過（2026-10-08，之後每週自動重測；和外掛共用的資料庫用同一個網址）。**確定**＝實測帶得進檢索詞的搜尋網址；**推測**＝要先登入、無法實測到結果頁，開啟時也會複製檢索詞，沒帶入就直接貼上；**首頁**＝網站沒有可靠的搜尋網址（需要登入、學校代碼或 session），開首頁並複製檢索詞。「CI 實測」：OK＝有結果頁（首頁類＝首頁可開）；需登入＝轉到訂閱資料庫的登入頁（預期）；被擋＝網站擋掉雲端主機的自動連線，無法自動判斷，在一般瀏覽器通常正常。打不開或沒帶入檢索詞，請到 [Issues](https://github.com/bobyu89/zotero-bridge/issues) 回報。
 
-| 分組 | 資料庫 | 狀態 | 權限 |
-|---|---|---|---|
-| 英文資料庫 | PubMed、MeSH Database、Google Scholar、Europe PMC、Semantic Scholar | 確定 | 免費 |
-| | CINAHL（EBSCO）、Embase | 首頁 | 需機構權限 |
-| 實證與指引 | Google 指引 PDF（加上 `guideline filetype:pdf`） | 確定 | 免費 |
-| | TRIP Database、NICE、CDC | 推測 | 免費 |
-| | UpToDate | 推測 | 需機構權限 |
-| | Cochrane Library（開進階搜尋） | 首頁 | 摘要免費、全文需訂閱 |
-| | JBI EBP Database（Ovid） | 首頁 | 需機構權限 |
-| 中文資料庫 | 華藝線上圖書館 | 首頁 | 摘要免費、全文需訂閱 |
-| | 臺灣博碩士論文知識加值系統、國家圖書館期刊文獻資訊網 | 首頁 | 免費 |
-| 臨床試驗登錄 | ClinicalTrials.gov | 確定 | 免費 |
-| | WHO ICTRP | 首頁 | 免費 |
+| 分組 | 資料庫 | 狀態 | CI 實測 2026-10-08 | 權限 |
+|---|---|---|---|---|
+| 英文資料庫 | PubMed、MeSH Database | 確定 | OK | 免費 |
+| | Google Scholar | 確定 | OK（常被擋） | 免費 |
+| | Europe PMC、Semantic Scholar | 確定 | 被擋 | 免費 |
+| | CINAHL（EBSCO，CINAHL Plus `db=rzh` 直接連結，和外掛相同） | 推測 | 需登入 | 需機構權限 |
+| | Embase | 首頁 | 需登入 | 需機構權限 |
+| 實證與指引 | Cochrane Library（和外掛相同的搜尋網址） | 確定 | OK | 摘要免費、全文需訂閱 |
+| | TRIP Database、NICE、CDC | 確定 | OK | 免費 |
+| | UpToDate | 確定 | OK（結果清單免登入） | 需機構權限 |
+| | Google 指引 PDF（加上 `guideline filetype:pdf`） | 確定 | 被擋 | 免費 |
+| | JBI EBP Database（Ovid） | 首頁 | 需登入 | 需機構權限 |
+| 中文資料庫 | 華藝線上圖書館 | 首頁 | OK | 摘要免費、全文需訂閱 |
+| | 臺灣博碩士論文知識加值系統 | 首頁 | OK | 免費 |
+| | 國家圖書館期刊文獻資訊網 | 首頁 | 被擋（不接受境外連線） | 免費 |
+| 臨床試驗登錄 | ClinicalTrials.gov | 確定 | OK | 免費 |
+| | WHO ICTRP | 首頁 | OK | 免費 |
+
+CINAHL 的「在 CINAHL 執行」會用 EBSCO 的直接連結開啟 PICO 檢索式（同時複製）；學校訂的是 CINAHL Complete（`db=ccm`）或改用新版 EBSCO 介面時可能沒有帶入，貼上即可。
 
 完整網址列在頁面最下方的「網址格式與狀態」。
 
@@ -659,6 +666,16 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi
 | `research-brain/` | Claude Code／Codex 研究大腦設定檔 |
 | `site/index.html` | 安裝精靈網頁（GitHub Pages） |
 | `site/search.html` | 醫學文獻快速搜尋網頁（GitHub Pages） |
+| `test/live/check-links.mjs` | 外部服務連線檢查（link-check workflow；不在 `npm test` 內） |
+
+### 外部服務連線檢查（link-check）
+
+開發環境連不到 PubMed、OpenAlex 和各資料庫，所以 `.github/workflows/link-check.yml` 在 GitHub Actions 上實際連線檢查（每週一自動執行；修改 `content/search-links.js`、`pubmed-watch.js`、`citation-chase.js`、`site/search.html` 時也會跑；GitHub → Actions → **link-check** → **Run workflow** 可手動執行）：
+
+- `test/live/check-links.mjs` 用插件與網頁的資料庫清單（`search-links.js` 與 `search.html` 的 `window.ZBSearch`）組出每個搜尋網址，以 `fall prevention older adults`（中文資料庫用 `跌倒 預防`）實際開啟：一般 HTTP 連線（跟隨轉址、20 秒逾時、每個網站之間暫停）加上無頭 Chromium，判斷是搜尋結果頁（看得到檢索詞與結果數）、首頁、登入頁、被擋（Cloudflare、captcha、Google 的機器人檢查）或壞掉（404、網址格式錯誤）。不確定的資料庫還會試其他網址寫法，開首頁的資料庫會在網站的搜尋框實際輸入，看搜尋後的網址能不能當成固定格式。
+- NCBI E-utilities：用插件自己的函式組網址、解析回應，確認 `esearchresult.count／idlist／querytranslation／errorlist／warninglist`、`esummary` 的 `uids／title／fulljournalname／pubdate／articleids／authors`、MeSH 的 `ds_meshterms／ds_meshui／ds_scopenote` 都還在。
+- OpenAlex：引文追蹤用到的每個參數，最後用 `chase()` 對一篇常被引用的護理研究（Aiken et al., 2002, JAMA）實際跑一次。
+- 結果表格在該次執行的摘要，也上傳成 `link-check-report` 附件（`report.md`、`report.json`）。只有明確壞掉（404、網址錯誤、NCBI／OpenAlex 欄位不符）才會失敗；擋雲端主機的網站標成「被擋（無法判斷）」，不算失敗。
 
 ### 真實 Zotero 測試（e2e）
 

@@ -3,7 +3,8 @@
  *
  * A catalog of databases with a search-URL template each ({q} = the URL-encoded query). Databases
  * without a public GET search URL (Embase, JBI/Ovid, WHO ICTRP, 華藝, 博碩士論文, 國圖期刊) open
- * their start page and the query is copied to the clipboard instead. Sources that need institutional
+ * their start page and the query is copied to the clipboard instead. Every URL is checked live by
+ * test/live/check-links.mjs (.github/workflows/link-check.yml, weekly); `ci` records the last result. Sources that need institutional
  * access can go through the library's proxy (EZproxy `…/login?url=`). The links are used in:
  *   - the item context menu 「在醫學資料庫搜尋」 (find this paper; PubMed similar articles)
  *   - the item pane (a row of links, plus PICO search links when the AI note has PICO data)
@@ -34,6 +35,11 @@
 	const MAX_MESH_TAGS = 6;
 	const MAX_MESH_CONCEPTS = 4;
 	const MAX_TITLE = 300;
+	// PubMed title lookup without PMID/DOI: at most this many title words, each [ti]
+	const MAX_TITLE_WORDS = 10;
+	const TITLE_STOP = new Set(["and", "the", "for", "with", "from", "into", "its", "are", "was", "were", "not", "but", "via", "than", "their", "this", "that"]);
+	// When test/live/check-links.mjs last ran against every source (GitHub Actions, link-check.yml)
+	const CI_DATE = "2026-10-08";
 	const PICO_FIELDS = [
 		{ key: "P", field: "population", label: "族群" },
 		{ key: "I", field: "intervention", label: "介入" },
@@ -43,40 +49,50 @@
 	const PICO_EN_SOURCES = ["pubmed", "cinahl", "scholar"];
 	const PICO_ALL_SOURCES = ["scholar", "airiti"];
 
-	// check: how sure the URL pattern is (README table) — "common": widely used public format;
-	// "guide": the format from university library guides; "assumed": from memory, unverified;
-	// "copy": no reliable GET search URL, the start page opens and the query is copied.
+	// check: how sure the URL pattern is (README table) — "verified": the live check found a results
+	// page for the query; "common": widely used public format (the site blocks automated checks);
+	// "guide": the format from university library guides; "copy": no reliable GET search URL, the start
+	// page opens and the query is copied.
+	// ci: the live check's result on CI_DATE — "ok" results page (or, for "copy", the start page
+	// opens), "login" the subscription login page (expected), "blocked" the site turns away cloud
+	// servers (inconclusive; works in a normal browser)
 	// find: how "find this paper" searches here ("pubmed", "europepmc", "cinahl", "title"; false = not offered)
 	// lang: "en", "zh" or "any" — Chinese queries list the "zh" sources first
 	const BUILTIN = [
-		{ id: "pubmed", name: "PubMed", desc: "MEDLINE 生物醫學文獻（預設 Best Match 排序）", url: "https://pubmed.ncbi.nlm.nih.gov/?term={q}", lang: "en", find: "pubmed", check: "common" },
-		{ id: "pubmed-cq", name: "PubMed Clinical Queries", desc: "依臨床問題類別（治療、診斷、病因、預後）過濾的 PubMed", url: "https://pubmed.ncbi.nlm.nih.gov/clinical/?term={q}", lang: "en", check: "assumed" },
-		{ id: "mesh", name: "MeSH Database", desc: "查醫學主題詞（MeSH）的定義、同義詞與樹狀結構", url: "https://www.ncbi.nlm.nih.gov/mesh/?term={q}", lang: "en", check: "common" },
-		{ id: "cochrane", name: "Cochrane Library", desc: "Cochrane 系統性回顧與臨床試驗（CENTRAL）", url: "https://www.cochranelibrary.com/search?p_p_id=scolarissearchresultsportlet_WAR_scolarissearchresults&p_p_lifecycle=0&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchType=basic&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchBy=6&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchText={q}", lang: "en", find: "title", check: "assumed" },
-		{ id: "cinahl", name: "CINAHL", desc: "護理與健康相關文獻（EBSCOhost；預設 CINAHL Plus with Full Text，資料庫代碼 rzh）", url: "https://search.ebscohost.com/login.aspx?direct=true&db=rzh&bquery={q}&type=1&searchMode=And&site=ehost-live", needsAccess: true, lang: "en", find: "cinahl", check: "guide" },
-		{ id: "embase", name: "Embase", desc: "Elsevier 生物醫學與藥學文獻", home: "https://www.embase.com/", needsAccess: true, lang: "en", find: "title", check: "copy" },
-		{ id: "scholar", name: "Google Scholar", desc: "跨學科學術搜尋（中英文皆可）", url: "https://scholar.google.com/scholar?hl=zh-TW&q={q}", lang: "any", find: "title", check: "common" },
-		{ id: "europepmc", name: "Europe PMC", desc: "PubMed 加上 PMC 全文、預印本與專利", url: "https://europepmc.org/search?query={q}", lang: "en", find: "europepmc", check: "common" },
-		{ id: "semantic", name: "Semantic Scholar", desc: "AI 輔助的學術搜尋，可看引用脈絡", url: "https://www.semanticscholar.org/search?q={q}", lang: "en", find: "title", check: "common" },
-		{ id: "trip", name: "TRIP Database", desc: "實證醫學資源：臨床指引、系統性回顧、證據摘要", url: "https://www.tripdatabase.com/Searchresult?criteria={q}", lang: "en", check: "assumed" },
-		{ id: "jbi", name: "JBI EBP Database", desc: "JBI 證據摘要與實證護理建議（Ovid）", home: "https://ovidsp.ovid.com/ovidweb.cgi?T=JS&NEWS=N&PAGE=main&D=jbi", needsAccess: true, lang: "en", check: "copy" },
-		{ id: "clinicaltrials", name: "ClinicalTrials.gov", desc: "美國 NIH 臨床試驗登錄", url: "https://clinicaltrials.gov/search?term={q}", lang: "en", check: "common" },
-		{ id: "ictrp", name: "WHO ICTRP", desc: "WHO 國際臨床試驗登錄平台", home: "https://trialsearch.who.int/", lang: "en", check: "copy" },
-		{ id: "uptodate", name: "UpToDate", desc: "臨床決策支援（需機構訂閱）", url: "https://www.uptodate.com/contents/search?search={q}", needsAccess: true, lang: "en", check: "assumed" },
-		{ id: "airiti", name: "華藝線上圖書館", desc: "Airiti Library：臺灣與華文期刊、學位論文（全文多需機構訂閱）", home: "https://www.airitilibrary.com/", lang: "zh", find: "title", check: "copy" },
-		{ id: "ndltd", name: "臺灣博碩士論文知識加值系統", desc: "國家圖書館的臺灣博碩士論文", home: "https://ndltd.ncl.edu.tw/", lang: "zh", find: "title", check: "copy" },
-		{ id: "ncl-periodicals", name: "國家圖書館期刊文獻資訊網", desc: "臺灣期刊論文索引", home: "https://tpl.ncl.edu.tw/", lang: "zh", find: "title", check: "copy" },
-		{ id: "guideline-pdf", name: "Google 指引 PDF", desc: "用 Google 找臨床指引 PDF（filetype:pdf）", url: "https://www.google.com/search?q={q}", query: "{q} (guideline OR 指引 OR 指南) filetype:pdf", lang: "any", check: "common" },
-		{ id: "tw-gov", name: "衛福部／國健署", desc: "用 Google 站內搜尋 mohw.gov.tw、hpa.gov.tw 的指引與公告", url: "https://www.google.com/search?q={q}", query: "{q} site:mohw.gov.tw OR site:hpa.gov.tw", lang: "zh", check: "common" },
-		{ id: "nice", name: "NICE", desc: "英國 NICE 臨床指引", url: "https://www.nice.org.uk/search?q={q}", lang: "en", check: "common" },
-		{ id: "cdc", name: "CDC", desc: "美國疾病管制與預防中心", url: "https://search.cdc.gov/search/?query={q}", lang: "en", check: "assumed" },
+		{ id: "pubmed", name: "PubMed", desc: "MEDLINE 生物醫學文獻（預設 Best Match 排序）", url: "https://pubmed.ncbi.nlm.nih.gov/?term={q}", lang: "en", find: "pubmed", check: "verified", ci: "ok" },
+		{ id: "pubmed-cq", name: "PubMed Clinical Queries", desc: "依臨床問題類別（治療、診斷、病因、預後）過濾的 PubMed", url: "https://pubmed.ncbi.nlm.nih.gov/clinical/?term={q}", lang: "en", check: "verified", ci: "ok" },
+		{ id: "mesh", name: "MeSH Database", desc: "查醫學主題詞（MeSH）的定義、同義詞與樹狀結構", url: "https://www.ncbi.nlm.nih.gov/mesh/?term={q}", lang: "en", check: "verified", ci: "ok" },
+		{ id: "cochrane", name: "Cochrane Library", desc: "Cochrane 系統性回顧與臨床試驗（CENTRAL）", url: "https://www.cochranelibrary.com/search?p_p_id=scolarissearchresultsportlet_WAR_scolarissearchresults&p_p_lifecycle=0&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchType=basic&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchBy=6&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchText={q}", lang: "en", find: "title", check: "verified", ci: "ok" },
+		{ id: "cinahl", name: "CINAHL", desc: "護理與健康相關文獻（EBSCOhost；預設 CINAHL Plus with Full Text，資料庫代碼 rzh）", url: "https://search.ebscohost.com/login.aspx?direct=true&db=rzh&bquery={q}&type=1&searchMode=And&site=ehost-live", needsAccess: true, lang: "en", find: "cinahl", check: "guide", ci: "login" },
+		{ id: "embase", name: "Embase", desc: "Elsevier 生物醫學與藥學文獻", home: "https://www.embase.com/", needsAccess: true, lang: "en", find: "title", check: "copy", ci: "login" },
+		{ id: "scholar", name: "Google Scholar", desc: "跨學科學術搜尋（中英文皆可）", url: "https://scholar.google.com/scholar?hl=zh-TW&q={q}", lang: "any", find: "title", check: "verified", ci: "ok" },
+		{ id: "europepmc", name: "Europe PMC", desc: "PubMed 加上 PMC 全文、預印本與專利", url: "https://europepmc.org/search?query={q}", lang: "en", find: "europepmc", check: "common", ci: "blocked" },
+		{ id: "semantic", name: "Semantic Scholar", desc: "AI 輔助的學術搜尋，可看引用脈絡", url: "https://www.semanticscholar.org/search?q={q}", lang: "en", find: "title", check: "common", ci: "blocked" },
+		{ id: "trip", name: "TRIP Database", desc: "實證醫學資源：臨床指引、系統性回顧、證據摘要", url: "https://www.tripdatabase.com/Searchresult?criteria={q}", lang: "en", check: "verified", ci: "ok" },
+		{ id: "jbi", name: "JBI EBP Database", desc: "JBI 證據摘要與實證護理建議（Ovid）", home: "https://ovidsp.ovid.com/ovidweb.cgi?T=JS&NEWS=N&PAGE=main&D=jbi", needsAccess: true, lang: "en", check: "copy", ci: "login" },
+		{ id: "clinicaltrials", name: "ClinicalTrials.gov", desc: "美國 NIH 臨床試驗登錄", url: "https://clinicaltrials.gov/search?term={q}", lang: "en", check: "verified", ci: "ok" },
+		{ id: "ictrp", name: "WHO ICTRP", desc: "WHO 國際臨床試驗登錄平台", home: "https://trialsearch.who.int/", lang: "en", check: "copy", ci: "ok" },
+		{ id: "uptodate", name: "UpToDate", desc: "臨床決策支援（需機構訂閱）", url: "https://www.uptodate.com/contents/search?search={q}", needsAccess: true, lang: "en", check: "verified", ci: "ok" },
+		{ id: "airiti", name: "華藝線上圖書館", desc: "Airiti Library：臺灣與華文期刊、學位論文（全文多需機構訂閱）", home: "https://www.airitilibrary.com/", lang: "zh", find: "title", check: "copy", ci: "ok" },
+		{ id: "ndltd", name: "臺灣博碩士論文知識加值系統", desc: "國家圖書館的臺灣博碩士論文", home: "https://ndltd.ncl.edu.tw/", lang: "zh", find: "title", check: "copy", ci: "ok" },
+		{ id: "ncl-periodicals", name: "國家圖書館期刊文獻資訊網", desc: "臺灣期刊論文索引", home: "https://tpl.ncl.edu.tw/", lang: "zh", find: "title", check: "copy", ci: "blocked" },
+		{ id: "guideline-pdf", name: "Google 指引 PDF", desc: "用 Google 找臨床指引 PDF（filetype:pdf）", url: "https://www.google.com/search?q={q}", query: "{q} (guideline OR 指引 OR 指南) filetype:pdf", lang: "any", check: "common", ci: "blocked" },
+		{ id: "tw-gov", name: "衛福部／國健署", desc: "用 Google 站內搜尋 mohw.gov.tw、hpa.gov.tw 的指引與公告", url: "https://www.google.com/search?q={q}", query: "{q} site:mohw.gov.tw OR site:hpa.gov.tw", lang: "zh", check: "common", ci: "blocked" },
+		{ id: "nice", name: "NICE", desc: "英國 NICE 臨床指引", url: "https://www.nice.org.uk/search?q={q}", lang: "en", check: "verified", ci: "ok" },
+		{ id: "cdc", name: "CDC", desc: "美國疾病管制與預防中心", url: "https://search.cdc.gov/search/?query={q}", lang: "en", check: "verified", ci: "ok" },
 	];
 
 	const CHECK_LABELS = {
+		verified: "實測可帶入檢索詞",
 		common: "常見公開格式",
 		guide: "依圖書館指南範例格式",
-		assumed: "推測格式，未驗證",
 		copy: "開首頁＋複製檢索詞",
+	};
+
+	const CI_LABELS = {
+		ok: "OK",
+		login: "需登入",
+		blocked: "被擋",
 	};
 
 	// MeSH check tags and publication-type tags that say nothing about the topic
@@ -217,7 +233,11 @@
 	function normalizeConfig(raw = {}) {
 		let custom = parseCustom(raw.custom === undefined ? "[]" : raw.custom);
 		let errors = custom.errors.slice();
-		let base = BUILTIN.map(s => Object.assign({}, s, custom.overrides[s.id] || {}, { builtin: true }));
+		// A built-in source with its own URL from the settings no longer has the live-check result
+		let base = BUILTIN.map((s) => {
+			let o = custom.overrides[s.id] || {};
+			return Object.assign({}, s, o, "url" in o || "home" in o ? { ci: undefined } : {}, { builtin: true });
+		});
 		let all = [...base, ...custom.sources];
 		let byID = new Map(all.map(s => [s.id, s]));
 		let order = parseIDList(raw.order);
@@ -319,6 +339,23 @@
 		return `"${s}"`;
 	}
 
+	/**
+	 * PubMed title lookup: the title's words, each [ti], joined with AND. A quoted title ("…"[ti])
+	 * only matches phrases in PubMed's phrase index, so whole titles found nothing (live check).
+	 */
+	function titleWords(title) {
+		let seen = new Set();
+		let words = String(title || "").replace(/[^\p{L}\p{N}\s-]/gu, " ").split(/\s+/)
+			.map(w => w.replace(/^-+|-+$/g, ""))
+			.filter((w) => {
+				let k = w.toLowerCase();
+				if (w.length < 3 || TITLE_STOP.has(k) || seen.has(k)) return false;
+				seen.add(k);
+				return true;
+			});
+		return words.slice(0, MAX_TITLE_WORDS).map(w => `${w}[ti]`).join(" AND ");
+	}
+
 	/** The query (or record URL) for finding one paper in a source; null when the source can't. */
 	function findQuery(source, info) {
 		let title = info.title;
@@ -326,7 +363,7 @@
 			case "pubmed":
 				if (info.pmid) return { url: `https://pubmed.ncbi.nlm.nih.gov/${info.pmid}/`, query: info.pmid };
 				if (info.doi) return { query: `${info.doi}[doi]` };
-				return title ? { query: `${quoted(title)}[ti]` } : null;
+				return title ? { query: titleWords(title) || `${quoted(title)}[ti]` } : null;
 			case "europepmc":
 				if (info.pmid) return { query: `EXT_ID:${info.pmid} AND SRC:MED` };
 				if (info.doi) return { query: `DOI:${quoted(info.doi)}` };
@@ -564,7 +601,10 @@
 	/** Settings pane: one line per source. */
 	function describeSources(cfg) {
 		let lines = cfg.all.map((s) => {
-			let flags = [s.enabled ? "" : "已隱藏", s.needsAccess ? "需機構權限" : "", s.custom ? "自訂" : CHECK_LABELS[s.check] || ""].filter(Boolean);
+			let flags = [
+				s.enabled ? "" : "已隱藏", s.needsAccess ? "需機構權限" : "", s.custom ? "自訂" : CHECK_LABELS[s.check] || "",
+				!s.custom && CI_LABELS[s.ci] ? `CI 實測 ${CI_DATE}：${CI_LABELS[s.ci]}` : "",
+			].filter(Boolean);
 			return `${s.id}｜${s.name}${flags.length ? `（${flags.join("，")}）` : ""}`;
 		});
 		return [...cfg.errors.map(e => `⚠️ ${e}`), ...lines];
@@ -781,7 +821,7 @@
 	async function quickSearch() {
 		let win = Zotero.getMainWindow();
 		let input = { value: "" };
-		if (!Services.prompt.prompt(win, TITLE, "輸入關鍵字（中文或英文；不同概念用逗號分隔，例如：fall prevention, older adults）：", input, null, { value: false })) return null;
+		if (!Services.prompt.prompt(win, TITLE, "輸入關鍵字（中文或英文；不同概念用逗號分隔，例如：falls, older adults）：", input, null, { value: false })) return null;
 		let q = String(input.value || "").replace(/\s+/g, " ").trim();
 		if (!q) return null;
 		let cfg = readConfig();
@@ -888,8 +928,8 @@
 	}
 
 	return {
-		BUILTIN, CHECK_LABELS, MENU_SLOTS, PANE_COUNT, PICO_FIELDS,
-		encodeQuery, fillTemplate, isChinese, wrapProxy, validProxy, parseIDList, parseCustom, normalizeConfig, findSource,
+		BUILTIN, CHECK_LABELS, CI_LABELS, CI_DATE, MENU_SLOTS, PANE_COUNT, PICO_FIELDS,
+		encodeQuery, fillTemplate, isChinese, titleWords, wrapProxy, validProxy, parseIDList, parseCustom, normalizeConfig, findSource,
 		buildTarget, routeSources, sourceLabel, itemInfo, cleanTitle, findQuery, itemTargets, relatedURL,
 		meshTerms, meshLookupURL, picoTerms, englishPhrases, picoQuery, meshConcepts, parseMeshSummary, buildMeshQuery,
 		quickEntries, noteCallout, describeSources,
