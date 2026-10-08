@@ -20,3 +20,5 @@ pref("extensions.zotero-bridge.llm.fullTextLimit", "150000");
 pref("extensions.zotero-bridge.llm.systemPrompt", "");
 pref("extensions.zotero-bridge.llm.synthesisPrompt", "");
 pref("extensions.zotero-bridge.autoSync", false);
+pref("extensions.zotero-bridge.export.autoUpdate", false);
+pref("extensions.zotero-bridge.export.bibtex", false);

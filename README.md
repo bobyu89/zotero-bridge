@@ -24,6 +24,7 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 - **跨文獻比較表**：選多篇文獻或整個分類 → AI 讀各篇的 AI 筆記（沒有的改用摘要與劃線），產生文獻比較表、主題整理、方法學品質、研究缺口。引文由 Zotero 書目轉換（不讓 AI 自己寫參考文獻），Obsidian 版會連回各篇文獻筆記，並附 APA 7 參考文獻。同時存成 Notion 頁面（含真正的表格）、Obsidian 筆記和 Zotero 獨立筆記。
 - **Zotero 內直接看 AI 筆記**：條目右側面板新增「AI 文獻筆記」區塊，顯示摘要與重點，並有「同步」「重新產生」按鈕。
 - **自動同步（選用）**：條目、劃線或筆記變更後，自動同步到兩邊。自動同步不會呼叫 AI。
+- **參考文獻檔（Pandoc）**：把文獻庫匯出成 vault 裡的 `Zotero/references.json`（CSL JSON），條目 id 就是筆記的 `citekey`。在 Obsidian 用 `[@citekey]` 寫論文，再用 Pandoc 產生 APA 7 的 Word 檔（見[下方說明](#在-obsidian-寫論文並用-pandoc-產生-apa-word)）。
 
 ## 安裝（從 GitHub 下載）
 
@@ -119,6 +120,60 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
   - 「閱讀進度」：1.14 新增的看板（kanban），依 `status` 分成 待讀／閱讀中／已讀／已引用。把卡片拖到別欄就會改筆記的 `status`，重新同步也不會被覆寫
 - **Graph view**：AI 筆記裡的 `[[Fall prevention]]` 等關鍵概念會把相關文獻自動串起來
 
+## 在 Obsidian 寫論文並用 Pandoc 產生 APA Word
+
+### 1. 匯出參考文獻檔
+
+| 方式 | 產出 |
+|---|---|
+| Zotero → 工具 → **匯出參考文獻到 Obsidian** | `<vault>/Zotero/references.json`：我的文獻庫和群組文獻庫的所有文獻 |
+| 在分類上按右鍵 → **Zotero Bridge：匯出此分類的參考文獻** | `Zotero/references-<分類名稱>.json`：該分類（含子分類），citekey 和主檔相同 |
+| 設定 → 參考文獻檔 → 勾選 **同步時自動更新參考文獻檔** | 每次同步後自動更新 `references.json`，內容沒變就不寫入 |
+
+- 檔案放在 Obsidian 的「預設子資料夾」（例如 `Zotero`）。
+- 主檔包含整個文獻庫，而不只是已同步成筆記的文獻：Pandoc 只會列出內文真的有引用的文獻，多出來的條目不影響結果；還沒建立筆記的文獻也能直接引用，不會漏掉。
+- 需要 BibTeX（例如寫 LaTeX）時，勾選「同時匯出 references.bib」，會用 Zotero 內建的 BibTeX 匯出器產生同名 `.bib`，citekey 一樣。
+
+**citekey 從哪裡來**：每篇文獻的 `id` 和文獻筆記 frontmatter 的 `citekey` 相同，依序使用：
+
+1. Zotero 10 的 **Citation Key** 欄位
+2. Better BibTeX 的 citekey（有安裝時）
+3. 都沒有時自動產生：第一作者姓氏 + 年份 + 標題第一個字（略過 the、a、of 等），例如 `chen2024effects`；中文取標題前四個字，例如 `陳2023護理人員`。撞名時，較晚加入 Zotero 的文獻加上 a、b、c，例如 `chen2024effectsa`。
+
+自動產生的 citekey 會記在 `Zotero/.zotero-bridge-citekeys.json`，之後不會變動；文獻刪除後，它的 citekey 也不會轉給別篇，避免論文引用到錯的文獻（Pandoc 會提示找不到引用）。修改第一作者、年份或標題第一個字時，會換成新的 citekey。論文要長期引用的文獻，建議直接在 Zotero 填 Citation Key 欄位。
+
+### 2. 安裝 Pandoc 與 APA 7 樣式
+
+1. 安裝 Pandoc（2.11 以上，內建 `--citeproc`）：<https://pandoc.org/installing.html>
+2. 從官方 CSL 樣式庫下載 APA 7 樣式 [`apa.csl`](https://github.com/citation-style-language/styles/blob/master/apa.csl)（[直接下載](https://raw.githubusercontent.com/citation-style-language/styles/master/apa.csl)），放在 vault 根目錄
+
+### 3. 在 Obsidian 引用
+
+| 寫法 | APA 7 輸出 |
+|---|---|
+| `[@chen2024effects]` | (Chen, 2024) |
+| `[@chen2024effects, p. 5]` | (Chen, 2024, p. 5) |
+| `@chen2024effects` | Chen (2024)：敘述式引用，放在句子裡 |
+| `[@chen2024effects; @lee2021sleep]` | (Chen, 2024; Lee, 2021) |
+
+citekey 可以從文獻筆記的 `citekey` 欄位複製。Pandoc 會把參考文獻列表放在文件最後，所以在論文最後寫一個 `# 參考文獻` 標題即可。
+
+### 4. 產生 Word 檔
+
+在 vault 根目錄開終端機執行：
+
+```bash
+pandoc 論文.md --citeproc --bibliography Zotero/references.json --csl apa.csl -o 論文.docx
+```
+
+- 想套用學校的字型、行距與邊界：先準備一份格式正確的 Word 檔，加上 `--reference-doc 範本.docx`。
+- 論文檔裡的 `[[內部連結]]` Pandoc 不會轉換，交稿用的檔案請改成一般文字。
+- `apa.csl` 會用英文 APA 規則排版中文文獻（例如 `et al.`、`&`）。學校要求中文文獻用中文格式時，交件前請手動調整中文文獻。
+
+### 5.（選用）在 Obsidian 預覽參考文獻
+
+安裝社群外掛 **Pandoc Reference List**，在外掛設定填入 `Zotero/references.json` 的完整路徑與 `apa.csl`。側欄會即時列出目前這份筆記引用的文獻（APA 格式），方便邊寫邊檢查 citekey 有沒有打錯。這個外掛也會用到上面安裝的 Pandoc。
+
 ## 和 Notero 一起用？
 
 可以並存，但**不要讓兩者寫入同一個 Notion 資料庫**，否則同一篇文獻會出現兩頁。建議改用本插件的分流規則取代 Notero。
@@ -158,6 +213,7 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi
 | `content/core.js` | Obsidian 筆記組裝、frontmatter 合併、分流規則 |
 | `content/markdown.js` | Markdown ⇄ Notion blocks ⇄ HTML |
 | `content/synthesis.js` | 跨文獻比較表：提示詞、引文轉換、APA 參考文獻 |
+| `content/export.js` | 參考文獻檔匯出（CSL JSON／BibTeX）與 citekey 產生 |
 | `research-brain/` | Claude Code／Codex 研究大腦設定檔 |
 
 發布新版本：修改 `manifest.json` 的 `version` → `npm run build` → 推送到 `main`，GitHub Actions 會自動建立 Release，Zotero 會自動更新。

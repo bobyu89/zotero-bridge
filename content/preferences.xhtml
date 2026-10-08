@@ -85,6 +85,13 @@
 	</groupbox>
 
 	<groupbox>
+		<label><html:h2>參考文獻檔（Pandoc／Obsidian 引用）</html:h2></label>
+		<description>匯出 CSL JSON 到 Obsidian 預設子資料夾的 references.json，條目 id 就是筆記的 citekey，可以用 [@citekey] 引用並用 Pandoc 產生 APA Word。手動匯出：工具 → 匯出參考文獻到 Obsidian；在分類上按右鍵可只匯出該分類。</description>
+		<checkbox label="同步時自動更新參考文獻檔（整個文獻庫，只有內容變更時才寫入）" preference="extensions.zotero-bridge.export.autoUpdate"/>
+		<checkbox label="同時匯出 references.bib（BibTeX，使用 Zotero 內建 BibTeX 匯出器）" preference="extensions.zotero-bridge.export.bibtex"/>
+	</groupbox>
+
+	<groupbox>
 		<label><html:h2>Notion</html:h2></label>
 		<label value="Integration token（notion.so/profile/integrations 建立，並把資料庫分享給這個 integration）："/>
 		<html:input type="password" preference="extensions.zotero-bridge.notion.token" placeholder="ntn_..."/>
