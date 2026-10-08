@@ -166,13 +166,31 @@
 		return { get, set, clear, migrateFromPrefs, get ready() { return ready; } };
 	}
 
+	/**
+	 * The login manager calls createStore uses. Zotero 10.0 runs on Firefox 140 ESR, whose
+	 * nsILoginManager has no removeLoginAsync()/modifyLoginAsync(), only the synchronous
+	 * removeLogin() and modifyLogin(); newer Gecko versions (Zotero's development builds) add the async ones.
+	 */
+	function loginManager(lm) {
+		return {
+			searchLoginsAsync: matchData => lm.searchLoginsAsync(matchData),
+			addLoginAsync: login => lm.addLoginAsync(login),
+			removeLoginAsync: async login => (typeof lm.removeLoginAsync === "function"
+				? lm.removeLoginAsync(login)
+				: lm.removeLogin(login)),
+			modifyLoginAsync: async (oldLogin, newLogin) => (typeof lm.modifyLoginAsync === "function"
+				? lm.modifyLoginAsync(oldLogin, newLogin)
+				: lm.modifyLogin(oldLogin, newLogin)),
+		};
+	}
+
 	/** Backend for the Zotero/Gecko environment. */
 	function geckoBackend() {
 		/* global Components, Services, Zotero */
 		let LoginInfo = new Components.Constructor("@mozilla.org/login-manager/loginInfo;1",
 			Components.interfaces.nsILoginInfo, "init");
 		return {
-			logins: Services.logins,
+			logins: loginManager(Services.logins),
 			newLogin: (origin, realm, username, password) => new LoginInfo(origin, null, realm, username, password, "", ""),
 			keyStore: Zotero.OSKeyStore || null,
 			prefs: {
@@ -191,7 +209,7 @@
 
 	// Async wrappers: a login manager that can't be reached rejects instead of throwing during startup
 	return {
-		ORIGIN, REALM, SECRETS, createStore, geckoBackend,
+		ORIGIN, REALM, SECRETS, createStore, geckoBackend, loginManager,
 		get: async name => store().get(name),
 		set: async (name, value) => store().set(name, value),
 		clear: async name => store().clear(name),
