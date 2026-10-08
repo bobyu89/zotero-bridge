@@ -731,6 +731,8 @@ const TESTS = [
 			setPref("export.bibtex", true);
 			// A red highlight on the text PDF: coloured in place in the full-text note (fulltext.js)
 			let highlight = new Zotero.Item("annotation");
+			// The library first: the annotation setters look the parent attachment up by library and key
+			highlight.libraryID = ctx.textPDF.libraryID;
 			highlight.parentID = ctx.textPDF.id;
 			highlight.annotationType = "highlight";
 			highlight.annotationText = "The intervention reduced the rate of falls by thirty percent compared with usual care.";
