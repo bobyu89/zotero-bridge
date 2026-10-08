@@ -354,6 +354,34 @@ const TESTS = [
 			await step("unregisterClones", () => {
 				for (let id of ids) Zotero.ItemPaneManager.unregisterSection(id);
 			});
+			await step("failingElements", async () => {
+				let failing = [];
+				let all = [...doc.querySelectorAll("[data-l10n-id]")];
+				d.l10nElements = all.length;
+				for (let el of all) {
+					try {
+						await doc.l10n.translateElements([el]);
+					}
+					catch (e) {
+						failing.push(`${el.localName}#${el.id || ""} ${el.dataset.l10nId} args=${el.dataset.l10nArgs || ""} (${e})`);
+					}
+				}
+				d.failingElements = failing.slice(0, 20);
+			});
+			await step("translateRoots", async () => {
+				try {
+					await doc.l10n.translateRoots();
+				}
+				catch (e) {
+					d.translateRootsRejected = String(e);
+				}
+			});
+			await step("updatePluginSource", () => {
+				let reg = win.L10nRegistry.getInstance();
+				d.sources = reg.getSourceNames();
+				let src = reg.getSource("zotero-plugins");
+				if (src) reg.updateSources([src]);
+			});
 			let menu = Zotero.MenuManager._menuManager.options.find(o => o.pluginID === PLUGIN_ID);
 			await step("menuClone", () => {
 				let id = Zotero.MenuManager.registerMenu({
