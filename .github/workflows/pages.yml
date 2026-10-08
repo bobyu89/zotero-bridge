@@ -1,6 +1,6 @@
 name: pages
 
-# Publishes site/ (the install wizard) to GitHub Pages: https://bobyu89.github.io/zotero-bridge/
+# Publishes site/ (install wizard index.html + literature search search.html) to GitHub Pages: https://bobyu89.github.io/zotero-bridge/
 on:
   push:
     branches: [main]
