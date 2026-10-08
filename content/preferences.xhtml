@@ -45,6 +45,9 @@
 			<label value="全文最多送出字元數（0 = 不送全文，只用摘要與註記）："/>
 			<html:input type="number" min="0" step="10000" preference="extensions.zotero-bridge.llm.fullTextLimit"/>
 		</hbox>
+		<checkbox label="掃描版 PDF 直接傳給 AI 讀（Claude；較耗 token）" preference="extensions.zotero-bridge.llm.sendScannedPDF"/>
+		<description class="zb-hint">PDF 沒有文字層（掃描檔）時，把 PDF 檔本身傳給 AI 看每一頁（上限 20 MB、100 頁）；OpenAI 官方 API 也適用。比較省錢的做法是先用 OCR（例如 OCRmyPDF）加上文字層，或重新下載有文字的 PDF。</description>
+		<checkbox label="AI 也看圖片劃線（把圖片／手繪註記的截圖一起傳給 Claude，例如圈選的表格或圖；會增加 token 用量，OpenAI 不適用）" preference="extensions.zotero-bridge.images.sendToAI"/>
 		<label value="筆記模板（system prompt；留空 = 使用內建的護理／醫學文獻模板）："/>
 		<html:textarea id="zb-system-prompt" rows="8" preference="extensions.zotero-bridge.llm.systemPrompt"/>
 		<hbox>
@@ -96,6 +99,7 @@
 			</menulist>
 		</hbox>
 		<checkbox label="一併同步 Zotero 子筆記" preference="extensions.zotero-bridge.includeNotes"/>
+		<checkbox label="匯出圖片劃線（PDF 圖片／手繪註記的截圖：Obsidian 存到筆記旁的 attachments 資料夾，Notion 上傳成圖片）" preference="extensions.zotero-bridge.images.export"/>
 		<checkbox label="建立「Zotero 文獻庫.base」總表（表格 + 閱讀進度看板，需要 Obsidian 1.14 以上）" preference="extensions.zotero-bridge.obsidian.createBase"/>
 	</groupbox>
 
@@ -128,6 +132,17 @@
 			<button label="新增規則" oncommand="ZoteroBridgePrefs.addRule()"/>
 		</hbox>
 		<html:pre id="zb-rules-status" class="zb-status"/>
+	</groupbox>
+
+	<groupbox>
+		<label><html:h2>閱讀狀態</html:h2></label>
+		<checkbox label="在 Zotero、Notion、Obsidian 之間同步閱讀狀態（待讀／閱讀中／已讀／已引用）" preference="extensions.zotero-bridge.status.enabled"/>
+		<hbox align="center">
+			<label value="Zotero 標籤前綴："/>
+			<html:input type="text" preference="extensions.zotero-bridge.status.tagPrefix" placeholder="狀態/"/>
+		</hbox>
+		<checkbox label="標籤加上 emoji（例如「狀態/已讀 ✅」），Zotero 會把它顯示在條目清單的標題旁" preference="extensions.zotero-bridge.status.tagEmoji"/>
+		<description class="zb-hint">Zotero 用標籤（每篇只留一個）、Notion 用 Status 欄位、Obsidian 用 frontmatter 的 status。每次同步時，哪一邊改過就以那一邊為準；同時在不同地方改成不同狀態時，依 Obsidian &gt; Zotero &gt; Notion 採用並在進度視窗提示（自動同步時 Zotero 優先）。Notion／Obsidian 的修改會在下一次同步時帶回，或用 工具 → 同步閱讀狀態 一次更新全部。</description>
 	</groupbox>
 
 	<groupbox>

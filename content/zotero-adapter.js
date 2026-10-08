@@ -93,9 +93,64 @@
 		return null;
 	}
 
+	function hasTextLayerType(att) {
+		return att.isPDFAttachment() || att.attachmentContentType === "application/epub+zip"
+			|| att.attachmentContentType === "text/html";
+	}
+
+	/**
+	 * Read one attachment's text and what is needed to judge it (scanned.classifyFullText):
+	 * { key, title, filename, isPDF, path (false when the file isn't on this computer), text, chars, pages }
+	 */
+	async function readFullTextSource(att) {
+		let isPDF = att.isPDFAttachment();
+		let path = false;
+		try {
+			path = await att.getFilePathAsync();
+		}
+		catch (e) {}
+		let text = "";
+		try {
+			text = (await att.attachmentText) || "";
+		}
+		catch (e) {
+			Zotero.debug(`Zotero Bridge: could not read full text of ${att.key}: ${e}`);
+		}
+		let pages = 0;
+		if (isPDF) {
+			// Page count of an indexed PDF (fulltextItems.totalPages); a scan without any text is never indexed
+			try {
+				let row = Zotero.Fulltext && await Zotero.Fulltext.getPages(att.id);
+				pages = (row && Number(row.total)) || 0;
+			}
+			catch (e) {}
+			if (!pages && path && Zotero.PDFWorker) {
+				// Not indexed: extracting just the first page returns the total page count
+				try {
+					pages = Number((await Zotero.PDFWorker.getFullText(att.id, 1)).totalPages) || 0;
+				}
+				catch (e) {
+					Zotero.debug(`Zotero Bridge: could not count the pages of ${att.key}: ${e}`);
+				}
+			}
+		}
+		return {
+			key: att.key,
+			title: att.getField("title") || "",
+			filename: att.attachmentFilename || "",
+			isPDF,
+			path: path || false,
+			hasFile: !!path,
+			text,
+			chars: ZB.scanned.countChars(text),
+			pages,
+		};
+	}
+
 	/**
 	 * @param {Zotero.Item} item regular item
-	 * @param {object} opts { fullTextLimit: number|0 (0 = don't read full text) }
+	 * @param {object} opts { fullTextLimit: number|0 (0 = don't read full text),
+	 *   checkFullText: classify the full text (data.fullTextStatus) even when it isn't sent }
 	 */
 	async function extractItemData(item, opts = {}) {
 		let lib = libraryInfo(item.libraryID);
@@ -142,6 +197,7 @@
 		}
 
 		let fullTexts = [];
+		let sources = [];
 		for (let att of Zotero.Items.get(item.getAttachments())) {
 			if (!att.isFileAttachment()) continue;
 			let annotations = att.getAnnotations()
@@ -162,21 +218,22 @@
 				contentType: att.attachmentContentType,
 				annotations,
 			});
-			if (opts.fullTextLimit && (att.isPDFAttachment() || att.attachmentContentType === "application/epub+zip"
-					|| att.attachmentContentType === "text/html")) {
-				try {
-					let text = await att.attachmentText;
-					if (text) fullTexts.push(text);
-				}
-				catch (e) {
-					Zotero.debug(`Zotero Bridge: could not read full text of ${att.key}: ${e}`);
-				}
+			if ((opts.fullTextLimit || opts.checkFullText) && hasTextLayerType(att)) {
+				let source = await readFullTextSource(att);
+				sources.push(source);
+				if (opts.fullTextLimit && source.text) fullTexts.push(source.text);
 			}
 		}
 		if (fullTexts.length) {
 			let t = ZB.core.truncate(fullTexts.join("\n\n"), opts.fullTextLimit);
 			data.fullText = t.text;
 			data.fullTextTruncated = t.truncated;
+		}
+		if (opts.fullTextLimit || opts.checkFullText) {
+			// "ok" | "partial" | "none" | "no_pdf" (scanned.js); fullTextSource is the attachment it describes
+			let check = ZB.scanned.classifyFullText(sources);
+			data.fullTextStatus = check.status;
+			data.fullTextSource = check.source && Object.assign({}, check.source, { text: undefined });
 		}
 
 		for (let note of Zotero.Items.get(item.getNotes())) {

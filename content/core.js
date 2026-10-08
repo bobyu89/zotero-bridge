@@ -29,6 +29,8 @@
 		"zotero", "zotero_key", "library", "collections", "tags", "notion",
 		...STUDY_KEYS,
 		"ai_model", "ai_generated", "fulltext_truncated", "date_added", "last_synced",
+		// Full-text status of the PDF (scanned.js): ok / partial / none / no_pdf
+		"full_text",
 		// Set only while the item is deleted in Zotero (markObsidianNoteDeleted); a re-sync drops them
 		"zotero_deleted", "status_before_delete",
 	];
@@ -290,6 +292,7 @@
 			ai_model: opts.aiModel || "",
 			ai_generated: opts.aiGeneratedAt || "",
 			fulltext_truncated: opts.fullTextTruncated ? true : "",
+			full_text: data.fullTextStatus || "",
 			date_added: data.dateAdded || "",
 			last_synced: opts.now || "",
 		});
@@ -329,6 +332,11 @@
 		}
 		else if (ann.type === "image" || ann.type === "ink") {
 			out.push(`> ${color.emoji} *[${ann.type === "image" ? "圖片" : "手繪"}註記]* — ${link}`);
+			// The rendered PNG (annotation-images.js), on its own line so it isn't part of the quote
+			if (ann.image && ann.image.embed) {
+				out.push("");
+				out.push(`![[${ann.image.embed}]]`);
+			}
 		}
 		else {
 			out.push(`> ${color.emoji} *[便利貼]* — ${link}`);

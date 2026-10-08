@@ -53,6 +53,10 @@
 				baseURL: String(pref("llm.openaiBaseURL") || "").trim(),
 				systemPrompt: pref("llm.systemPrompt") || "",
 				fullTextLimit: Number(pref("llm.fullTextLimit")) || 0,
+				// Scanned PDFs (scanned.js): send the file itself, within these limits
+				sendScannedPDF: pref("llm.sendScannedPDF") !== false,
+				pdfMaxMB: Number(pref("llm.pdfMaxMB")) || 0,
+				pdfMaxPages: Number(pref("llm.pdfMaxPages")) || 0,
 				synthesisPrompt: pref("llm.synthesisPrompt") || "",
 			},
 			notionSynthesisParent: String(pref("notion.synthesisParent") || "").trim(),
@@ -71,6 +75,21 @@
 		for (let id of ids) {
 			selfModified.add(id);
 			setTimeout(() => selfModified.delete(id), AUTO_SYNC_DELAY_MS * 2);
+		}
+	}
+
+	/**
+	 * Save a change of our own (a reading-status tag) without auto-sync reacting to it. Zotero notifies
+	 * observers before saveTx() resolves, so only that save is skipped, not the user's next edit.
+	 */
+	async function saveQuietly(item) {
+		let had = selfModified.has(item.id);
+		selfModified.add(item.id);
+		try {
+			await item.saveTx();
+		}
+		finally {
+			if (!had) selfModified.delete(item.id);
 		}
 	}
 
@@ -159,7 +178,7 @@
 		for (let att of data.attachments || []) {
 			for (let ann of att.annotations || []) texts.push(ann.text);
 		}
-		let check = ZB.verify.verifyQuotes(parsed.md.trim(), { fullText: data.fullText, texts });
+		let check = ZB.verify.verifyQuotes(parsed.md.trim(), ZB.scanned.quoteSources(data, texts));
 		let summary = ZB.verify.summarize(check);
 		if (summary) messages.push(summary);
 		return { md: check.md, data: parsed.data, raw: parsed.found && !parsed.data ? parsed.raw : "", messages, check };
@@ -175,6 +194,8 @@
 		}
 		let data = await ZB.adapter.extractItemData(item, {
 			fullTextLimit: needAI ? settings.llm.fullTextLimit : 0,
+			// Always judged, for the frontmatter full_text and the Notion "Full Text" column
+			checkFullText: true,
 		});
 		let notesMarkdown = settings.includeNotes
 			? data.notes.map(n => ({ title: n.title, md: ZB.markdown.htmlToMd(n.html, parseHTML) }))
@@ -185,14 +206,28 @@
 		let messages = [];
 		let quoteCheck = null;
 		let ai = null;
+		// PNGs of image/ink annotations, when this sync uses them (annotation-images.js)
+		let images = await ZB.images.collect(data, { targets: action.targets, ai: needAI }, ctx, messages);
+		// Scanned PDF: send the file itself; nothing at all to read: no AI call (scanned.js)
+		let aiInput = null;
+		if (needAI) {
+			aiInput = await ZB.scanned.prepareAIInput(data, settings.llm, notesMarkdown, IOUtils);
+			messages.push(...aiInput.messages);
+			if (aiInput.skip) needAI = false;
+		}
 		if (needAI) {
 			ctx.status("AI 產生筆記中…");
 			try {
-				let result = await ZB.llm.generateNote(settings.llm, data, {
+				// When the PDF itself is sent the AI sees the figures on its pages, so the annotation
+				// images are only added if it has to fall back to text
+				let promptImages = await ZB.images.forPrompt(images, settings.llm, ctx, messages);
+				let result = await ZB.scanned.generateWithPDF(aiInput, data, notesMarkdown, pdf => ZB.llm.generateNote(settings.llm, data, {
 					systemPrompt: settings.llm.systemPrompt,
 					notesMarkdown,
 					fullTextTruncated: data.fullTextTruncated,
-				}, (url, init) => fetch(url, init), Object.assign({ onRetry: retryStatus(ctx.status) }, ctx.retry));
+					images: pdf ? [] : promptImages,
+					pdf,
+				}, (url, init) => fetch(url, init), Object.assign({ onRetry: retryStatus(ctx.status) }, ctx.retry)), messages);
 				recordAIUsage(result, ctx.usage);
 				let at = nowISO();
 				let processed = processGeneratedNote(result.text.trim(), data);
@@ -224,6 +259,8 @@
 				index: ctx.obsidianIndex, rename: action.targets.has("obsidian"),
 			});
 		}
+		// Reading status merged across Zotero, Notion and Obsidian before anything is written (status.js)
+		let status = await ZB.status.prepare(item, data, { settings, action, route, obsidian, ctx, messages });
 
 		let notionUrl = null;
 		if (action.targets.has("notion")) {
@@ -231,7 +268,7 @@
 			try {
 				if (!route.notionDatabase) throw new Error(`沒有對應的資料庫（規則：${route.ruleName || "預設"}）`);
 				notionUrl = await syncNotion(ctx.notion(settings.notionToken), route.notionDatabase, data, {
-					ai, notesMarkdown, obsidianURI: obsidian && obsidian.uri, messages,
+					ai, notesMarkdown, obsidianURI: obsidian && obsidian.uri, messages, images, status,
 				}, ctx);
 			}
 			catch (e) {
@@ -242,7 +279,8 @@
 		if (action.targets.has("obsidian")) {
 			ctx.status("寫入 Obsidian…");
 			try {
-				await writeObsidian(obsidian, data, { ai, notesMarkdown, notionUrl });
+				let noteData = await ZB.images.writeToVault(obsidian, data, images, messages);
+				await writeObsidian(obsidian, noteData, { ai, notesMarkdown, notionUrl, status });
 				if (ctx.obsidianIndex) ctx.obsidianIndex.add(`${data.libraryPath}/${data.key}`, obsidian.path, obsidian.relParts);
 			}
 			catch (e) {
@@ -424,6 +462,7 @@
 			notionUrl,
 			now: nowISO(),
 		});
+		text = ZB.status.applyPlanToNote(text, opts.status);
 		if (text !== existing) {
 			await IOUtils.writeUTF8(obsidian.path, text);
 		}
@@ -481,11 +520,16 @@
 			citationKey: data.citationKey,
 			zoteroKey,
 			summary: opts.ai ? ZB.markdown.plainText(ZB.llm.extractSummary(opts.ai.md)) : "",
+			fullText: data.fullTextStatus,
 			study,
 			apa: data.apa,
+			status: ZB.status.notionValue(opts.status),
 			lastSynced: nowISO(),
 		});
-		let page = await client.findPageByZoteroKey(dsId, zoteroKey);
+		// The page status.js already looked up while merging the reading status
+		let page = opts.status && opts.status.notionPage !== undefined
+			? opts.status.notionPage
+			: await client.findPageByZoteroKey(dsId, zoteroKey);
 		if (page) {
 			page = await client.request("PATCH", `pages/${page.id}`, { properties });
 		}
@@ -495,11 +539,14 @@
 				properties,
 			});
 		}
-		let md = ZB.core.buildManagedSection(data, {
+		ZB.status.notionWritten(opts.status);
+		// Image annotations are uploaded just before the blocks that show them are written
+		let uploaded = await ZB.images.uploadToNotion(client, data, opts.images, ctx, opts.messages || []);
+		let md = ZB.core.buildManagedSection(uploaded.data, {
 			aiMarkdown: opts.ai && opts.ai.md,
 			notesMarkdown: opts.notesMarkdown,
 		});
-		let blocks = ZB.markdown.mdToNotionBlocks(md);
+		let blocks = ZB.markdown.mdToNotionBlocks(md, { images: uploaded.ids });
 		await client.replaceManagedContainer(page.id, "自動同步區（重新同步會覆寫，個人筆記請寫在此區塊外）", blocks);
 		return page.url;
 	}
@@ -758,6 +805,13 @@
 			Zotero.logError(e);
 			return "";
 		}
+	}
+
+	/** Run `fn` after any sync in progress, like run() (status.js uses it for the status-only pass). */
+	function enqueue(fn) {
+		let p = running.then(fn);
+		running = p.catch(() => {});
+		return p;
 	}
 
 	function notify(headline, text) {
@@ -1150,6 +1204,11 @@
 				},
 				{
 					menuType: "menuitem",
+					l10nID: "zotero-bridge-menu-status",
+					onCommand: () => ZB.status.runPass().catch(e => Zotero.logError(e)),
+				},
+				{
+					menuType: "menuitem",
 					l10nID: "zotero-bridge-menu-stop",
 					onShowing: (ev, context) => context.setVisible(!!currentBatch && !currentBatch.cancelled),
 					onCommand: () => cancelBatch(),
@@ -1184,6 +1243,7 @@
 
 	function renderPane({ doc, body, item, setSectionSummary }) {
 		body.replaceChildren();
+		ZB.status.renderPaneRow(doc, body, item);
 		let el = (tag, text, style) => {
 			let e = doc.createElement(tag);
 			if (text !== undefined) e.textContent = text;
@@ -1368,5 +1428,7 @@
 		ZB.bibliography.shutdown();
 	}
 
-	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime };
+	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime,
+		// for status.js
+		enqueue, notify, buildObsidianIndex, saveQuietly };
 })(this);

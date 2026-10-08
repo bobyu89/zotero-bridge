@@ -95,6 +95,7 @@ function makeEnv({ prefs, fetch, logins = [], confirm = () => true, timers }) {
 		getCreatorsJSON() { return this.fields.creators || []; }
 		getTags() { return this.tags.map(tag => ({ tag })); }
 		addTag(t) { this.tags.push(t); }
+		removeTag(t) { this.tags = this.tags.filter(x => x !== t); }
 		getCollections() { return this.fields.collectionIDs || []; }
 		getAttachments() { return this.children.filter(id => items.get(id).itemType === "attachment"); }
 		getNotes() { return this.children.filter(id => items.get(id).itemType === "note"); }
@@ -291,12 +292,15 @@ function notionMock(log, pages = new Map()) {
 		}
 		if (p === "data_sources/ds-1/query") {
 			// Like Notion, a query doesn't return pages in the trash
+			if (body.filter.rich_text && body.filter.rich_text.is_not_empty) {
+				return ok({ results: [...pages.values()].filter(pg => !pg.in_trash), has_more: false });
+			}
 			let keys = body.filter.or ? body.filter.or.map(f => f.rich_text.equals) : [body.filter.rich_text.equals];
 			return ok({ results: keys.filter(k => pages.has(k) && !pages.get(k).in_trash).map(k => pages.get(k)), has_more: false });
 		}
 		if (p === "pages" && init.method === "POST") {
 			let id = `page-${pages.size + 1}`;
-			let page = { id, url: `https://www.notion.so/${id}` };
+			let page = { id, url: `https://www.notion.so/${id}`, properties: body.properties };
 			pages.set(body.properties["Zotero Key"].rich_text[0].text.content, page);
 			return ok(page);
 		}
@@ -304,6 +308,7 @@ function notionMock(log, pages = new Map()) {
 		if (m) {
 			let page = [...pages.values()].find(pg => pg.id === m[1]);
 			if (body && body.in_trash !== undefined) page.in_trash = body.in_trash;
+			if (body && body.properties) Object.assign(page.properties, body.properties);
 			return ok(page);
 		}
 		if (/^blocks\/page-\d+\/children\?/.test(p)) return ok({ results: [], has_more: false });
@@ -493,7 +498,8 @@ test("AI failure still writes Obsidian, and an unconfigured Notion is skipped", 
 	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
 	let sleeps = [];
 	env.context.ZB.main.runtime.retry = { sleep: async (ms) => { sleeps.push(ms); } };
-	let item = new env.MockItem("book", { title: "Nursing Theory", year: "2020", creators: [{ name: "WHO", creatorType: "author" }] });
+	// An abstract to read (an item with nothing at all to read never reaches the AI)
+	let item = new env.MockItem("book", { title: "Nursing Theory", year: "2020", creators: [{ name: "WHO", creatorType: "author" }], abstractNote: "Abstract" });
 	await env.context.ZB.main.run([item], { targets: ["notion", "obsidian"], ai: "missing" });
 
 	// 1 try + 4 retries, each waiting the server's retry-after-ms; never any Notion call without a token
@@ -506,6 +512,113 @@ test("AI failure still writes Obsidian, and an unconfigured Notion is skipped", 
 	let text = fs.readFileSync(path.join(vault, "WHO 2020 - Nursing Theory.md"), "utf8");
 	assert.match(text, /^title: "Nursing Theory"$/m);
 	assert.doesNotMatch(text, /AI 文獻筆記/);
+});
+
+test("scanned PDF: the file goes to Claude, the status reaches Obsidian and Notion; nothing to read skips the AI", async () => {
+	let vault = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-vault-"));
+	let storage = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-storage-"));
+	let pdfPath = path.join(storage, "scan.pdf");
+	let pdfBytes = Buffer.from("%PDF-1.4\n% scanned pages, images only\n");
+	fs.writeFileSync(pdfPath, pdfBytes);
+	let log = [];
+	let env = makeEnv({
+		fetch: notionMock(log),
+		prefs: basePrefs(vault, {
+			"extensions.zotero-bridge.llm.enabled": true,
+			"extensions.zotero-bridge.llm.provider": "anthropic",
+			"extensions.zotero-bridge.llm.anthropicKey": "sk-ant-test",
+			"extensions.zotero-bridge.llm.anthropicModel": "claude-opus-5-5",
+			"extensions.zotero-bridge.llm.fullTextLimit": "150000",
+		}),
+	});
+	// Zotero's full-text index: a scan without text is never indexed, so the page count comes from
+	// the PDF worker; the partly scanned PDF below is indexed (10 pages)
+	let pageRows = new Map();
+	let workerCalls = [];
+	env.Zotero.Fulltext = { getPages: async id => pageRows.get(id) || false };
+	env.Zotero.PDFWorker = {
+		getFullText: async (id, maxPages) => {
+			workerCalls.push([id, maxPages]);
+			return { text: "", extractedPages: 0, totalPages: 3 };
+		},
+	};
+	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
+	let creators = [{ lastName: "Chen", creatorType: "author" }];
+
+	let scan = new env.MockItem("journalArticle", { title: "Scanned RCT", year: "1998", citationKey: "chen1998", creators, abstractNote: "Abstract of a scanned paper" });
+	let pdf = new env.MockItem("attachment", { title: "Full Text PDF", fulltext: "" });
+	pdf.getFilePathAsync = async () => pdfPath;
+	env.addChild(scan, pdf);
+	pdf.annotations = [{
+		key: "ANN1", annotationType: "highlight", annotationText: "Falls decreased", annotationComment: "",
+		annotationColor: "#ffd400", annotationPageLabel: "5", annotationSortIndex: "00001", getTags: () => [],
+	}];
+	// Bibliographic fields only: nothing for the AI to read
+	let bare = new env.MockItem("journalArticle", { title: "Bare record", year: "2001", citationKey: "lee2001", creators });
+
+	await env.context.ZB.main.run([scan, bare], { targets: ["notion", "obsidian"], ai: "missing" });
+	assert.deepEqual(env.errors, []);
+	assert.deepEqual(workerCalls, [[pdf.id, 1]], "only the page count is asked of the PDF worker");
+
+	// One Claude call, for the scan, with the PDF as a base64 document block before the prompt
+	let llmCalls = log.filter(l => l.api === "anthropic");
+	assert.equal(llmCalls.length, 1);
+	let content = llmCalls[0].body.messages[0].content;
+	assert.deepEqual(content[0], { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBytes.toString("base64") } });
+	assert.equal(content[1].type, "text");
+	assert.match(content[1].text, /全文以附件 PDF 提供/);
+	assert.doesNotMatch(content[1].text, /<fulltext>/);
+
+	let [scanLine, bareLine] = env.progressLines.filter(l => !/要中途停止/.test(l.text));
+	assert.equal(scanLine.error, undefined, scanLine.text);
+	assert.equal(scanLine.text, "Scanned RCT — ⚠️ 掃描版 PDF（沒有文字層）：已把 PDF 直接傳給 AI 讀（3 頁，較耗 token）；可引用句 2 句：✅ 1、⚠️ 1 句無全文可查證");
+	assert.equal(bareLine.error, undefined, bareLine.text);
+	assert.equal(bareLine.text, "Bare record — ⚠️ 沒有全文、摘要、劃線或筆記可讀，略過 AI 筆記（避免 AI 憑空產生內容）");
+
+	// The call is in the usage ledger like any other
+	let month = JSON.parse(env.prefStore["extensions.zotero-bridge.usage.ledger"])[env.context.ZB.usage.monthKey()];
+	assert.equal(month.calls, 1);
+	assert.equal(month.input, 12000);
+
+	// Quotes: the one from the highlight is verified, the other can't be checked without a text layer
+	let aiNote = env.Zotero.Items.get(scan.getNotes()).find(n => n.tags.includes("zotero-bridge-ai"));
+	assert.match(aiNote.noteHTML, /Falls decreased by 30%&quot; \(p\. 5\) ⚠️ 無全文可查證/);
+	assert.equal(env.Zotero.Items.get(bare.getNotes()).length, 0, "no AI note for the bare record");
+
+	// Obsidian frontmatter and the Notion column
+	let scanNote = fs.readFileSync(path.join(vault, "Zotero", "chen1998.md"), "utf8");
+	assert.match(scanNote, /^full_text: "none"$/m);
+	let bareNote = fs.readFileSync(path.join(vault, "Zotero", "lee2001.md"), "utf8");
+	assert.match(bareNote, /^full_text: "no_pdf"$/m);
+	assert.doesNotMatch(bareNote, /^ai_model:/m);
+	let created = log.filter(l => l.path === "pages" && l.method === "POST");
+	assert.deepEqual(created.map(c => c.body.properties["Full Text"]), [{ select: { name: "none" } }, { select: { name: "no_pdf" } }]);
+
+	// A mostly scanned PDF with the option off: the partial text layer is sent, with a warning
+	log.length = 0;
+	env.prefStore["extensions.zotero-bridge.llm.sendScannedPDF"] = false;
+	let partial = new env.MockItem("journalArticle", { title: "Partly scanned", year: "2005", citationKey: "wu2005", creators, abstractNote: "Abstract" });
+	let partialPdf = new env.MockItem("attachment", { title: "PDF", fulltext: "Page one text. ".repeat(160) });
+	partialPdf.getFilePathAsync = async () => pdfPath;
+	env.addChild(partial, partialPdf);
+	pageRows.set(partialPdf.id, { indexedPages: 10, total: 10 });
+	await env.context.ZB.main.run([partial], { targets: ["notion", "obsidian"], ai: "missing" });
+	assert.deepEqual(env.errors, []);
+	assert.equal(workerCalls.length, 1, "indexed PDFs take the page count from the index");
+	let call = log.find(l => l.api === "anthropic");
+	assert.equal(typeof call.body.messages[0].content, "string", "no PDF attached");
+	assert.match(call.body.messages[0].content, /<fulltext>\n（這份 PDF 大部分頁面是掃描影像/);
+	assert.match(env.progressLines.at(-1).text, /^Partly scanned — ⚠️ PDF 大部分沒有文字層（每頁平均約 192 字），AI 讀到的全文不完整；/);
+	assert.match(fs.readFileSync(path.join(vault, "Zotero", "wu2005.md"), "utf8"), /^full_text: "partial"$/m);
+
+	// A sync without AI still writes the status (and reads no PDF)
+	log.length = 0;
+	await env.context.ZB.main.run([scan], { targets: ["notion", "obsidian"], ai: "none" });
+	assert.equal(log.filter(l => l.api === "anthropic").length, 0);
+	assert.match(fs.readFileSync(path.join(vault, "Zotero", "chen1998.md"), "utf8"), /^full_text: "none"$/m);
+	let patch = log.find(l => l.method === "PATCH" && /^pages\/page-\d+$/.test(l.path));
+	assert.deepEqual(patch.body.properties["Full Text"], { select: { name: "none" } });
+	assert.equal(env.progressLines.at(-1).text, "Scanned RCT", "status warnings only when the AI ran");
 });
 
 test("item pane shows the AI note; synthesis from a collection writes Obsidian, Notion and a Zotero note", async () => {
@@ -664,7 +777,7 @@ test("keys come from the login manager; batch confirm shows a cost estimate; 529
 		};
 		return push(line);
 	};
-	let items = Array.from({ length: 6 }, (_, i) => new env.MockItem("journalArticle", { title: `Paper ${i}`, year: "2024" }));
+	let items = Array.from({ length: 6 }, (_, i) => new env.MockItem("journalArticle", { title: `Paper ${i}`, year: "2024", abstractNote: `Abstract ${i}` }));
 	await env.context.ZB.main.run(items, { targets: ["notion", "obsidian"], ai: "missing" });
 
 	assert.deepEqual(env.errors, []);
@@ -1230,4 +1343,266 @@ test("a batch cut off by shutdown is reported at the next startup", async () => 
 	assert.equal(next.descriptions.at(-1), "還有 2 筆文獻沒有同步。要接續：工具 → 繼續未完成的 Zotero Bridge 同步。");
 	assert.equal(JSON.parse(next.prefStore["extensions.zotero-bridge.batch.pending"]).running, false, "reminded once");
 	assert.deepEqual(next.errors, []);
+});
+
+// ---------- reading status (status.js) ----------
+
+const statusOf = text => (/^status: "?([^"\n]*)"?$/m.exec(text) || [])[1];
+const syncedOf = text => (/^status_synced: "?([^"\n]*)"?$/m.exec(text) || [])[1];
+const statusTags = item => item.tags.filter(t => t.startsWith("狀態/"));
+const setNoteStatus = (file, value) => fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace(/^status: .*$/m, `status: ${value}`));
+
+test("reading status: a change in Zotero, Notion or Obsidian reaches the other two on the next sync", async () => {
+	let vault = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-vault-"));
+	let log = [];
+	let pages = new Map();
+	let timers = [];
+	let env = makeEnv({ fetch: notionMock(log, pages), timers, prefs: basePrefs(vault, { "extensions.zotero-bridge.autoSync": true }) });
+	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
+	let ZB = env.context.ZB;
+	let creators = [{ lastName: "Chen", creatorType: "author" }];
+	let a = new env.MockItem("journalArticle", { title: "A", year: "2024", citationKey: "chen2024", creators });
+	let b = new env.MockItem("journalArticle", { title: "B", year: "2021", citationKey: "lee2021", creators });
+	let c = new env.MockItem("journalArticle", { title: "C", year: "2022", citationKey: "lin2022", creators });
+	a.tags = ["fall prevention"];
+	let sync = (items, targets = ["notion", "obsidian"]) => ZB.main.run(items, { targets, ai: "none" });
+	let file = item => path.join(vault, "Zotero", item.fields.citationKey + ".md");
+	let page = item => pages.get(`library/${item.key}`);
+	let notionStatus = item => page(item).properties.Status && page(item).properties.Status.select.name;
+	let statusPatches = () => log.filter(l => l.method === "PATCH" && /^pages\//.test(l.path) && l.body.properties && l.body.properties.Status)
+		.map(l => [l.path, l.body.properties.Status.select.name]);
+
+	// C was synced by an earlier version (no status sync), then dragged to 已讀 on the kanban
+	env.prefStore["extensions.zotero-bridge.status.enabled"] = false;
+	await sync([c]);
+	assert.equal(notionStatus(c), undefined);
+	setNoteStatus(file(c), "已讀");
+	delete env.prefStore["extensions.zotero-bridge.status.enabled"];
+
+	await sync([a, b, c]);
+	assert.deepEqual(env.errors, []);
+	for (let item of [a, b]) {
+		let text = fs.readFileSync(file(item), "utf8");
+		assert.equal(statusOf(text), "待讀");
+		assert.equal(syncedOf(text), "待讀");
+		assert.deepEqual(statusTags(item), ["狀態/待讀"]);
+		assert.equal(notionStatus(item), "待讀");
+	}
+	// The user's 已讀 is kept (not the default 待讀) and given to Zotero and Notion
+	let textC = fs.readFileSync(file(c), "utf8");
+	assert.equal(statusOf(textC), "已讀");
+	assert.equal(syncedOf(textC), "已讀");
+	assert.deepEqual(statusTags(c), ["狀態/已讀 ✅"]);
+	assert.equal(notionStatus(c), "已讀");
+	// The status tag is carried by Status / `status`, not by Tags / `tags`
+	assert.deepEqual(page(a).properties.Tags.multi_select, [{ name: "fall prevention" }]);
+	assert.match(fs.readFileSync(file(a), "utf8"), /^tags:\n {2}- "fall-prevention"\nnotion:/m);
+	assert.ok(env.progressLines.every(l => !/閱讀狀態/.test(l.text)), "no status messages for new or upgraded items");
+
+	// Zotero: the user swaps the tag (e.g. with a colored tag's number key, so both are there for a moment)
+	a.tags.push("狀態/已讀 ✅");
+	log.length = 0;
+	await sync([a]);
+	assert.deepEqual(statusTags(a), ["狀態/已讀 ✅"], "exactly one status tag left");
+	assert.equal(statusOf(fs.readFileSync(file(a), "utf8")), "已讀");
+	assert.equal(syncedOf(fs.readFileSync(file(a), "utf8")), "已讀");
+	assert.deepEqual(statusPatches(), [[`pages/${page(a).id}`, "已讀"]]);
+	assert.equal(log.filter(l => l.path === "data_sources/ds-1/query").length, 1, "the page looked up for the status is reused");
+	assert.equal(env.progressLines.at(-1).text, "A — 閱讀狀態 → 已讀（來自 Zotero）");
+
+	// Notion: Status changed on the page
+	page(b).properties.Status = { select: { name: "已引用" } };
+	await sync([b]);
+	assert.deepEqual(statusTags(b), ["狀態/已引用 📝"]);
+	assert.equal(statusOf(fs.readFileSync(file(b), "utf8")), "已引用");
+	assert.equal(env.progressLines.at(-1).text, "B — 閱讀狀態 → 已引用（來自 Notion）");
+
+	// Obsidian: card dragged on the kanban (Obsidian writes the value unquoted)
+	setNoteStatus(file(a), "閱讀中");
+	log.length = 0;
+	await sync([a]);
+	assert.deepEqual(statusTags(a), ["狀態/閱讀中 📖"]);
+	assert.equal(notionStatus(a), "閱讀中");
+	assert.equal(syncedOf(fs.readFileSync(file(a), "utf8")), "閱讀中");
+
+	// Changed in two places to different values: Obsidian wins, and the progress line says so
+	setNoteStatus(file(b), "已讀");
+	page(b).properties.Status = { select: { name: "閱讀中" } };
+	await sync([b]);
+	assert.equal(env.progressLines.at(-1).text, "B — ⚠️ 閱讀狀態衝突：Obsidian「已讀」、Notion「閱讀中」 → 採用 Obsidian「已讀」");
+	assert.equal(env.progressLines.at(-1).error, undefined, "a conflict is not a failure");
+	assert.equal(notionStatus(b), "已讀");
+	assert.deepEqual(statusTags(b), ["狀態/已讀 ✅"]);
+
+	// An Obsidian-only sync leaves Notion alone and doesn't move status_synced…
+	a.tags = a.tags.filter(t => !t.startsWith("狀態/")).concat("狀態/已引用 📝");
+	log.length = 0;
+	await sync([a], ["obsidian"]);
+	assert.equal(log.filter(l => l.api === "notion").length, 0);
+	let textA = fs.readFileSync(file(a), "utf8");
+	assert.equal(statusOf(textA), "已引用");
+	assert.equal(syncedOf(textA), "閱讀中");
+	// …so the next full sync still takes it to Notion, without a conflict
+	await sync([a]);
+	assert.equal(notionStatus(a), "已引用");
+	assert.equal(syncedOf(fs.readFileSync(file(a), "utf8")), "已引用");
+	assert.doesNotMatch(env.progressLines.at(-1).text, /衝突/);
+
+	// The plugin's own tag write doesn't trigger auto-sync (Zotero notifies inside saveTx)…
+	let observer = env.observers[0].ref;
+	let flushes = () => timers.filter(t => t.ms === 8000 && !t.cleared && !t.fired);
+	c.saveTx = async function () {
+		observer.notify("modify", "item", [this.id], {});
+		return this.id;
+	};
+	page(c).properties.Status = { select: { name: "閱讀中" } };
+	await sync([c]);
+	assert.deepEqual(statusTags(c), ["狀態/閱讀中 📖"]);
+	assert.equal(flushes().length, 0, "nothing queued");
+	// …but the user's next change to the item does
+	c.tags = ["狀態/已引用 📝"];
+	observer.notify("modify", "item", [c.id], {});
+	assert.equal(flushes().length, 1);
+	// Auto-sync follows a change in Zotero, so Zotero wins a conflict there (with a notice: no progress window)
+	setNoteStatus(file(c), "已讀");
+	let flush = flushes()[0];
+	flush.fired = true;
+	flush.fn();
+	await ZB.main.run([], {});
+	assert.deepEqual(statusTags(c), ["狀態/已引用 📝"]);
+	assert.equal(statusOf(fs.readFileSync(file(c), "utf8")), "已引用");
+	assert.equal(notionStatus(c), "已引用");
+	assert.equal(env.descriptions.at(-1), "C\n⚠️ 閱讀狀態衝突：Zotero「已引用」、Obsidian「已讀」 → 採用 Zotero「已引用」");
+	assert.deepEqual(env.errors, []);
+});
+
+test("reading status: Tools → 同步閱讀狀態 updates only the status of synced items and leaves trashed ones alone", async () => {
+	let vault = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-vault-"));
+	let log = [];
+	let pages = new Map();
+	let env = makeEnv({ fetch: notionMock(log, pages), prefs: basePrefs(vault) });
+	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
+	let ZB = env.context.ZB;
+	let creators = [{ lastName: "Chen", creatorType: "author" }];
+	let [a, b, c, d] = ["a", "b", "c", "d"].map(k => new env.MockItem("journalArticle", { title: `Paper ${k}`, year: "2024", citationKey: `key${k}`, creators }));
+	let neverSynced = new env.MockItem("journalArticle", { title: "Not synced", year: "2024", citationKey: "keye", creators });
+	await ZB.main.run([a, b, c, d], { targets: ["notion", "obsidian"], ai: "none" });
+	let file = item => path.join(vault, "Zotero", item.fields.citationKey + ".md");
+	let page = item => pages.get(`library/${item.key}`);
+	// D is trashed: its Notion page goes to the trash and its note is marked 已刪除
+	d.deleted = true;
+	await ZB.main.archiveItems([`library/${d.key}`]);
+	let textD = fs.readFileSync(file(d), "utf8");
+	assert.equal(statusOf(textD), "已刪除");
+
+	// Changes in each app since the last sync; a's note also has the user's own writing
+	setNoteStatus(file(a), "已讀");
+	fs.appendFileSync(file(a), "\n我的心得\n");
+	page(b).properties.Status = { select: { name: "閱讀中" } };
+	c.tags = ["狀態/已引用 📝"];
+	let before = new Map([a, b, c].map(i => [i, fs.readFileSync(file(i), "utf8")]));
+	log.length = 0;
+
+	let tools = env.menus.find(m => m.menuID === "zotero-bridge-tools").menus;
+	let entry = tools.find(m => m.l10nID === "zotero-bridge-menu-status");
+	entry.onCommand();
+	await ZB.main.run([], {}); // runs after the pass
+	assert.deepEqual(env.errors, []);
+
+	// Notion: one query for the whole database, then one PATCH of just Status per page that changed
+	let notionCalls = log.filter(l => l.api === "notion");
+	let queries = notionCalls.filter(l => l.path === "data_sources/ds-1/query");
+	assert.deepEqual(queries.map(q => q.body), [{ filter: { property: "Zotero Key", rich_text: { is_not_empty: true } }, page_size: 100 }]);
+	let patches = notionCalls.filter(l => l.method === "PATCH");
+	assert.deepEqual(patches.map(l => [l.path, l.body]), [
+		[`pages/${page(a).id}`, { properties: { Status: { select: { name: "已讀" } } } }],
+		[`pages/${page(c).id}`, { properties: { Status: { select: { name: "已引用" } } } }],
+	]);
+	assert.ok(!notionCalls.some(l => l.method === "POST" && l.path === "pages" || /^blocks\//.test(l.path)), "no pages created, no content rewritten");
+	assert.equal(log.filter(l => l.api === "anthropic").length, 0);
+
+	// Zotero: one status tag each
+	assert.deepEqual(statusTags(a), ["狀態/已讀 ✅"]);
+	assert.deepEqual(statusTags(b), ["狀態/閱讀中 📖"]);
+	assert.deepEqual(statusTags(c), ["狀態/已引用 📝"]);
+	// Obsidian: only the status keys changed
+	let expected = { [a.key]: "已讀", [b.key]: "閱讀中", [c.key]: "已引用" };
+	let withoutStatus = t => t.replace(/^status(_synced)?: .*\n/gm, "");
+	for (let item of [a, b, c]) {
+		let after = fs.readFileSync(file(item), "utf8");
+		assert.equal(statusOf(after), expected[item.key]);
+		assert.equal(syncedOf(after), expected[item.key]);
+		assert.equal(withoutStatus(after), withoutStatus(before.get(item)));
+	}
+	assert.match(fs.readFileSync(file(a), "utf8"), /我的心得/);
+	// The trashed item and the never-synced one are left alone
+	assert.equal(fs.readFileSync(file(d), "utf8"), textD);
+	assert.equal(page(d).in_trash, true);
+	assert.deepEqual(statusTags(d), ["狀態/待讀"]);
+	assert.deepEqual(neverSynced.tags, []);
+	assert.ok(!fs.existsSync(file(neverSynced)));
+	assert.equal(env.descriptions.at(-1), "閱讀狀態：檢查 3 筆，更新 Zotero 2 筆、Notion 2 筆、Obsidian 2 筆");
+
+	// Run again: nothing left to do
+	log.length = 0;
+	entry.onCommand();
+	await ZB.main.run([], {});
+	assert.equal(log.filter(l => l.method === "PATCH").length, 0);
+	assert.equal(env.descriptions.at(-1), "閱讀狀態：檢查 3 筆，三邊都一致");
+
+	// A conflict is listed on its own progress line
+	setNoteStatus(file(a), "閱讀中");
+	page(a).properties.Status = { select: { name: "已引用" } };
+	entry.onCommand();
+	await ZB.main.run([], {});
+	assert.ok(env.progressLines.some(l => l.text === "Paper a — ⚠️ 閱讀狀態衝突：Obsidian「閱讀中」、Notion「已引用」 → 採用 Obsidian「閱讀中」"));
+	assert.equal(page(a).properties.Status.select.name, "閱讀中");
+	assert.match(env.descriptions.at(-1), /；衝突 1 筆（依 Obsidian > Zotero > Notion 採用）$/);
+	assert.deepEqual(env.errors, []);
+});
+
+test("reading status: without a vault the last synced value lives in a pref; the item pane sets the tag", async () => {
+	let log = [];
+	let pages = new Map();
+	let env = makeEnv({ fetch: notionMock(log, pages), prefs: basePrefs("", { "extensions.zotero-bridge.obsidian.vaultPath": "" }) });
+	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
+	let ZB = env.context.ZB;
+	let a = new env.MockItem("journalArticle", { title: "A", year: "2024", citationKey: "chen2024", creators: [{ lastName: "Chen", creatorType: "author" }] });
+	let bases = () => JSON.parse(env.prefStore["extensions.zotero-bridge.status.synced"] || "{}");
+	await ZB.main.run([a], { targets: ["notion", "obsidian"], ai: "none" });
+	assert.deepEqual(bases(), { [`library/${a.key}`]: "待讀" });
+	assert.deepEqual(statusTags(a), ["狀態/待讀"]);
+
+	// Item pane: the picker shows the Zotero status and changing it replaces the tag
+	let doc = new JSDOM("<div id=b></div>").window.document;
+	let body = doc.getElementById("b");
+	env.panes[0].onRender({ doc, body, item: a, setSectionSummary: () => {} });
+	let select = body.querySelector("select");
+	assert.ok(select, "status picker rendered");
+	assert.match(body.textContent, /閱讀狀態：/);
+	assert.equal(select.value, "待讀");
+	assert.deepEqual([...select.options].map(o => o.value), ["", "待讀", "閱讀中", "已讀", "已引用"]);
+	select.value = "已讀";
+	select.dispatchEvent(new doc.defaultView.Event("change"));
+	assert.deepEqual(statusTags(a), ["狀態/已讀 ✅"]);
+
+	// The next sync takes it to Notion and records it
+	await ZB.main.run([a], { targets: ["notion"], ai: "none" });
+	assert.equal(pages.get(`library/${a.key}`).properties.Status.select.name, "已讀");
+	assert.deepEqual(bases(), { [`library/${a.key}`]: "已讀" });
+	// …and a Notion change comes back through the Tools pass
+	pages.get(`library/${a.key}`).properties.Status = { select: { name: "已引用" } };
+	await ZB.status.runPass();
+	assert.deepEqual(statusTags(a), ["狀態/已引用 📝"]);
+	assert.deepEqual(bases(), { [`library/${a.key}`]: "已引用" });
+
+	// Turned off: no tags, no Status, the pane shows no picker
+	env.prefStore["extensions.zotero-bridge.status.enabled"] = false;
+	let b = new env.MockItem("journalArticle", { title: "B", year: "2021", citationKey: "lee2021", creators: [] });
+	await ZB.main.run([b], { targets: ["notion"], ai: "none" });
+	assert.deepEqual(b.tags, []);
+	assert.equal(pages.get(`library/${b.key}`).properties.Status, undefined);
+	env.panes[0].onRender({ doc, body, item: b, setSectionSummary: () => {} });
+	assert.equal(body.querySelector("select"), null);
+	assert.deepEqual(env.errors, []);
 });
