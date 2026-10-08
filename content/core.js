@@ -329,6 +329,11 @@
 		}
 		else if (ann.type === "image" || ann.type === "ink") {
 			out.push(`> ${color.emoji} *[${ann.type === "image" ? "圖片" : "手繪"}註記]* — ${link}`);
+			// The rendered PNG (annotation-images.js), on its own line so it isn't part of the quote
+			if (ann.image && ann.image.embed) {
+				out.push("");
+				out.push(`![[${ann.image.embed}]]`);
+			}
 		}
 		else {
 			out.push(`> ${color.emoji} *[便利貼]* — ${link}`);

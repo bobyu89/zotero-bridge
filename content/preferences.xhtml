@@ -45,6 +45,7 @@
 			<label value="全文最多送出字元數（0 = 不送全文，只用摘要與註記）："/>
 			<html:input type="number" min="0" step="10000" preference="extensions.zotero-bridge.llm.fullTextLimit"/>
 		</hbox>
+		<checkbox label="AI 也看圖片劃線（把圖片／手繪註記的截圖一起傳給 Claude，例如圈選的表格或圖；會增加 token 用量，OpenAI 不適用）" preference="extensions.zotero-bridge.images.sendToAI"/>
 		<label value="筆記模板（system prompt；留空 = 使用內建的護理／醫學文獻模板）："/>
 		<html:textarea id="zb-system-prompt" rows="8" preference="extensions.zotero-bridge.llm.systemPrompt"/>
 		<hbox>
@@ -96,6 +97,7 @@
 			</menulist>
 		</hbox>
 		<checkbox label="一併同步 Zotero 子筆記" preference="extensions.zotero-bridge.includeNotes"/>
+		<checkbox label="匯出圖片劃線（PDF 圖片／手繪註記的截圖：Obsidian 存到筆記旁的 attachments 資料夾，Notion 上傳成圖片）" preference="extensions.zotero-bridge.images.export"/>
 		<checkbox label="建立「Zotero 文獻庫.base」總表（表格 + 閱讀進度看板，需要 Obsidian 1.14 以上）" preference="extensions.zotero-bridge.obsidian.createBase"/>
 	</groupbox>
 
