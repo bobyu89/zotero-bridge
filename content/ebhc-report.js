@@ -1237,6 +1237,8 @@ end
 				study: note ? note.data : null,
 				annotationsText: ZB.llm.formatAnnotationsForPrompt(data),
 			});
+			// A verified 文獻評讀表 replaces the AI note's appraisal (appraisal-form.js)
+			ZB.appraisalForm.applyToSource(sources[sources.length - 1]);
 		}
 		sources = orderSources(sources);
 

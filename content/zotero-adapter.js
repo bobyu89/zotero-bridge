@@ -7,6 +7,8 @@
 	const AI_NOTE_TAG = "zotero-bridge-ai";
 	// Earlier versions of the AI note, kept when it is regenerated; never synced or sent to the LLM
 	const AI_HISTORY_TAG = "zotero-bridge-ai-history";
+	// The 文獻評讀表 child note (appraisal-form.js): synced as its own section, never as a user note
+	const APPRAISAL_TAG = "zotero-bridge-appraisal";
 
 	function libraryInfo(libraryID) {
 		let lib = Zotero.Libraries.get(libraryID);
@@ -212,6 +214,7 @@
 			attachments: [],
 			notes: [],
 			aiNote: null,
+			appraisalNote: null,
 			fullText: null,
 		};
 		if (!chineseAPA(item, data)) data.apa = apaReference(item);
@@ -271,6 +274,9 @@
 			}
 			else if (isAIHistoryNote(note)) {
 				continue;
+			}
+			else if (note.getTags().some(t => t.tag === APPRAISAL_TAG)) {
+				data.appraisalNote = { key: note.key, html: note.getNote() };
 			}
 			else {
 				data.notes.push({ key: note.key, title: note.getNoteTitle(), html: note.getNote() });
@@ -338,7 +344,7 @@
 	}
 
 	ZB.adapter = {
-		AI_NOTE_TAG, AI_HISTORY_TAG, libraryInfo, zoteroKeyFor, collectionPath, toRegularItems, extractItemData, citationKey,
+		AI_NOTE_TAG, AI_HISTORY_TAG, APPRAISAL_TAG, libraryInfo, zoteroKeyFor, collectionPath, toRegularItems, extractItemData, citationKey,
 		saveAINote, getAINote, isAINote, isAIHistoryNote, itemsInCollection, listLibraries,
 	};
 })(this);

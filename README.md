@@ -16,6 +16,7 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 
 - **AI 文獻筆記**：固定格式，包含一句話摘要、背景與目的、設計與方法（樣本、工具信效度、統計）、主要結果、作者結論、研究限制、嚴格評讀、證據等級、對我研究的啟發、關鍵概念 `[[ ]]`、可引用句。模板可以在設定裡改。
 - **嚴格評讀（critical appraisal）**：AI 依研究設計選對應的 JBI 清單（RCT、quasi-experimental、cohort、case-control、analytical cross-sectional、qualitative、systematic review；也可用 CASP），逐題回答 是／否／不清楚／不適用 並附一句理由，最後給整體評價（納入／排除／需更多資訊），可直接用在實證報告的文獻評讀。題目以官方清單為準，請對照原版清單確認。
+- **文獻評讀表**：右側面板逐題點選 是／否／不清楚／不適用、寫評析根據，預先帶入 AI 的嚴格評讀（標示「AI 初評」），可選 CASP（2024 RCT、2018 SR 等）或 JBI 清單；勾選「我已核對」後，評讀工具與整體評價會取代 AI 的值同步到 Notion／Obsidian。可加第二位評讀者算 Cohen's κ，並匯出分類的評讀總表（燈號矩陣、CSV、Word）（見[文獻評讀表](#文獻評讀表)）。
 - **研讀欄位（結構化資料）**：AI 同時輸出研究設計、樣本數、場域、PICO、測量工具、證據等級（Oxford CEBM 2011 與 JBI）、評讀工具與結果、國家，寫入 Notion 欄位與 Obsidian frontmatter，可以直接篩選，例如「Study Design = RCT 且 Sample Size > 100」。這些資料也存在 Zotero AI 子筆記最後的「📋 結構化資料」區塊，之後不呼叫 AI 的同步也會沿用；你可以直接在 Zotero 修改那段 JSON。這段 JSON 不會出現在 Obsidian／Notion 的內文。即使改用自訂模板，插件仍會要求 AI 附上這段資料。
 - **可引用句查證**：產生筆記後，「可引用的句子」每一句都會和全文、摘要與你的劃線比對（忽略大小寫、彎引號、PDF 換行斷字、中文字間空白；省略號 … 前後分段比對；九成以上的字依序相符即算找到）。找到的標 ✅，找不到的標 ⚠️ 未在全文中找到；沒有全文時標 ⚠️ 無全文可查證。進度視窗會顯示查證結果。
 - **APA 7 引文由 Zotero 產生**：使用內建 CSL 引文處理器，不讓 LLM 編造參考文獻。
@@ -257,6 +258,53 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 結構、各節寫法與配分整理自「A 類實證健康照護綜整文章發表準則暨撰寫指引（1141020 修訂版）」與已發表範例的寫作指南；學會的準則、評讀工具版本與評分表會更新，**請以台灣護理學會最新公告為準**。
 
 > ⚠️ **這是草稿，不是可以直接投稿或繳交的實證報告。** 評讀結果來自 AI 筆記，可能答錯題或漏掉方法學問題；AI 可能誤解結果、把結論套到錯誤的文獻，或寫出過度概括的建議。每一題評讀、每個數字、每個引用都必須對照原文確認，搜尋策略與篇數要和你實際的搜尋紀錄一致，並以學會最新準則（含指定的評讀工具版本）重新檢查格式。也請遵守課程或期刊對 AI 使用的規定。
+
+### 文獻評讀表
+
+AI 筆記的「嚴格評讀」是 AI 初評；實證報告與論文需要**你自己逐題核對**。文獻評讀表讓你在 Zotero 裡完成這件事，並把核對後的結果帶到 Notion、Obsidian 與各種報告。
+
+**1. 開啟**：選取一篇文獻，右側面板「AI 文獻筆記」區塊上方有一列「文獻評讀表：…」，按「開啟評讀表」。
+
+**2. 選評讀工具**：預設是 AI 筆記使用的清單（`appraisal_tool`）；AI 沒有評讀時，依研究設計（`study_design`）選，CASP 優先（台灣護理學會實證報告撰寫指引要求最新版 CASP：RCT 用 2024 版、SR 用 2018 版）。可隨時換：
+
+| 研究設計 | CASP | JBI |
+|---|---|---|
+| RCT | CASP RCT（2024，13 項：1–3、4a–4c、5–11，Section A–D） | JBI RCT（2023 修訂版，13 題） |
+| 類實驗（含單組前後測） | — | JBI Quasi-Experimental（9 題） |
+| 世代研究 | CASP Cohort（2018） | JBI Cohort（11 題） |
+| 病例對照 | CASP Case Control（2018） | JBI Case Control（10 題） |
+| 橫斷性研究 | — | JBI Analytical Cross Sectional（8 題）、JBI Prevalence（9 題） |
+| 質性研究 | CASP Qualitative（2018） | JBI Qualitative（10 題） |
+| 系統性回顧／統合分析 | CASP Systematic Review（2018） | JBI Systematic Reviews and Research Syntheses（11 題） |
+| 診斷性研究 | CASP Diagnostic（2018） | — |
+| 個案報告／專家意見 | — | JBI Case Reports、JBI Text and Opinion |
+
+混合方法建議用 MMAT、臨床指引用 AGREE II（未內建）。
+
+**3. 逐題評讀**：每題按 是／否／不清楚／不適用（再按一次取消），下方填「評析根據」（引用文中的方法或數字，例如「電腦亂數分派，信封保密」）。滑鼠停在題目上可看英文提示，題目下方的「看什麼」是判讀重點。CASP 的開放式題目（例如「結果為何」）不計分，直接把結果寫在評析根據。
+- **AI 初評**：AI 筆記使用同一份清單時，逐題答案與理由會預先帶入，標上橘色「AI」；你點過或修改過的題目標綠色「✓」。換成另一份清單時不會套用 AI 的逐題答案（題目不同），只帶入整體評價；「帶入 AI 初評（只填空白題）」可再次帶入。
+- **整體評價**：納入／排除／需更多資訊，並寫理由。
+- **我已核對**：逐題確認後勾選，會記下日期。只有勾選後，評讀工具與整體評價才會取代 AI 筆記的值。
+- **雙人評讀（選用）**：勾「雙人評讀（評讀者 B）」後，每題多一列 B 的答案；面板與總表顯示 Cohen's κ 與不一致的題目，方便討論後定案（定案答案填在 A 列）。
+
+**4. 儲存**：「儲存評讀表」存成這篇文獻的子筆記「📝 文獻評讀表」（標籤 `zotero-bridge-appraisal`），內容是可讀的表格加一段 JSON 資料；**AI 筆記不會被修改**。儲存不會觸發自動同步，下次同步（或按「儲存並同步」）時才更新 Notion 與 Obsidian。子筆記不會被當成你的 Zotero 筆記同步，也不會送給 AI；請在面板修改，不要直接編輯子筆記的 JSON。
+
+**5. 同步到哪裡**
+- **Obsidian**：文獻筆記的自動同步區在 AI 筆記之後多一節「## 文獻評讀表」：狀態提示框（綠色「已核對（日期）」／黃色「AI 初評，尚未核對」）、評讀工具與出處連結、「評讀項目｜評讀結果｜評析根據」表格、整體評價、雙人評讀的 κ。還沒有存評讀表時，顯示 AI 初評並標「AI 初評，尚未核對」。frontmatter 新增 `appraisal_verified: true/false`；核對後 `appraisal_tool`、`appraisal_overall` 改為評讀表的值。
+- **Notion**：自動同步區塊內同樣一節，表格是真正的 Notion 表格；`Appraisal Tool`、`Appraisal` 欄位在核對後改為評讀表的值，新增勾選欄位 **Appraisal Verified**。既有資料庫請到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」加上這個欄位。
+- **PRISMA 證據表**與**實證健康照護報告草稿**：已核對的評讀表取代 AI 筆記的評讀工具、整體評價與逐題評讀（報告草稿的 AI 會依你核對的答案撰寫評讀表）。
+
+**6. 評讀總表**：在分類上按右鍵 → **Zotero Bridge：匯出文獻評讀總表**（或 工具 → 匯出文獻評讀總表（目前分類））。分類有篩選標籤時只用全文納入的研究。產出在 `Zotero/Reviews/`：
+- `<分類> 評讀總表.md`：評讀概況（已核對／尚未核對／沒有評讀的篇數、整體評價分布）、**燈號總表**（每份清單一張表，列是文獻、欄是題號，✅ 是 ❌ 否 ❓ 不清楚 ➖ 不適用 ⬜ 未評，附題號對照）、各篇「評讀項目｜評讀結果｜評析根據」表、雙人評讀一致性（各篇與合計的 κ、不一致的題目）、沒有評讀資料的文獻。重新匯出只覆寫自動區塊。
+- `<分類> 評讀總表.csv`：每篇 × 每題一列（UTF-8 BOM，Excel 直接開啟）。
+- `<分類> 評讀總表（Word）.md`：不含 Obsidian 語法的版本，在同一資料夾執行 `pandoc "<分類> 評讀總表（Word）.md" -o "<分類> 評讀總表.docx"` 轉成 Word（燈號改用 ✓ ✗ ? –）。
+
+**Cohen's κ 怎麼算**：只計入兩位評讀者都作答、且不是開放式的題目，答案分「是／否／不清楚／不適用」四類。p_o = 答案相同的題數 ÷ 題數；p_e = Σ（A 選該類的比例 × B 選該類的比例）；κ = (p_o − p_e) ÷ (1 − p_e)。兩人所有題目都答同一類時 p_e = 1，κ 無法計算（只顯示一致率）。合計 κ 把所有文獻的題目合在一起計算。解讀依 Landis & Koch（1977）：≤ 0.20 輕微、0.21–0.40 尚可、0.41–0.60 中等、0.61–0.80 高度、> 0.80 幾乎完全一致。題數少時 κ 不穩定，請搭配一致率與不一致清單討論。
+
+**清單出處與授權**：題目是插件的中文意譯與簡短英文提示，**不是官方原文**；評讀時請開啟官方表單（面板的「官方表單」連結）對照，報告中引用官方清單。
+- CASP checklists（https://casp-uk.net/casp-tools-checklists/）：© CASP，Creative Commons BY-NC-SA 4.0（2024 版；舊版 PDF 標示 3.0），非商業使用、標示出處、相同方式分享。CASP RCT 2024 的段落與部分題號已經網路搜尋比對，其餘依 2020 版結構（題號相同）；其他 CASP 清單依 2018 版整理，**未連線核對官方 PDF**。
+- JBI Critical Appraisal Tools（https://jbi.global/critical-appraisal-tools）：© JBI，可免費使用，請標示出處。JBI RCT 為 2023 修訂版（Barker et al., 2023, *JBI Evidence Synthesis*, 21(3), 494–506），題數與題序和 AI 筆記提示中的 JBI 清單一致；偏差領域分組與盛行率、個案報告、文本與意見清單依既有資料整理，**未連線核對**。
+- 清單資料在 `content/appraisal-tools.js`（沒有 Zotero 相依，網頁也能直接載入）。
 
 ### 系統性／範圍回顧篩選
 
@@ -734,6 +782,8 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi
 | `content/markdown.js` | Markdown ⇄ Notion blocks ⇄ HTML |
 | `content/synthesis.js` | 跨文獻比較表：提示詞、引文轉換、APA 參考文獻 |
 | `content/export.js` | 參考文獻檔匯出（CSL JSON／BibTeX）與 citekey 產生 |
+| `content/appraisal-tools.js` | 文獻評讀表的清單目錄（CASP／JBI 題目、出處、授權）與純函式：計數、評讀表 Markdown、CSV、JSON、解析 AI 嚴格評讀、Cohen's κ、燈號矩陣（Node、插件、網頁共用） |
+| `content/appraisal-form.js` | 文獻評讀表：右側面板表單、子筆記存取、同步到 Obsidian／Notion、PRISMA 證據表與實證報告的掛勾、分類評讀總表（Markdown／CSV／Word） |
 | `content/screening.js` | 系統性／範圍回顧篩選：篩選標籤、找重複、PRISMA 2020 計數與一致性檢查、Mermaid 流程圖、證據表（Obsidian／CSV／Notion） |
 | `content/pubmed-watch.js` | PubMed 新文獻追蹤：E-utilities 查詢（速率限制）、去重、用 Zotero 匯入器匯入、自動檢查、Obsidian 每日清單 |
 | `content/citation-chase.js` | 引文追蹤：OpenAlex 往回／往前查詢（節流、請求上限、分頁）、與文獻庫比對去重、Obsidian 勾選清單與 CSV、依 DOI／PMID 匯入勾選的文獻 |
