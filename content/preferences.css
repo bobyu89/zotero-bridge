@@ -28,3 +28,7 @@
 	min-width: 8em;
 	width: 100%;
 }
+.zotero-bridge-prefs .zb-hint {
+	color: var(--fill-secondary);
+	margin: 2px 0;
+}

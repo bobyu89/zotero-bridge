@@ -1,10 +1,18 @@
-/* global Zotero, window, document, ChromeUtils */
+/* global Zotero, window, document, ChromeUtils, Services */
 // Runs in the preferences pane scope. Inline handlers in preferences.xhtml run in the
 // window scope, so the controller is attached to the window.
 (function () {
 	const HTML_NS = "http://www.w3.org/1999/xhtml";
 	const RULES_PREF = "extensions.zotero-bridge.routing.rules";
 	const PROVIDER_PREF = "extensions.zotero-bridge.llm.provider";
+	const USAGE_PREFS = ["extensions.zotero-bridge.usage.ledger", "extensions.zotero-bridge.usage.prices"];
+	// Password inputs → secrets.js names. These are not bound with preference= (they never touch prefs.js)
+	const SECRET_INPUTS = {
+		"zb-anthropic-key": "anthropicKey",
+		"zb-openai-key": "openaiKey",
+		"zb-notion-token": "notionToken",
+	};
+	const SAVE_DELAY_MS = 600;
 
 	function el(tag, attrs = {}, text) {
 		let e = document.createElementNS(HTML_NS, tag);
@@ -110,16 +118,123 @@
 		if (o) o.hidden = !openai;
 	}
 
-	let providerObserver = null;
+	// ---------- secrets (login manager via Zotero.ZoteroBridge.secrets) ----------
+
+	let pendingSaves = new Map(); // input id → { timer, save }
+	let inflightSaves = new Set();
+
+	function secretStatus(text) {
+		try {
+			let status = document.getElementById("zb-secrets-status");
+			if (status) status.textContent = text;
+		}
+		catch (e) {
+			// The pane may already be closed when a save made on unload finishes
+		}
+	}
+
+	function saveSecret(input, name) {
+		let pending = pendingSaves.get(input.id);
+		if (pending) clearTimeout(pending.timer);
+		pendingSaves.delete(input.id);
+		let p = Zotero.ZoteroBridge.secrets.set(name, input.value)
+			.then(() => secretStatus(""))
+			.catch((e) => {
+				Zotero.logError(e);
+				secretStatus(`❌ 無法儲存：${e.message || e}`);
+			});
+		inflightSaves.add(p);
+		p.finally(() => inflightSaves.delete(p));
+		return p;
+	}
+
+	/** Save anything typed but not yet stored (before testing Notion, or when the pane closes). */
+	function flushSecrets() {
+		for (let [id, pending] of [...pendingSaves]) {
+			clearTimeout(pending.timer);
+			pending.save();
+			pendingSaves.delete(id);
+		}
+		return Promise.all([...inflightSaves]);
+	}
+
+	async function loadSecrets() {
+		let bridge = Zotero.ZoteroBridge;
+		if (!bridge || !bridge.secrets) return;
+		for (let [id, name] of Object.entries(SECRET_INPUTS)) {
+			let input = document.getElementById(id);
+			if (!input || input.dataset.zbBound) continue;
+			input.dataset.zbBound = "1";
+			let edited = false;
+			input.addEventListener("input", () => {
+				edited = true;
+				let pending = pendingSaves.get(id);
+				if (pending) clearTimeout(pending.timer);
+				let save = () => saveSecret(input, name);
+				pendingSaves.set(id, { timer: setTimeout(save, SAVE_DELAY_MS), save });
+			});
+			input.addEventListener("change", () => saveSecret(input, name));
+			try {
+				let value = await bridge.secrets.get(name);
+				// Don't overwrite what the user started typing while the stored value loaded
+				if (!edited) input.value = value;
+			}
+			catch (e) {
+				secretStatus(`❌ ${e.message || e}`);
+			}
+		}
+	}
+
+	// ---------- AI usage ----------
+
+	function renderUsage() {
+		let el = document.getElementById("zb-usage");
+		let bridge = Zotero.ZoteroBridge;
+		if (!el || !bridge) return;
+		try {
+			el.textContent = bridge.main.usageReport().join("\n");
+		}
+		catch (e) {
+			el.textContent = `❌ ${e.message || e}`;
+		}
+	}
+
+	let observers = null;
 
 	window.ZoteroBridgePrefs = {
 		init() {
 			renderRules();
 			updateProviderBoxes();
-			if (!providerObserver) {
-				providerObserver = Zotero.Prefs.registerObserver(PROVIDER_PREF, updateProviderBoxes, true);
-				window.addEventListener("unload", () => Zotero.Prefs.unregisterObserver(providerObserver), { once: true });
+			renderUsage();
+			loadSecrets();
+			if (!observers) {
+				observers = [
+					Zotero.Prefs.registerObserver(PROVIDER_PREF, updateProviderBoxes, true),
+					...USAGE_PREFS.map(p => Zotero.Prefs.registerObserver(p, renderUsage, true)),
+				];
+				window.addEventListener("unload", () => {
+					flushSecrets();
+					observers.forEach(o => Zotero.Prefs.unregisterObserver(o));
+				}, { once: true });
 			}
+		},
+
+		renderUsage,
+
+		resetUsage() {
+			let bridge = Zotero.ZoteroBridge;
+			if (!bridge) return;
+			if (!Services.prompt.confirm(window, "Zotero Bridge", "要清除所有 AI 用量統計嗎？（批次產生前的費用預估也會一併重新累計）")) return;
+			bridge.main.resetUsage();
+			renderUsage();
+		},
+
+		loadDefaultPrices() {
+			let bridge = Zotero.ZoteroBridge;
+			let ta = document.getElementById("zb-prices");
+			if (!bridge || !ta) return;
+			ta.value = JSON.stringify(bridge.usage.DEFAULT_PRICES, null, 2);
+			ta.dispatchEvent(new Event("input"));
 		},
 
 		addRule() {
@@ -159,6 +274,7 @@
 			let status = document.getElementById("zb-notion-status");
 			status.textContent = "測試中…";
 			try {
+				await flushSecrets();
 				let lines = await Zotero.ZoteroBridge.main.testNotion();
 				status.textContent = lines.join("\n");
 			}

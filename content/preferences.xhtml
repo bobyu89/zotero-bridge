@@ -13,7 +13,7 @@
 		</hbox>
 		<vbox id="zb-anthropic-box">
 			<label value="Claude API key（console.anthropic.com）："/>
-			<html:input type="password" preference="extensions.zotero-bridge.llm.anthropicKey" placeholder="sk-ant-..."/>
+			<html:input id="zb-anthropic-key" type="password" placeholder="sk-ant-..." autocomplete="off"/>
 			<hbox align="center">
 				<label value="模型："/>
 				<html:input type="text" preference="extensions.zotero-bridge.llm.anthropicModel" placeholder="claude-opus-5-5"/>
@@ -31,7 +31,7 @@
 		</vbox>
 		<vbox id="zb-openai-box">
 			<label value="OpenAI API key（platform.openai.com）："/>
-			<html:input type="password" preference="extensions.zotero-bridge.llm.openaiKey" placeholder="sk-..."/>
+			<html:input id="zb-openai-key" type="password" placeholder="sk-..." autocomplete="off"/>
 			<hbox align="center">
 				<label value="模型："/>
 				<html:input type="text" preference="extensions.zotero-bridge.llm.openaiModel" placeholder="gpt-5.5"/>
@@ -39,6 +39,8 @@
 			<label value="API base URL（選填，使用相容服務時才需要）："/>
 			<html:input type="text" preference="extensions.zotero-bridge.llm.openaiBaseURL" placeholder="https://api.openai.com/v1"/>
 		</vbox>
+		<description class="zb-hint">API key 與 Notion token 存在 Zotero 的密碼管理員（有作業系統鑰匙圈時會再加密），不會寫進設定檔 prefs.js。</description>
+		<html:div id="zb-secrets-status" class="zb-status"/>
 		<hbox align="center">
 			<label value="全文最多送出字元數（0 = 不送全文，只用摘要與註記）："/>
 			<html:input type="number" min="0" step="10000" preference="extensions.zotero-bridge.llm.fullTextLimit"/>
@@ -52,6 +54,19 @@
 		<html:textarea id="zb-synthesis-prompt" rows="6" preference="extensions.zotero-bridge.llm.synthesisPrompt"/>
 		<hbox>
 			<button label="載入內建比較表模板來修改" oncommand="ZoteroBridgePrefs.loadDefaultSynthesisPrompt()"/>
+		</hbox>
+	</groupbox>
+
+	<groupbox>
+		<label><html:h2>本月 AI 用量</html:h2></label>
+		<html:pre id="zb-usage" class="zb-status"/>
+		<hbox>
+			<button label="重設用量統計" oncommand="ZoteroBridgePrefs.resetUsage()"/>
+		</hbox>
+		<label value="價格表（每百萬 tokens 的美元價格，JSON；留空 = 內建 Claude 價格。OpenAI 模型未內建價格，只顯示 tokens，可自行加入）："/>
+		<html:textarea id="zb-prices" rows="5" preference="extensions.zotero-bridge.usage.prices" placeholder='{ "claude-opus-5-5": { "input": 4, "output": 20 } }'/>
+		<hbox>
+			<button label="載入內建價格表來修改" oncommand="ZoteroBridgePrefs.loadDefaultPrices()"/>
 		</hbox>
 	</groupbox>
 
@@ -87,7 +102,7 @@
 	<groupbox>
 		<label><html:h2>Notion</html:h2></label>
 		<label value="Integration token（notion.so/profile/integrations 建立，並把資料庫分享給這個 integration）："/>
-		<html:input type="password" preference="extensions.zotero-bridge.notion.token" placeholder="ntn_..."/>
+		<html:input id="zb-notion-token" type="password" placeholder="ntn_..." autocomplete="off"/>
 		<label value="預設資料庫連結（沒有符合任何分流規則時使用）："/>
 		<html:input type="text" preference="extensions.zotero-bridge.notion.database" placeholder="https://www.notion.so/..."/>
 		<label value="文獻比較表的 Notion 父頁面（選填；比較表會建立成這個頁面底下的子頁面，頁面也要分享給 integration）："/>

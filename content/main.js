@@ -16,21 +16,26 @@
 	// Item IDs we just wrote ourselves (AI notes), so auto-sync doesn't react to them
 	let selfModified = new Set();
 	let running = Promise.resolve();
+	// Test hook: extra options for LLM calls (e.g. { sleep } to skip retry delays)
+	let runtime = { retry: {} };
 
 	function pref(key) {
 		return Zotero.Prefs.get(PREF + key, true);
 	}
 
-	function readSettings() {
+	async function readSettings() {
 		let vaultPath = String(pref("obsidian.vaultPath") || "").trim();
 		let provider = pref("llm.provider") === "openai" ? "openai" : "anthropic";
+		// Secrets live in the login manager (secrets.js), not in prefs
+		let notionToken = await ZB.secrets.get("notionToken");
+		let apiKey = await ZB.secrets.get(provider === "openai" ? "openaiKey" : "anthropicKey");
 		return {
 			vaultPath,
 			vaultName: String(pref("obsidian.vaultName") || "").trim() || (vaultPath ? PathUtils.filename(vaultPath) : ""),
 			filenameFormat: pref("obsidian.filenameFormat") || "citekey",
 			createBase: pref("obsidian.createBase") !== false,
 			includeNotes: pref("includeNotes") !== false,
-			notionToken: String(pref("notion.token") || "").trim(),
+			notionToken: String(notionToken || "").trim(),
 			defaults: {
 				obsidianFolder: pref("obsidian.folder") || "",
 				notionDatabase: String(pref("notion.database") || "").trim(),
@@ -39,7 +44,7 @@
 			llm: {
 				enabled: pref("llm.enabled") !== false,
 				provider,
-				apiKey: String(pref(provider === "openai" ? "llm.openaiKey" : "llm.anthropicKey") || "").trim(),
+				apiKey: String(apiKey || "").trim(),
 				model: String(pref(provider === "openai" ? "llm.openaiModel" : "llm.anthropicModel") || "").trim()
 					|| ZB.llm.DEFAULT_MODELS[provider],
 				effort: pref("llm.effort") || "medium",
@@ -58,6 +63,52 @@
 
 	function nowISO() {
 		return new Date().toISOString();
+	}
+
+	// ---------- AI usage ledger ----------
+
+	function readPrices() {
+		return ZB.usage.parsePrices(pref("usage.prices"));
+	}
+
+	function readLedger() {
+		return ZB.usage.parseLedger(pref("usage.ledger"));
+	}
+
+	/** Add one LLM call to the monthly ledger pref and to the current run's totals. */
+	function recordAIUsage(result, runTotals) {
+		let call = { model: result.model, usage: result.usage };
+		try {
+			Zotero.Prefs.set(PREF + "usage.ledger", JSON.stringify(ZB.usage.recordUsage(readLedger(), call)), true);
+		}
+		catch (e) {
+			Zotero.logError(e);
+		}
+		if (runTotals) runTotals.ledger = ZB.usage.recordUsage(runTotals.ledger, call);
+	}
+
+	/** One-line summary of the AI calls in this run (empty if none). */
+	function runUsageLine(runTotals) {
+		let month = runTotals && Object.values(runTotals.ledger)[0];
+		return month ? ZB.usage.describeRun(month, readPrices().prices) : "";
+	}
+
+	function retryStatus(status) {
+		return ({ attempt, maxRetries, delay, status: code }) => {
+			status(`AI 服務暫時無法使用（${code || "連線錯誤"}），${Math.max(1, Math.round(delay / 1000))} 秒後重試（${attempt}/${maxRetries}）…`);
+		};
+	}
+
+	/** Settings pane: lines for "本月 AI 用量". */
+	function usageReport() {
+		let { prices, error } = readPrices();
+		let lines = ZB.usage.describeMonth(readLedger()[ZB.usage.monthKey()], prices);
+		if (error) lines.push(`⚠️ ${error}（改用內建價格表）`);
+		return lines;
+	}
+
+	function resetUsage() {
+		Zotero.Prefs.set(PREF + "usage.ledger", "{}", true);
 	}
 
 	// ---------- AI note ----------
@@ -105,7 +156,8 @@
 					systemPrompt: settings.llm.systemPrompt,
 					notesMarkdown,
 					fullTextTruncated: data.fullTextTruncated,
-				}, (url, init) => fetch(url, init));
+				}, (url, init) => fetch(url, init), Object.assign({ onRetry: retryStatus(ctx.status) }, ctx.retry));
+				recordAIUsage(result, ctx.usage);
 				let at = nowISO();
 				ai = { md: result.text.trim(), model: result.model || settings.llm.model, at };
 				let note = await ZB.adapter.saveAINote(item, aiNoteHTML(ai.md, ai.model, at));
@@ -287,7 +339,7 @@
 		if (!items.length) return;
 		let settings;
 		try {
-			settings = readSettings();
+			settings = await readSettings();
 		}
 		catch (e) {
 			notify("Zotero Bridge 設定有誤", String(e.message || e));
@@ -317,7 +369,8 @@
 		}
 		if (willGenerate && items.length > 5 && !action.silent) {
 			let ok = Services.prompt.confirm(Zotero.getMainWindow(), "Zotero Bridge",
-				`即將為最多 ${items.length} 筆文獻呼叫 ${settings.llm.provider === "openai" ? "OpenAI" : "Claude"}（${settings.llm.model}）產生 AI 筆記，會產生 API 費用。要繼續嗎？`);
+				`即將為最多 ${items.length} 筆文獻呼叫 ${settings.llm.provider === "openai" ? "OpenAI" : "Claude"}（${settings.llm.model}）產生 AI 筆記，會產生 API 費用。`
+				+ batchEstimate(items, action, settings) + "要繼續嗎？");
 			if (!ok) return;
 		}
 
@@ -334,6 +387,8 @@
 				return clients.get(token);
 			},
 			status: () => {},
+			usage: { ledger: {} },
+			retry: runtime.retry,
 		};
 		let ok = 0;
 		let failures = [];
@@ -370,10 +425,27 @@
 		}
 		if (pw) {
 			pw.addDescription(`完成 ${ok} 筆${failures.length ? `，失敗 ${failures.length} 筆（詳見 說明 → 除錯輸出記錄）` : ""}`);
+			let usageLine = runUsageLine(ctx.usage);
+			if (usageLine) pw.addDescription(usageLine);
 			pw.startCloseTimer(failures.length ? 15000 : 5000);
 		}
 		else if (failures.length) {
 			notify("Zotero Bridge 自動同步失敗", failures.slice(0, 3).join("\n"));
+		}
+	}
+
+	/** Rough cost for the confirm dialog, from the ledger's average tokens per call ("" when unknown). */
+	function batchEstimate(items, action, settings) {
+		try {
+			let n = action.ai === "regenerate" ? items.length : items.filter(i => !ZB.adapter.getAINote(i)).length;
+			let est = ZB.usage.estimateCost(readLedger(), settings.llm.model, readPrices().prices, n);
+			if (!est) return "";
+			return `\n\n預估費用：約 ${ZB.usage.formatUSD(est.total)}（${n} 筆 × 每筆約 ${ZB.usage.formatUSD(est.perCall)}，`
+				+ `依過去 ${est.samples} 次呼叫的平均用量估算；實際費用依全文長度而定）。\n\n`;
+		}
+		catch (e) {
+			Zotero.logError(e);
+			return "";
 		}
 	}
 
@@ -413,7 +485,7 @@
 		}
 		let settings;
 		try {
-			settings = readSettings();
+			settings = await readSettings();
 		}
 		catch (e) {
 			notify("Zotero Bridge 設定有誤", String(e.message || e));
@@ -446,7 +518,10 @@
 				systemPrompt: settings.llm.synthesisPrompt,
 			});
 			line.setText(`AI 分析 ${items.length} 篇文獻中…（可能需要一兩分鐘）`);
-			let result = await ZB.llm.generateText(settings.llm, system, user, (u, i) => fetch(u, i));
+			let runTotals = { ledger: {} };
+			let result = await ZB.llm.generateText(settings.llm, system, user, (u, i) => fetch(u, i),
+				Object.assign({ onRetry: retryStatus(s => line.setText(s)) }, runtime.retry));
+			recordAIUsage(result, runTotals);
 			let md = result.text.trim();
 			let model = result.model || settings.llm.model;
 			let generatedAt = new Date().toISOString();
@@ -523,6 +598,8 @@
 				line.setProgress(100);
 			}
 			if (withoutAI) pw.addDescription(`其中 ${withoutAI} 篇沒有 AI 筆記，改用摘要與劃線；先產生 AI 筆記可提高比較表品質。`);
+			let usageLine = runUsageLine(runTotals);
+			if (usageLine) pw.addDescription(usageLine);
 			if (settings.notionToken && !settings.notionSynthesisParent) {
 				pw.addDescription("想同步到 Notion：請在設定填入「文獻比較表的 Notion 父頁面」。");
 			}
@@ -544,7 +621,7 @@
 
 	/** Check the token and every configured database; add missing columns. Returns report lines. */
 	async function testNotion() {
-		let settings = readSettings();
+		let settings = await readSettings();
 		if (!settings.notionToken) throw new Error("請先填入 Notion integration token");
 		let client = new ZB.notion.NotionClient({ token: settings.notionToken, fetch: (u, i) => fetch(u, i) });
 		let targets = new Map();
@@ -771,6 +848,10 @@
 	function init(opts) {
 		pluginID = opts.id;
 		rootURI = opts.rootURI;
+		// Move secrets from plain prefs (earlier versions) into the login manager; readers wait for it
+		ZB.secrets.migrateFromPrefs().then((names) => {
+			if (names.length) Zotero.debug(`Zotero Bridge: moved ${names.join(", ")} from prefs to the login manager`);
+		}).catch(e => Zotero.logError(e));
 		registerMenus();
 		registerItemPane();
 		registerNotifier();
@@ -786,5 +867,5 @@
 		if (autoSyncTimer) clearTimeout(autoSyncTimer);
 	}
 
-	ZB.main = { init, shutdown, run, runSynthesis, renderPane, testNotion, readSettings, readAINote };
+	ZB.main = { init, shutdown, run, runSynthesis, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime };
 })(this);
