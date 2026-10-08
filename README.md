@@ -46,6 +46,8 @@ LLM（Claude / OpenAI）讀「書目 + 摘要 + 全文 + 你的劃線與筆記�
 > 🧭 **第一次安裝？用 [安裝精靈](https://bobyu89.github.io/zotero-bridge/) 一步一步完成**：依你的電腦、AI 服務商、同步目的地（Notion／Obsidian）調整步驟，每步打勾確認，進度會記住。
 >
 > 🔎 要找文獻：[醫學文獻快速搜尋](https://bobyu89.github.io/zotero-bridge/search.html)（PubMed、CINAHL、Cochrane、華藝、臺灣博碩士論文…一次開啟，含 PICO 檢索式產生器）。
+>
+> 📋 要評讀文獻：[文獻評讀表](https://bobyu89.github.io/zotero-bridge/appraisal.html)（CASP、JBI 逐題評讀，複製成 Word／Markdown 表格，見[評讀表網頁](#評讀表網頁)）。
 
 1. 到 GitHub 的 **[Releases 頁面](https://github.com/bobyu89/zotero-bridge/releases)**，下載最新版 `zotero-bridge-x.y.z.xpi`
    - 用 Firefox 下載時，請在連結上按右鍵 →「另存連結」，不要直接點開，否則 Firefox 會嘗試把它當成自己的擴充功能安裝
@@ -663,6 +665,27 @@ CINAHL 的「在 CINAHL 執行」會用 EBSCO 的直接連結開啟 PICO 檢索�
 
 完整網址列在頁面最下方的「網址格式與狀態」。
 
+## 評讀表網頁
+
+**[bobyu89.github.io/zotero-bridge/appraisal.html](https://bobyu89.github.io/zotero-bridge/appraisal.html)**：不用 Zotero、不用安裝，手機也能填 CASP、JBI 文獻評讀表，適合課堂作業、讀書會和台灣護理學會實證健康照護（EBHC）報告。評讀工具的題目和外掛共用同一份清單（`content/appraisal-tools.js`）。
+
+- **論文資料**：填第一作者、年份、篇名，選研究設計後會推薦適合的評讀工具（例如 RCT → CASP RCT 2024、系統性回顧 → CASP SR 2018、質性研究 → CASP／JBI 質性研究），也可以從下拉選單改用其他工具。工具名稱下方有官方表單連結和授權說明；題目是中文摘譯，正式送審前請對照官方原文。可另外記錄證據等級（Oxford CEBM 2011）。
+- **逐題評讀**：每題按「是／否／不清楚／不適用」（再按一次取消），在「評析根據」引用原文的設計或數字（例如：電腦亂數分派、信封密封；流失率 8%，採 ITT 分析）。有提示的題目按「提示」看評讀重點。上方顯示進度與各答案的題數。
+- **整體判定**：納入／排除／需更多資訊，加上評讀者與評讀日期。
+- **多篇論文**：左側（手機在上方）「我的評讀」列出所有評讀，可新增、複製（例如同一份工具評讀第二篇）、刪除；資料只存在這台裝置的瀏覽器，換電腦或和同學交換時用「匯出 JSON／匯入 JSON」（同一篇會更新，不會重複）。無痕視窗不能儲存時會提醒你先匯出。
+- **輸出**：
+  - **複製到 Word**：含框線的「評讀項目｜評讀結果｜評析根據」三欄表格（和 EBHC 報告的評讀表相同），上方是作者（年份）、篇名、研究設計、評讀工具，下方是整體判定、評讀者、日期；直接貼到 Word 或 Google 文件。瀏覽器不支援複製表格時改為以 Tab 分隔的文字（Word 可用「表格 → 文字轉換為表格」）。
+  - **複製 Markdown 表格**：貼到 Obsidian、Notion（可取消「評析根據」欄）。
+  - **下載 CSV**：這一篇或全部論文，每題一列，UTF-8（含 BOM），Excel 開啟中文不會亂碼。
+  - **列印／存 PDF**：只印評讀表；「列印全部」會先印燈號總覽，再每篇一頁。
+- **燈號總覽**：所有論文依評讀工具分組，一列一篇、一欄一題（✓ 是、✗ 否、? 不清楚、– 不適用），方便在報告裡比較各篇的品質；點論文名稱開啟該篇。
+- **雙人評讀**：勾選「雙人評讀」後每題多一列評讀者 B 的答案，兩人答案不同的題目會標黃，並計算 Cohen's κ：
+
+  κ = (p_o − p_e) ÷ (1 − p_e)；p_o＝答案相同的題數 ÷ 兩人都作答的題數；p_e＝Σ（A 選某答案的比例 × B 選同一答案的比例），答案類別為是、否、不清楚、不適用。
+
+  解讀依 Landis & Koch（1977）：≤ 0.20 輕微、0.21–0.40 尚可、0.41–0.60 中等、0.61–0.80 高度、0.81–1.00 幾乎完全一致。兩人都只用同一種答案時 p_e＝1，κ 無法計算，只顯示一致率。一篇只有 10 題左右，κ 很不穩定，報告時請同時寫一致率，並說明不一致的題目如何討論決定；燈號總覽下方另有全部雙人評讀論文合計的 κ。
+- 本頁不會把評讀內容送到任何伺服器。
+
 ## 🧠 研究大腦（Claude Code／Codex）
 
 [`research-brain/`](research-brain/) 是給 Obsidian vault 用的 Claude Code／Codex 設定檔：接上 Zotero 與 Notion，用斜線指令完成跨文獻的工作。插件負責「每一篇」的固定流程，大腦負責「跨文獻」的思考。
@@ -719,6 +742,7 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi
 | `research-brain/` | Claude Code／Codex 研究大腦設定檔 |
 | `site/index.html` | 安裝精靈網頁（GitHub Pages） |
 | `site/search.html` | 醫學文獻快速搜尋網頁（GitHub Pages） |
+| `site/appraisal.html` | 文獻評讀表網頁（GitHub Pages；部署時把 `content/appraisal-tools.js` 複製到 `site/`，該複本不進版控） |
 | `test/live/check-links.mjs` | 外部服務連線檢查（link-check workflow；不在 `npm test` 內） |
 
 ### 外部服務連線檢查（link-check）
