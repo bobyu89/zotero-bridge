@@ -1637,10 +1637,13 @@ test("settings pane: closing it saves a pending key and unregisters its pref obs
 	</div>`);
 	let paneScope = vm.createContext({ Zotero: env.Zotero, window, document: window.document, Event: window.Event, setTimeout, clearTimeout });
 	vm.runInContext(fs.readFileSync(path.join(ROOT, "content", "preferences.js"), "utf8"), paneScope);
+	// Observers the plugin itself keeps until shutdown (e.g. pubmed-watch.js) aren't the pane's
+	let pluginObservers = new Set(registered);
 	window.ZoteroBridgePrefs.init();
 	await env.context.ZB.secrets.get("notionToken");
 	await new Promise(r => setTimeout(r, 0));
-	assert.equal(registered.size, 3, "provider + two usage pref observers");
+	let paneObservers = () => [...registered].filter(o => !pluginObservers.has(o)).length;
+	assert.equal(paneObservers(), 3, "provider + two usage pref observers");
 
 	// Typed, and the window closed before the 600 ms save delay
 	let input = window.document.getElementById("zb-openai-key");
@@ -1648,5 +1651,6 @@ test("settings pane: closing it saves a pending key and unregisters its pref obs
 	input.dispatchEvent(new window.Event("input"));
 	window.document.getElementById("zotero-bridge-prefs").dispatchEvent(new window.Event("unload"));
 	assert.equal(await env.context.ZB.secrets.get("openaiKey"), "sk-typed-then-closed");
-	assert.equal(registered.size, 0, "pref observers left registered after the pane closed");
+	assert.equal(paneObservers(), 0, "pref observers left registered after the pane closed");
+	assert.equal(registered.size, pluginObservers.size, "the plugin's own observers stay until shutdown");
 });
