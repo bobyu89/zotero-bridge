@@ -342,7 +342,7 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	});
 	await vm.runInContext(`startup({ id: "zotero-bridge@bobyu89.github.io", version: "0.1.0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
 	assert.deepEqual(env.menus.map(m => m.target), ["main/library/item", "main/library/collection", "main/menubar/tools", "main/menubar/tools", "main/library/collection",
-		"main/library/item", "main/library/collection", "main/menubar/tools"]);
+		"main/library/item", "main/library/collection", "main/menubar/tools", "main/menubar/tools"]);
 	assert.equal(env.panes[0].paneID, "zotero-bridge-ai-note");
 
 	let { MockItem, addChild } = env;
@@ -812,7 +812,8 @@ test("keys come from the login manager; batch confirm shows a cost estimate; 529
 test("settings pane loads and saves secrets through the login manager, never prefs", async () => {
 	let xhtml = fs.readFileSync(path.join(ROOT, "content", "preferences.xhtml"), "utf8");
 	let passwords = [...xhtml.matchAll(/<html:input[^>]*type="password"[^>]*>/g)].map(m => m[0]);
-	assert.equal(passwords.length, 3);
+	// Claude, OpenAI, Notion, NCBI (PubMed watch)
+	assert.equal(passwords.length, 4);
 	for (let tag of passwords) assert.doesNotMatch(tag, /preference=/, tag);
 	assert.doesNotMatch(xhtml, /llm\.anthropicKey|llm\.openaiKey|notion\.token/);
 
