@@ -62,11 +62,16 @@
 
 	// ---------- AI note ----------
 
-	function aiNoteHTML(md, model, at) {
-		return `<h1>${AI_TITLE}</h1>\n<p><em>由 ${model} 於 ${at} 產生（Zotero Bridge）</em></p>\n${ZB.markdown.mdToHtml(md)}`;
+	// The structured data goes last, as a heading + <pre> (both survive Zotero's note editor),
+	// so a later sync without AI can fill the Notion columns and frontmatter from it
+	function aiNoteHTML(md, model, at, data, raw) {
+		let block = data || raw ? ZB.llm.studyDataBlock(data, raw) : "";
+		return `<h1>${AI_TITLE}</h1>\n<p><em>由 ${model} 於 ${at} 產生（Zotero Bridge）</em></p>\n`
+			+ ZB.markdown.mdToHtml(block ? `${md}\n\n${block}` : md);
 	}
 
-	// Read back an AI note written by aiNoteHTML (the user may have edited it in Zotero)
+	// Read back an AI note written by aiNoteHTML (the user may have edited it in Zotero).
+	// The structured-data block is removed from `md` and returned as `data`.
 	function readAINote(html) {
 		let md = ZB.markdown.htmlToMd(html, parseHTML);
 		let model = "";
@@ -77,7 +82,27 @@
 			at = t;
 			return "";
 		});
-		return { md: md.trim(), model, at };
+		let parsed = ZB.llm.extractStudyData(md);
+		return { md: parsed.md.trim(), model, at, data: parsed.data, dataError: parsed.found ? parsed.error : "" };
+	}
+
+	/**
+	 * Post-process a freshly generated note: take out the JSON block and verify the quotes.
+	 * Returns { md, data, raw, messages } — messages are short notes for the progress window.
+	 */
+	function processGeneratedNote(text, data) {
+		let messages = [];
+		let parsed = ZB.llm.extractStudyData(text);
+		if (!parsed.found) messages.push("⚠️ AI 沒有輸出結構化資料（JSON），研讀欄位留空");
+		else if (parsed.error) messages.push(`⚠️ 結構化資料：${parsed.error}`);
+		let texts = [data.abstract];
+		for (let att of data.attachments || []) {
+			for (let ann of att.annotations || []) texts.push(ann.text);
+		}
+		let check = ZB.verify.verifyQuotes(parsed.md.trim(), { fullText: data.fullText, texts });
+		let summary = ZB.verify.summarize(check);
+		if (summary) messages.push(summary);
+		return { md: check.md, data: parsed.data, raw: parsed.found && !parsed.data ? parsed.raw : "", messages, check };
 	}
 
 	// ---------- per-item pipeline ----------
@@ -97,6 +122,8 @@
 
 		// A failing step doesn't stop the others; errors are reported together at the end
 		let errors = [];
+		let messages = [];
+		let quoteCheck = null;
 		let ai = null;
 		if (needAI) {
 			ctx.status("AI 產生筆記中…");
@@ -107,8 +134,11 @@
 					fullTextTruncated: data.fullTextTruncated,
 				}, (url, init) => fetch(url, init));
 				let at = nowISO();
-				ai = { md: result.text.trim(), model: result.model || settings.llm.model, at };
-				let note = await ZB.adapter.saveAINote(item, aiNoteHTML(ai.md, ai.model, at));
+				let processed = processGeneratedNote(result.text.trim(), data);
+				messages.push(...processed.messages);
+				quoteCheck = processed.check;
+				ai = { md: processed.md, model: result.model || settings.llm.model, at, data: processed.data };
+				let note = await ZB.adapter.saveAINote(item, aiNoteHTML(ai.md, ai.model, at, processed.data, processed.raw));
 				selfModified.add(note.id);
 				setTimeout(() => selfModified.delete(note.id), AUTO_SYNC_DELAY_MS * 2);
 			}
@@ -118,6 +148,7 @@
 		}
 		if (!ai && data.aiNote && action.ai !== "none") {
 			ai = readAINote(data.aiNote.html);
+			if (ai.dataError) messages.push(`⚠️ AI 子筆記的結構化資料無法讀取：${ai.dataError}`);
 		}
 
 		let route = ZB.core.resolveRoute(data, settings.rules, settings.defaults);
@@ -134,7 +165,7 @@
 			try {
 				if (!route.notionDatabase) throw new Error(`沒有對應的資料庫（規則：${route.ruleName || "預設"}）`);
 				notionUrl = await syncNotion(ctx.notion(settings.notionToken), route.notionDatabase, data, {
-					ai, notesMarkdown, obsidianURI: obsidian && obsidian.uri,
+					ai, notesMarkdown, obsidianURI: obsidian && obsidian.uri, messages,
 				}, ctx);
 			}
 			catch (e) {
@@ -151,8 +182,8 @@
 				errors.push(`Obsidian：${e.message || e}`);
 			}
 		}
-		if (errors.length) throw new Error(errors.join("；"));
-		return { route, notionUrl, obsidianPath: obsidian && obsidian.relPath, generated: !!ai && needAI };
+		if (errors.length) throw new Error([...errors, ...messages].join("；"));
+		return { route, notionUrl, obsidianPath: obsidian && obsidian.relPath, generated: !!ai && needAI, messages, quoteCheck };
 	}
 
 	async function resolveObsidianPath(settings, folderParts, basename, data) {
@@ -191,6 +222,7 @@
 			aiMarkdown: opts.ai && opts.ai.md,
 			aiModel: opts.ai && opts.ai.model,
 			aiGeneratedAt: opts.ai && opts.ai.at,
+			study: opts.ai && opts.ai.data,
 			fullTextTruncated: data.fullTextTruncated,
 			notesMarkdown: opts.notesMarkdown,
 			notionUrl,
@@ -223,6 +255,12 @@
 			}
 			ctx.schemaCache.set(dsId, schema);
 		}
+		let study = opts.ai && opts.ai.data;
+		if (study && !schema.props["Study Design"] && !ctx.schemaHints.has(dsId)) {
+			// Databases set up before these columns existed: adding them is the user's call
+			ctx.schemaHints.add(dsId);
+			if (opts.messages) opts.messages.push("Notion 資料庫還沒有研讀欄位（Study Design 等）：到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」即可加上");
+		}
 		let zoteroKey = `${data.libraryPath}/${data.key}`;
 		let properties = ZB.notion.buildProperties(schema, {
 			title: data.title,
@@ -247,6 +285,7 @@
 			citationKey: data.citationKey,
 			zoteroKey,
 			summary: opts.ai ? ZB.markdown.plainText(ZB.llm.extractSummary(opts.ai.md)) : "",
+			study,
 			apa: data.apa,
 			lastSynced: nowISO(),
 		});
@@ -329,6 +368,7 @@
 		let clients = new Map();
 		let ctx = {
 			schemaCache: new Map(),
+			schemaHints: new Set(),
 			notion(token) {
 				if (!clients.has(token)) clients.set(token, new ZB.notion.NotionClient({ token, fetch: (u, i) => fetch(u, i) }));
 				return clients.get(token);
@@ -337,6 +377,7 @@
 		};
 		let ok = 0;
 		let failures = [];
+		let quotes = { total: 0, verified: 0, notFound: 0, unchecked: 0 };
 		for (let item of items) {
 			let title = item.getField("title") || item.key;
 			let line = pw ? new pw.ItemProgress(item.getItemTypeIconName(), title) : null;
@@ -344,10 +385,13 @@
 				if (line) line.setText(`${title} — ${s}`);
 			};
 			try {
-				await syncItem(item, action, settings, ctx);
+				let result = await syncItem(item, action, settings, ctx);
 				ok++;
+				if (result.quoteCheck) {
+					for (let k of Object.keys(quotes)) quotes[k] += result.quoteCheck[k];
+				}
 				if (line) {
-					line.setText(title);
+					line.setText(result.messages.length ? `${title} — ${result.messages.join("；")}` : title);
 					line.setProgress(100);
 				}
 			}
@@ -369,7 +413,9 @@
 			}
 		}
 		if (pw) {
-			pw.addDescription(`完成 ${ok} 筆${failures.length ? `，失敗 ${failures.length} 筆（詳見 說明 → 除錯輸出記錄）` : ""}`);
+			let quoteSummary = items.length > 1 ? ZB.verify.summarize(quotes) : "";
+			pw.addDescription(`完成 ${ok} 筆${failures.length ? `，失敗 ${failures.length} 筆（詳見 說明 → 除錯輸出記錄）` : ""}`
+				+ (quoteSummary ? `；${quoteSummary}` : ""));
 			pw.startCloseTimer(failures.length ? 15000 : 5000);
 		}
 		else if (failures.length) {
@@ -697,10 +743,21 @@
 			body.append(actions);
 			return;
 		}
-		let { md, model, at } = readAINote(note.getNote());
+		let { md, model, at, data } = readAINote(note.getNote());
 		let summary = ZB.markdown.plainText(ZB.llm.extractSummary(md));
 		setSectionSummary(summary.slice(0, 80));
 		if (model || at) body.append(el("div", [model, at && at.slice(0, 10)].filter(Boolean).join(" · "), "font-size: 0.9em; color: var(--fill-secondary); margin-bottom: 4px;"));
+		if (data) {
+			let facts = [
+				data.study_design,
+				Number.isFinite(data.sample_size) ? `N = ${data.sample_size}` : "",
+				data.evidence_level ? `CEBM ${data.evidence_level}` : "",
+				data.jbi_level ? `JBI ${data.jbi_level}` : "",
+				data.appraisal_overall ? `評讀：${data.appraisal_overall}` : "",
+				data.country,
+			].filter(Boolean);
+			if (facts.length) body.append(el("div", facts.join(" · "), "font-weight: 600; margin-bottom: 4px;"));
+		}
 		for (let block of ZB.markdown.mdToOutline(md)) {
 			if (block.type === "h") {
 				body.append(el("div", block.text, "font-weight: 600; margin: 8px 0 2px;"));

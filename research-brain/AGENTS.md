@@ -21,9 +21,9 @@
 | Zotero | MCP 工具 `zotero_search_items`、`zotero_item_metadata`、`zotero_item_fulltext` | 搜尋文獻庫、讀完整書目與 PDF 全文 |
 | Notion | Notion MCP | 「📚 Zotero 文獻資料庫」與比較表頁面 |
 
-文獻筆記 frontmatter 主要欄位：`title`、`authors`、`year`、`publication`、`doi`、`citekey`、`zotero_key`、`collections`、`tags`、`status`（待讀／閱讀中／已讀／已引用）、`notion`、`ai_model`。
+文獻筆記 frontmatter 主要欄位：`title`、`authors`、`year`、`publication`、`doi`、`citekey`、`zotero_key`、`collections`、`tags`、`status`（待讀／閱讀中／已讀／已引用）、`notion`、`ai_model`。有 AI 筆記的文獻另有研讀欄位：`study_design`、`sample_size`（數字）、`evidence_level`（Oxford CEBM 2011，1–5）、`jbi_level`、`appraisal_tool`、`appraisal_overall`（納入／排除／需更多資訊）、`setting`、`population`、`intervention`、`comparison`、`outcomes`、`measures`（清單）、`country`，可用來篩選文獻（例如只看 RCT、樣本數 > 100）。
 
-每篇的 AI 文獻筆記固定包含：一句話摘要、研究背景與目的、研究設計與方法、主要結果、作者結論、研究限制、證據等級、對我的研究的啟發、關鍵概念 `[[…]]`、可引用的句子。
+每篇的 AI 文獻筆記固定包含：一句話摘要、研究背景與目的、研究設計與方法、主要結果、作者結論、研究限制、嚴格評讀（JBI 清單逐題評讀與整體評價）、證據等級、對我的研究的啟發、關鍵概念 `[[…]]`、可引用的句子。可引用的句子已和全文比對：✅ 表示在全文或劃線中找到；⚠️ 表示沒找到或沒有全文可查，引用前必須回原文確認，不可直接當作原文引用。
 
 ## 工作方式
 1. **先讀 vault 裡已整理好的筆記**（便宜、快、已含 BOB 的劃線），不夠時才用 Zotero MCP 讀 PDF 全文。

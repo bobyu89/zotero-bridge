@@ -11,6 +11,17 @@ const { JSDOM } = require("jsdom");
 const { AI_MD } = require("./fixtures.cjs");
 
 const ROOT = path.join(__dirname, "..");
+
+// What the model returns: the note, one more quote (from the user's highlight) and the JSON block
+const AI_RESPONSE = AI_MD + `- "Falls decreased" (p. 5)
+
+\`\`\`json
+{"study_design": "randomized controlled trial", "sample_size": 120, "setting": "內科病房", "population": "住院病人",
+ "intervention": "衛教", "comparison": "常規照護", "outcomes": "跌倒發生率", "measures": ["Morse Fall Scale"],
+ "evidence_level": "2", "jbi_level": "1.c", "appraisal_tool": "JBI Checklist for Randomized Controlled Trials",
+ "appraisal_overall": "納入", "country": "Taiwan"}
+\`\`\`
+`;
 const ROOT_URI = "file://" + ROOT + "/";
 
 function makeEnv({ prefs, fetch }) {
@@ -153,7 +164,7 @@ function notionMock(log) {
 		let ok = json => ({ status: 200, ok: true, headers: { get: () => null }, text: async () => JSON.stringify(json) });
 		if (url.startsWith("https://api.anthropic.com/")) {
 			log.push({ api: "anthropic", body });
-			return ok({ model: "claude-opus-5-5", stop_reason: "end_turn", content: [{ type: "text", text: AI_MD }] });
+			return ok({ model: "claude-opus-5-5", stop_reason: "end_turn", content: [{ type: "text", text: AI_RESPONSE }] });
 		}
 		let p = url.replace("https://api.notion.com/v1/", "");
 		log.push({ api: "notion", method: init.method, path: p, body });
@@ -236,6 +247,8 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	assert.equal(env.progressLines.length, 1);
 	assert.equal(env.progressLines[0].error, undefined, env.progressLines[0].text);
 	assert.equal(env.progressLines[0].progress, 100);
+	// Quote verification is reported on the item's progress line
+	assert.equal(env.progressLines[0].text, "Fall prevention RCT — 可引用句 2 句：✅ 1、⚠️ 1 句未在全文中找到");
 
 	// LLM call: full text truncated to the configured limit
 	let llmCalls = log.filter(l => l.api === "anthropic");
@@ -247,6 +260,9 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	let aiNote = env.Zotero.Items.get(item.getNotes()).find(n => n.tags.includes("zotero-bridge-ai"));
 	assert.ok(aiNote);
 	assert.match(aiNote.noteHTML, /<h1>🤖 AI 文獻筆記<\/h1>/);
+	// The structured data is kept at the end of the Zotero note as a heading + <pre>
+	assert.match(aiNote.noteHTML, /<h2>📋 結構化資料（Zotero Bridge）<\/h2>\n<pre>\{\n {2}&quot;study_design&quot;: &quot;RCT&quot;,[\s\S]*<\/pre>$/);
+	assert.match(aiNote.noteHTML, /Falls decreased by 30%&quot; \(p\. 5\) ⚠️ 未在全文中找到/);
 
 	// Notion: routed to the thesis database, page created with properties and a managed container
 	let dbCall = log.find(l => l.api === "notion" && l.path.startsWith("databases/"));
@@ -257,8 +273,13 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	assert.match(create.body.properties.Obsidian.url, /^obsidian:\/\/open\?vault=zb-vault-/);
 	assert.match(create.body.properties.Summary.rich_text[0].text.content, /^護理師主導衛教/);
 	assert.deepEqual(create.body.properties.Collections.multi_select, [{ name: "碩論/文獻回顧" }]);
+	assert.deepEqual(create.body.properties["Study Design"], { select: { name: "RCT" } });
+	assert.deepEqual(create.body.properties["Sample Size"], { number: 120 });
+	assert.deepEqual(create.body.properties.Measures, { multi_select: [{ name: "Morse Fall Scale" }] });
+	assert.deepEqual(create.body.properties.Appraisal, { select: { name: "納入" } });
 	let container = log.find(l => l.path === "blocks/page-1/children" && l.method === "PATCH");
 	assert.equal(container.body.children[0].type, "callout");
+	assert.doesNotMatch(JSON.stringify(container.body), /study_design/, "no raw JSON in the Notion page");
 
 	// Obsidian file in the routed folder with Notion link and AI note
 	let file = path.join(vault, "Zotero", "碩論", "chen2024.md");
@@ -269,6 +290,11 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	assert.match(text, /\[\[Fall prevention\]\]/);
 	assert.match(text, /My \*\*own\*\* note/);
 	assert.match(text, /> ==🟡Falls decreased==/);
+	assert.match(text, /^study_design: "RCT"$/m);
+	assert.match(text, /^sample_size: 120$/m);
+	assert.match(text, /^measures:\n {2}- "Morse Fall Scale"$/m);
+	assert.doesNotMatch(text, /"study_design"|```json|結構化資料/, "no raw JSON in the Obsidian body");
+	assert.match(text, /^- "Falls decreased" \(p\. 5\) ✅$/m);
 	// Bases overview created once in the default folder
 	let base = path.join(vault, "Zotero", "Zotero 文獻庫.base");
 	assert.match(fs.readFileSync(base, "utf8"), /type: kanban/);
@@ -288,6 +314,13 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	assert.match(text2, /我的心得：值得引用。/);
 	assert.match(text2, /\[\[Fall prevention\]\]/, "AI note read back from Zotero");
 	assert.match(text2, /^ai_model: "claude-opus-5-5"$/m);
+	// Structured data read back from the Zotero note (no AI call)
+	assert.match(text2, /^study_design: "RCT"$/m);
+	assert.doesNotMatch(text2, /"study_design"|結構化資料/);
+	let patch = log.find(l => l.method === "PATCH" && l.path === "pages/page-1");
+	assert.deepEqual(patch.body.properties["Study Design"], { select: { name: "RCT" } });
+	assert.deepEqual(patch.body.properties["Evidence Level"], { select: { name: "2" } });
+	assert.equal(env.progressLines.at(-1).text, "Fall prevention RCT");
 	assert.equal((text2.match(/zotero-bridge:start/g) || []).length, 1);
 	assert.equal(fs.readFileSync(base, "utf8"), "user edited", "existing .base is never overwritten");
 
@@ -365,7 +398,8 @@ test("item pane shows the AI note; synthesis from a collection writes Obsidian, 
 	let a = new env.MockItem("journalArticle", { title: "A", year: "2024", citationKey: "chen2024", creators: [{ lastName: "Chen", creatorType: "author" }] });
 	let b = new env.MockItem("journalArticle", { title: "B", year: "2021", citationKey: "lee2021", creators: [{ lastName: "Lee", creatorType: "author" }], abstractNote: "abstract B" });
 	let aiNote = new env.MockItem("note");
-	aiNote.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 claude-opus-5-5 於 2026-10-01T00:00:00Z 產生（Zotero Bridge）</em></p><h2>一句話摘要</h2><p>衛教降低跌倒。</p><ul><li>設計：RCT</li></ul>";
+	aiNote.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 claude-opus-5-5 於 2026-10-01T00:00:00Z 產生（Zotero Bridge）</em></p><h2>一句話摘要</h2><p>衛教降低跌倒。</p><ul><li>設計：RCT</li></ul>"
+		+ "<h2>📋 結構化資料（Zotero Bridge）</h2><pre>{\n  \"study_design\": \"RCT\",\n  \"sample_size\": 80\n}</pre>";
 	aiNote.tags = ["zotero-bridge-ai"];
 	env.addChild(a, aiNote);
 	// Item A already has a literature note in the vault, so the synthesis links to it
@@ -378,6 +412,8 @@ test("item pane shows the AI note; synthesis from a collection writes Obsidian, 
 	let summary;
 	env.panes[0].onRender({ doc, body, item: a, setSectionSummary: s => { summary = s; } });
 	assert.equal(summary, "衛教降低跌倒。");
+	assert.match(body.textContent, /RCT · N = 80/);
+	assert.doesNotMatch(body.textContent, /study_design/);
 	assert.match(body.textContent, /claude-opus-5-5 · 2026-10-01/);
 	assert.match(body.textContent, /• 設計：RCT/);
 	assert.equal(body.querySelectorAll("button").length, 2);
@@ -397,6 +433,7 @@ test("item pane shows the AI note; synthesis from a collection writes Obsidian, 
 
 	let llm = log.find(l => l.url.startsWith("https://api.anthropic.com/"));
 	assert.match(llm.body.messages[0].content, /<source id="S1">[\s\S]*<ai_note>[\s\S]*衛教降低跌倒/);
+	assert.doesNotMatch(llm.body.messages[0].content, /study_design|結構化資料/, "the JSON block is not sent to the synthesis");
 	assert.match(llm.body.messages[0].content, /<source id="S2">[\s\S]*abstract B/);
 
 	let create = log.find(l => l.url === "https://api.notion.com/v1/pages");

@@ -39,6 +39,20 @@
 		"Citation Key": { rich_text: {} },
 		"Zotero Key": { rich_text: {} },
 		"Summary": { rich_text: {} },
+		// Structured data from the AI note (filter e.g. Study Design = RCT and Sample Size > 100)
+		"Study Design": { select: {} },
+		"Sample Size": { number: {} },
+		"Evidence Level": { select: {} },
+		"JBI Level": { select: {} },
+		"Appraisal Tool": { select: {} },
+		"Appraisal": { select: {} },
+		"Population": { rich_text: {} },
+		"Intervention": { rich_text: {} },
+		"Comparison": { rich_text: {} },
+		"Outcomes": { rich_text: {} },
+		"Setting": { rich_text: {} },
+		"Measures": { multi_select: {} },
+		"Country": { select: {} },
 		"APA": { rich_text: {} },
 		"Date Added": { date: {} },
 		"Last Synced": { date: {} },
@@ -258,7 +272,10 @@
 	 * Build page properties, only for properties that exist in the schema with the expected type.
 	 * values: { title, authors, year, date, publication, volume, issue, pages, publisher, itemType, doi,
 	 *           url, abstract, zotero, obsidian, tags, collections, library, citationKey, zoteroKey,
-	 *           summary, apa, dateAdded, lastSynced }
+	 *           summary, apa, dateAdded, lastSynced, study }
+	 * study: normalised structured data from the AI note (ZB.llm.normalizeStudyData). When it is
+	 * absent the structured columns are left untouched, so a note without the JSON block doesn't
+	 * wipe values from an earlier sync.
 	 */
 	function buildProperties(schema, v) {
 		let p = {};
@@ -289,6 +306,23 @@
 		set("Citation Key", "rich_text", { rich_text: rt(v.citationKey) });
 		set("Zotero Key", "rich_text", { rich_text: rt(v.zoteroKey) });
 		set("Summary", "rich_text", { rich_text: rt(v.summary) });
+		let s = v.study;
+		if (s) {
+			let select = x => ({ select: x ? { name: optionName(x) } : null });
+			set("Study Design", "select", select(s.study_design));
+			set("Sample Size", "number", { number: Number.isFinite(s.sample_size) ? s.sample_size : null });
+			set("Evidence Level", "select", select(s.evidence_level));
+			set("JBI Level", "select", select(s.jbi_level));
+			set("Appraisal Tool", "select", select(s.appraisal_tool));
+			set("Appraisal", "select", select(s.appraisal_overall));
+			set("Population", "rich_text", { rich_text: rt(s.population) });
+			set("Intervention", "rich_text", { rich_text: rt(s.intervention) });
+			set("Comparison", "rich_text", { rich_text: rt(s.comparison) });
+			set("Outcomes", "rich_text", { rich_text: rt(s.outcomes) });
+			set("Setting", "rich_text", { rich_text: rt(s.setting) });
+			set("Measures", "multi_select", { multi_select: uniq(s.measures) });
+			set("Country", "select", select(s.country));
+		}
 		set("APA", "rich_text", { rich_text: rt(v.apa) });
 		set("Last Synced", "date", { date: v.lastSynced ? { start: v.lastSynced } : null });
 		return p;

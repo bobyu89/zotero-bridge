@@ -1,7 +1,7 @@
 /* global Zotero, Services */
 var ZB;
 
-const SCRIPTS = ["core.js", "markdown.js", "notion.js", "llm.js", "synthesis.js", "zotero-adapter.js", "main.js"];
+const SCRIPTS = ["core.js", "markdown.js", "notion.js", "llm.js", "synthesis.js", "verify.js", "zotero-adapter.js", "main.js"];
 
 function install() {}
 
