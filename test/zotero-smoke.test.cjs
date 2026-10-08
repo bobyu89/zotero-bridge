@@ -342,6 +342,8 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	});
 	await vm.runInContext(`startup({ id: "zotero-bridge@bobyu89.github.io", version: "0.1.0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
 	assert.deepEqual(env.menus.map(m => m.target), ["main/library/item", "main/library/collection", "main/menubar/tools", "main/menubar/tools", "main/library/collection",
+		"main/library/item", "main/library/collection", "main/menubar/tools",
+		// citation-chase.js
 		"main/library/item", "main/library/collection", "main/menubar/tools"]);
 	assert.equal(env.panes[0].paneID, "zotero-bridge-ai-note");
 

@@ -1243,6 +1243,8 @@
 		menuIDs.push(...ZB.bibliography.registerMenus({ pluginID, icon }));
 		// Systematic/scoping review screening (screening.js): item, collection and Tools menus
 		menuIDs.push(...ZB.screening.registerMenus({ pluginID, icon }));
+		// Citation searching for reviews (citation-chase.js): item, collection and Tools menus
+		menuIDs.push(...ZB.citationChase.registerMenus({ pluginID, icon }));
 	}
 
 	// ---------- item pane: AI note section ----------

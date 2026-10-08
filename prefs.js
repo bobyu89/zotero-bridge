@@ -48,3 +48,11 @@ pref("extensions.zotero-bridge.screening.reasons", "");
 pref("extensions.zotero-bridge.screening.notionParent", "");
 // Review page per collection ("library/collections/KEY" → Notion page ID), so a rerun updates it
 pref("extensions.zotero-bridge.screening.notionPages", "{}");
+// 來源/<name> tags counted as "other methods" in PRISMA 2020 (one per line or comma-separated; empty = 引文追蹤, 網站, 機構)
+pref("extensions.zotero-bridge.screening.otherSources", "");
+// Citation searching with OpenAlex (content/citation-chase.js): email for the polite pool, requests
+// per run, works per study and direction, direction "both" | "backward" | "forward"
+pref("extensions.zotero-bridge.citationChase.email", "");
+pref("extensions.zotero-bridge.citationChase.maxRequests", "100");
+pref("extensions.zotero-bridge.citationChase.maxPerSeed", "200");
+pref("extensions.zotero-bridge.citationChase.direction", "both");
