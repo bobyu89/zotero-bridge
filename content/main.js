@@ -790,6 +790,15 @@
 		}
 		// 「同步時自動更新參考文獻檔」 (export.js); never throws
 		if (ok) await ZB.bibliography.afterSync(settings);
+		// 研究儀表板 after manual runs (dashboard.js); must never fail the sync
+		if (ok && !action.silent) {
+			try {
+				await ZB.dashboard.afterSync(settings);
+			}
+			catch (e) {
+				Zotero.logError(e);
+			}
+		}
 	}
 
 	/** Rough cost for the confirm dialog, from the ledger's average tokens per call ("" when unknown). */
@@ -1243,6 +1252,8 @@
 		menuIDs.push(...ZB.bibliography.registerMenus({ pluginID, icon }));
 		// Systematic/scoping review screening (screening.js): item, collection and Tools menus
 		menuIDs.push(...ZB.screening.registerMenus({ pluginID, icon }));
+		// Research dashboard (dashboard.js): Tools menu
+		menuIDs.push(...ZB.dashboard.registerMenus({ pluginID, icon }));
 	}
 
 	// ---------- item pane: AI note section ----------

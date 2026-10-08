@@ -342,7 +342,7 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	});
 	await vm.runInContext(`startup({ id: "zotero-bridge@bobyu89.github.io", version: "0.1.0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
 	assert.deepEqual(env.menus.map(m => m.target), ["main/library/item", "main/library/collection", "main/menubar/tools", "main/menubar/tools", "main/library/collection",
-		"main/library/item", "main/library/collection", "main/menubar/tools"]);
+		"main/library/item", "main/library/collection", "main/menubar/tools", "main/menubar/tools"]);
 	assert.equal(env.panes[0].paneID, "zotero-bridge-ai-note");
 
 	let { MockItem, addChild } = env;
@@ -960,6 +960,8 @@ function basePrefs(vault, extra = {}) {
 		"extensions.zotero-bridge.obsidian.folder": "Zotero",
 		"extensions.zotero-bridge.obsidian.filenameFormat": "citekey",
 		"extensions.zotero-bridge.obsidian.createBase": false,
+		// No 研究儀表板.md in the folder listings below (test/dashboard-smoke.test.cjs covers it)
+		"extensions.zotero-bridge.dashboard.autoUpdate": false,
 		"extensions.zotero-bridge.notion.token": "ntn_test",
 		"extensions.zotero-bridge.notion.database": "https://www.notion.so/ws/Default-11111111111111111111111111111111",
 		"extensions.zotero-bridge.routing.rules": JSON.stringify([
