@@ -317,6 +317,9 @@ const TESTS = [
 			// Let startup's async work settle (secrets migration, the interrupted-batch reminder)
 			await delay(3000);
 		},
+		// Still part of startup (it waits for startup() to finish): the l10n-registration errors can
+		// arrive here instead of in the first test; the startup test judges them against the baseline
+		allowUnattributed: ["uncaught exception: undefined", "uncaught exception: undefined"],
 	},
 	{
 		name: "no plugin errors in the console during startup",
