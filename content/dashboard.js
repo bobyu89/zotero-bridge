@@ -495,7 +495,8 @@
 
 	/**
 	 * The managed region's content.
-	 * meta: { now: Date, reviews, drafts, usage: usageReport(), baseLink: "Zotero/研究儀表板.base" | "" }
+	 * meta: { now: Date, reviews, drafts, usage: usageReport(), baseLink: "Zotero/研究儀表板.base" | "",
+	 *   concepts: the 「🧠 熱門概念」 section (concepts.js) | "" }
 	 */
 	function buildDashboardSection(stats, meta = {}) {
 		let info = [
@@ -509,6 +510,8 @@
 			evidenceSection(stats),
 			todoSection(stats),
 			projectsSection(meta.reviews || [], meta.drafts || []),
+			// 「🧠 熱門概念」 (concepts.js), when given
+			...(meta.concepts ? [meta.concepts] : []),
 			usageSection(meta.usage),
 			newSection(stats),
 		].join("\n\n");
@@ -718,7 +721,9 @@
 		catch (e) {
 			Zotero.logError(e);
 		}
-		let section = buildDashboardSection(stats, { now, reviews, drafts, usage: report, baseLink });
+		// Top concept cards (concepts.js; their frontmatter only, never throws)
+		let concepts = scope.ZB && scope.ZB.concepts ? await scope.ZB.concepts.dashboardSection(settings) : "";
+		let section = buildDashboardSection(stats, { now, reviews, drafts, usage: report, baseLink, concepts });
 		let path = PathUtils.join(dir, NOTE_NAME + ".md");
 		let existing = (await IOUtils.exists(path)) ? await IOUtils.readUTF8(path) : null;
 		let text = buildDashboardNote(existing, section, { updated: now.toISOString() });

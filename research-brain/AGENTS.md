@@ -19,6 +19,7 @@
 | 文獻比較表 | `Zotero/文獻比較/` | 插件產生的跨文獻比較與研究缺口 |
 | 文獻總表 | `Zotero/Zotero 文獻庫.base` | Obsidian Bases 表格與閱讀進度看板 |
 | 系統性／範圍回顧 | `Zotero/Reviews/<分類名稱>.md`（＋ `<分類名稱> 證據表.csv`） | 插件依 Zotero 篩選標籤產生的 PRISMA 2020 計數、Mermaid 流程圖、一致性檢查、納入研究的證據表 |
+| 概念卡片 | `Zotero/概念/<概念>.md`、`Zotero/概念/概念索引.md` | 每個關鍵概念（與測量工具）一份：別名、提到它的文獻表、常一起出現的概念；索引依文獻數排序並有 Mermaid 關係圖 |
 | Zotero | MCP 工具 `zotero_search_items`、`zotero_item_metadata`、`zotero_item_fulltext` | 搜尋文獻庫、讀完整書目與 PDF 全文 |
 | Notion | Notion MCP | 「📚 Zotero 文獻資料庫」與比較表頁面 |
 
@@ -27,6 +28,8 @@
 每篇的 AI 文獻筆記固定包含：一句話摘要、研究背景與目的、研究設計與方法、主要結果、作者結論、研究限制、嚴格評讀（JBI 清單逐題評讀與整體評價）、證據等級、對我的研究的啟發、關鍵概念 `[[…]]`、可引用的句子。可引用的句子已和全文比對：✅ 表示在全文或劃線中找到；⚠️ 表示沒找到或沒有全文可查，引用前必須回原文確認，不可直接當作原文引用。
 
 系統性／範圍回顧筆記（`type: review-screening`）的 frontmatter 有 PRISMA 2020 計數：`prisma_identified`、`prisma_duplicates`、`prisma_screened`、`prisma_excluded_screening`、`prisma_awaiting_screening`、`prisma_sought`、`prisma_not_retrieved`、`prisma_assessed`、`prisma_excluded_fulltext`（各排除原因的篇數在筆記的計數表）、`prisma_awaiting_fulltext`、`prisma_included`，以及 `zotero_collection`、`evidence_csv`、`last_generated`。這些數字只能照抄，不可自行推算或修改；`prisma_awaiting_*` 不是 0 表示篩選還沒完成，「一致性檢查」有 ⚠️ 時要先提醒 BOB 修正 Zotero 標籤（`篩選/…`、`排除原因/…`）再重新產生，不要直接改筆記的數字。有其他方法（引文追蹤、網站等）找到的文獻時，另有 `prisma_other_identified`、`prisma_other_sought`、`prisma_other_not_retrieved`、`prisma_other_assessed`、`prisma_other_excluded`、`prisma_other_included`（PRISMA 右側欄），此時 `prisma_included` 是兩欄合計，其餘 `prisma_*` 只算資料庫與登錄庫。同資料夾的 `type: citation-chase` 筆記是引文追蹤的候選清單，不是納入研究。
+
+概念卡片（`type: "concept"`）由插件從文獻筆記「關鍵概念」的 `[[…]]` 整理而成：frontmatter 有 `concept`（卡片名稱）、`concept_types`（概念／測量工具／結果指標）、`papers`（提到它的文獻數，0 表示目前沒有文獻提到）、`aliases`（同一概念的其他寫法，含 BOB 設定的同義詞）。要找「哪些文獻談某個概念」時先讀這張卡片的文獻表，再讀各篇文獻筆記；要找相關概念看「常一起出現的概念」或 `概念索引.md`。卡片的「📖 我的定義」「✍️ 我的筆記」是 BOB 寫的，自動區塊與「🤖 AI 綜整（草稿）」區塊是插件產生的：不要修改它們，也不要把 AI 綜整當成已查證的內容（引用與數字仍要回文獻筆記確認，「⚠️ 查核清單」列出的要先處理）。新概念或定義寫在「✍️ 我的筆記」或 `研究大腦/` 的新筆記。
 
 ## 工作方式
 1. **先讀 vault 裡已整理好的筆記**（便宜、快、已含 BOB 的劃線），不夠時才用 Zotero MCP 讀 PDF 全文。
@@ -40,6 +43,7 @@
 - **研究缺口**：找出族群、場域、方法、結果指標上尚未被回答的問題，每點附上依據文獻。
 - **文獻探討初稿**：依主題分段的論述式段落（不是逐篇摘要），段落內整合多篇文獻並加 APA 引用，最後附參考文獻列表。
 - **系統性回顧 PRISMA**：讀 `Zotero/Reviews/` 的回顧筆記 → 確認篩選完成與一致性檢查 → 寫 PRISMA 流程段落（Results 的 Study selection）與納入研究特徵摘要，數字與筆記完全一致。
+- **概念定義與概念分析**：從 `Zotero/概念/<概念>.md` 的文獻表出發，比較各篇如何定義與測量這個概念（測量工具也有自己的卡片），寫成定義段落或概念分析的素材，每句附引用。
 - **整理新文獻**：找出 `status: 待讀` 且還沒有 AI 文獻筆記的文獻，列出清單並建議閱讀順序。
 
 ## 給 BOB 文獻搜尋連結
