@@ -25,6 +25,17 @@
 		return Zotero.Prefs.get(PREF + key, true);
 	}
 
+	/** A feature switch (features.js), checked live: turning a feature off needs no restart. */
+	function featureOn(id) {
+		return ZB.features.isEnabled(id);
+	}
+
+	/** A turned-off feature reached anyway (e.g. an old shortcut): say where to turn it on. */
+	function notifyFeatureOff(id) {
+		let f = ZB.features.get(id);
+		notify("Zotero Bridge", `「${f.label}」目前關閉。要使用的話：設定 → Zotero Bridge → 功能，把它打開。`);
+	}
+
 	async function readSettings() {
 		let vaultPath = String(pref("obsidian.vaultPath") || "").trim();
 		let provider = pref("llm.provider") === "openai" ? "openai" : "anthropic";
@@ -702,6 +713,11 @@
 	async function runNow(items, action) {
 		items = ZB.adapter.toRegularItems(items);
 		if (!items.length) return;
+		// 「同步到 Obsidian／Notion」 off: nothing is written or sent anywhere
+		if (!featureOn("sync")) {
+			if (!action.silent) notifyFeatureOff("sync");
+			return;
+		}
 		let settings;
 		try {
 			settings = await readSettings();
@@ -1063,6 +1079,10 @@
 	}
 
 	async function runSynthesisNow(items, scope) {
+		if (!featureOn("synthesis")) {
+			notifyFeatureOff("synthesis");
+			return;
+		}
 		items = ZB.adapter.toRegularItems(items);
 		if (items.length < 2) {
 			notify("Zotero Bridge", "文獻比較表至少需要 2 篇文獻。");
@@ -1232,47 +1252,62 @@
 
 	// ---------- menus ----------
 
+	// feature: the switch that hides the entry (features.js); "regenerate" also needs AI notes
 	const ITEM_ACTIONS = [
-		{ l10nID: "zotero-bridge-menu-sync", action: { targets: ["notion", "obsidian"], ai: "missing" } },
-		{ l10nID: "zotero-bridge-menu-regenerate", action: { targets: ["notion", "obsidian"], ai: "regenerate" } },
-		{ l10nID: "zotero-bridge-menu-no-ai", action: { targets: ["notion", "obsidian"], ai: "reuse" } },
-		{ separator: true },
-		{ l10nID: "zotero-bridge-menu-obsidian", action: { targets: ["obsidian"], ai: "reuse" } },
-		{ l10nID: "zotero-bridge-menu-notion", action: { targets: ["notion"], ai: "reuse" } },
+		{ l10nID: "zotero-bridge-menu-sync", action: { targets: ["notion", "obsidian"], ai: "missing" }, feature: "sync" },
+		{ l10nID: "zotero-bridge-menu-regenerate", action: { targets: ["notion", "obsidian"], ai: "regenerate" }, feature: "aiNotes" },
+		{ l10nID: "zotero-bridge-menu-no-ai", action: { targets: ["notion", "obsidian"], ai: "reuse" }, feature: "sync" },
+		{ separator: true, feature: "sync" },
+		{ l10nID: "zotero-bridge-menu-obsidian", action: { targets: ["obsidian"], ai: "reuse" }, feature: "sync" },
+		{ l10nID: "zotero-bridge-menu-notion", action: { targets: ["notion"], ai: "reuse" }, feature: "sync" },
 	];
 
+	// The AI writing entries below the sync entries, each with its own switch
+	const WRITING_FEATURES = ["synthesis", "reviewDraft", "ebhcReport"];
+
+	/** Features with an entry in the Zotero Bridge item/collection submenu: the submenu hides when all are off. */
+	const SUBMENU_FEATURES = ["sync", ...WRITING_FEATURES];
+
 	function buildMenus(getItems, getScope) {
-		let menus = ITEM_ACTIONS.map((entry) => {
-			if (entry.separator) return { menuType: "separator" };
-			return {
+		let gate = ZB.features.gateMenus;
+		let menus = ITEM_ACTIONS.flatMap((entry) => {
+			if (entry.separator) return gate(entry.feature, [{ menuType: "separator" }]);
+			return gate(entry.feature, [{
 				menuType: "menuitem",
 				l10nID: entry.l10nID,
 				onCommand: (ev, context) => {
 					run(getItems(context), entry.action).catch(e => Zotero.logError(e));
 				},
-			};
+			}]);
 		});
-		menus.push({ menuType: "separator" }, {
+		menus.push({
+			// Between the sync entries and the AI writing entries, only when both groups show something
+			menuType: "separator",
+			onShowing: (ev, context) => context.setVisible(featureOn("sync") && WRITING_FEATURES.some(featureOn)),
+		},
+		...gate("synthesis", [{
 			menuType: "menuitem",
 			l10nID: "zotero-bridge-menu-synthesis",
 			onCommand: (ev, context) => {
 				runSynthesis(getItems(context), getScope(context)).catch(e => Zotero.logError(e));
 			},
-		}, {
+		}]),
+		...gate("reviewDraft", [{
 			// Literature review draft (review-draft.js)
 			menuType: "menuitem",
 			l10nID: "zotero-bridge-menu-review-draft",
 			onCommand: (ev, context) => {
 				ZB.reviewDraft.run(getItems(context), getScope(context), context).catch(e => Zotero.logError(e));
 			},
-		}, {
+		}]),
+		...gate("ebhcReport", [{
 			// Evidence-based health care report draft (ebhc-report.js)
 			menuType: "menuitem",
 			l10nID: "zotero-bridge-menu-ebhc-report",
 			onCommand: (ev, context) => {
 				ZB.ebhcReport.run(getItems(context), getScope(context), context).catch(e => Zotero.logError(e));
 			},
-		});
+		}]));
 		return menus;
 	}
 
@@ -1311,6 +1346,7 @@
 				menuType: "submenu",
 				l10nID: "zotero-bridge-menu",
 				icon,
+				onShowing: (ev, context) => context.setVisible(SUBMENU_FEATURES.some(featureOn)),
 				menus: buildMenus(context => context.items || [], itemScope),
 			}],
 		});
@@ -1324,7 +1360,7 @@
 				icon,
 				onShowing: (ev, context) => {
 					let rows = context.collectionTreeRows || [];
-					context.setVisible(rows.some(r => r.isCollection && r.isCollection()));
+					context.setVisible(rows.some(r => r.isCollection && r.isCollection()) && SUBMENU_FEATURES.some(featureOn));
 				},
 				menus: buildMenus(collectionItems, collectionScope),
 			}],
@@ -1339,11 +1375,11 @@
 					l10nID: "zotero-bridge-menu-settings",
 					onCommand: () => Zotero.Utilities.Internal.openPreferences("zotero-bridge-prefs"),
 				},
-				{
+				...ZB.features.gateMenus("status", [{
 					menuType: "menuitem",
 					l10nID: "zotero-bridge-menu-status",
 					onCommand: () => ZB.status.runPass().catch(e => Zotero.logError(e)),
-				},
+				}]),
 				{
 					menuType: "menuitem",
 					l10nID: "zotero-bridge-menu-stop",
@@ -1353,8 +1389,9 @@
 				{
 					menuType: "menuitem",
 					l10nID: "zotero-bridge-menu-resume",
+					// Resuming syncs: hidden while 「同步到 Obsidian／Notion」 is off (discarding stays possible)
 					onShowing: (ev, context) => {
-						let count = currentBatch ? 0 : pendingCount(readPendingBatch());
+						let count = currentBatch || !featureOn("sync") ? 0 : pendingCount(readPendingBatch());
 						context.setVisible(count > 0);
 						if (count) context.setL10nArgs(JSON.stringify({ count }));
 					},
@@ -1396,21 +1433,42 @@
 	let paneID = null;
 	let paneRefresh = new WeakMap();
 
+	// Inline styles from Zotero's own variables (no stylesheet in the item pane): they follow the light
+	// and dark themes and the font size setting. Same rhythm as the settings pane (DESIGN.md)
+	const PANE_STYLE = {
+		// The per-item tools (status, screening, search links, appraisal) above the note
+		tools: "padding-bottom: 4px; margin-bottom: 8px; border-bottom: 1px solid var(--fill-quinary);",
+		lead: "margin: 2px 0;",
+		hint: "margin: 2px 0; font-size: 0.9em; color: var(--fill-secondary);",
+		meta: "margin: 0 0 6px; font-size: 0.9em; color: var(--fill-secondary);",
+		facts: "margin: 0 0 6px; font-weight: 600;",
+		heading: "margin: 10px 0 2px; font-weight: 600;",
+		text: "margin: 2px 0;",
+		quote: "margin: 4px 0; padding-inline-start: 8px; border-inline-start: 2px solid var(--fill-quinary); color: var(--fill-secondary); font-style: italic;",
+		actions: "display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;",
+	};
+
 	function renderPane({ doc, body, item, setSectionSummary }) {
 		body.replaceChildren();
-		ZB.status.renderPaneRow(doc, body, item);
-		ZB.screening.renderPaneRow(doc, body, item);
-		ZB.searchLinks.renderPaneRow(doc, body, item);
-		// 文獻評讀表 (appraisal-form.js)
-		ZB.appraisalForm.renderPaneRow(doc, body, item);
 		let el = (tag, text, style) => {
 			let e = doc.createElement(tag);
 			if (text !== undefined) e.textContent = text;
 			if (style) e.setAttribute("style", style);
 			return e;
 		};
+		// Each row only when its feature is on (features.js). A <section>, not a <div>: the rows stay
+		// the first <div>s that hold their own content
+		let tools = el("section", undefined, PANE_STYLE.tools);
+		tools.dataset.zbPane = "tools";
+		if (featureOn("status")) ZB.status.renderPaneRow(doc, tools, item);
+		if (featureOn("screening")) ZB.screening.renderPaneRow(doc, tools, item);
+		if (featureOn("searchLinks")) ZB.searchLinks.renderPaneRow(doc, tools, item);
+		// 文獻評讀表 (appraisal-form.js)
+		if (featureOn("appraisalForm")) ZB.appraisalForm.renderPaneRow(doc, tools, item);
+		if (tools.childNodes.length) body.append(tools);
+
 		let button = (label, action) => {
-			let b = el("button", label, "margin: 4px 6px 4px 0;");
+			let b = el("button", label);
 			b.addEventListener("click", () => {
 				run([item], action).then(() => {
 					let refresh = paneRefresh.get(body);
@@ -1419,19 +1477,31 @@
 			});
 			return b;
 		};
+		let syncOn = featureOn("sync");
+		let aiOn = featureOn("aiNotes");
 		let note = item && item.isRegularItem() ? ZB.adapter.getAINote(item) : null;
-		let actions = el("div");
+		let actions = el("div", undefined, PANE_STYLE.actions);
 		if (!note) {
-			setSectionSummary("尚未產生");
-			body.append(el("p", "這篇文獻還沒有 AI 文獻筆記。", "margin: 4px 0; color: var(--fill-secondary);"));
-			actions.append(button("產生 AI 筆記並同步", { targets: ["notion", "obsidian"], ai: "missing" }));
-			body.append(actions);
+			if (aiOn) {
+				setSectionSummary("尚未產生");
+				body.append(
+					el("p", "這篇文獻還沒有 AI 文獻筆記。", PANE_STYLE.lead),
+					el("p", "產生時會呼叫你設定的 AI 服務（要付費），完成後同步到 Notion／Obsidian。", PANE_STYLE.hint),
+				);
+				actions.append(button("產生 AI 筆記並同步", { targets: ["notion", "obsidian"], ai: "missing" }));
+			}
+			else {
+				setSectionSummary("AI 筆記已關閉");
+				body.append(el("p", "AI 文獻筆記目前關閉，同步時只整理書目、劃線和你的筆記。要打開：設定 → Zotero Bridge → 功能。", PANE_STYLE.hint));
+				if (syncOn) actions.append(button("同步到 Notion + Obsidian", { targets: ["notion", "obsidian"], ai: "reuse" }));
+			}
+			if (actions.childNodes.length) body.append(actions);
 			return;
 		}
 		let { md, model, at, data } = readAINote(note.getNote());
 		let summary = ZB.markdown.plainText(ZB.llm.extractSummary(md));
 		setSectionSummary(summary.slice(0, 80));
-		if (model || at) body.append(el("div", [model, at && at.slice(0, 10)].filter(Boolean).join(" · "), "font-size: 0.9em; color: var(--fill-secondary); margin-bottom: 4px;"));
+		if (model || at) body.append(el("div", [model, at && at.slice(0, 10)].filter(Boolean).join(" · "), PANE_STYLE.meta));
 		if (data) {
 			let facts = [
 				data.study_design,
@@ -1441,27 +1511,26 @@
 				data.appraisal_overall ? `評讀：${data.appraisal_overall}` : "",
 				data.country,
 			].filter(Boolean);
-			if (facts.length) body.append(el("div", facts.join(" · "), "font-weight: 600; margin-bottom: 4px;"));
+			if (facts.length) body.append(el("div", facts.join(" · "), PANE_STYLE.facts));
 		}
 		for (let block of ZB.markdown.mdToOutline(md)) {
 			if (block.type === "h") {
-				body.append(el("div", block.text, "font-weight: 600; margin: 8px 0 2px;"));
+				body.append(el("div", block.text, PANE_STYLE.heading));
 			}
 			else if (block.type === "li") {
-				body.append(el("div", "• " + block.text, `margin: 1px 0 1px ${0.8 + block.level}em; text-indent: -0.8em;`));
+				body.append(el("div", "• " + block.text, `margin: 1px 0; margin-inline-start: ${0.8 + block.level}em; text-indent: -0.8em;`));
 			}
 			else if (block.type === "quote") {
-				body.append(el("div", block.text, "margin: 2px 0; padding-left: 8px; border-inline-start: 3px solid var(--fill-quinary); font-style: italic;"));
+				body.append(el("div", block.text, PANE_STYLE.quote));
 			}
 			else {
-				body.append(el("div", block.text, "margin: 2px 0;"));
+				body.append(el("div", block.text, PANE_STYLE.text));
 			}
 		}
-		actions.append(
-			button("同步到 Notion + Obsidian", { targets: ["notion", "obsidian"], ai: "reuse" }),
-			button("重新產生", { targets: ["notion", "obsidian"], ai: "regenerate" }),
-		);
-		body.append(actions);
+		// The note stays readable with AI notes off; only the actions whose feature is off go
+		if (syncOn) actions.append(button("同步到 Notion + Obsidian", { targets: ["notion", "obsidian"], ai: "reuse" }));
+		if (aiOn) actions.append(button("重新產生", { targets: ["notion", "obsidian"], ai: "regenerate" }));
+		if (actions.childNodes.length) body.append(actions);
 	}
 
 	function registerItemPane() {
@@ -1492,7 +1561,7 @@
 	function registerNotifier() {
 		notifierID = Zotero.Notifier.registerObserver({
 			notify: (event, type, ids, extraData) => {
-				if (!pref("autoSync")) return;
+				if (!pref("autoSync") || !featureOn("sync")) return;
 				if (event === "add" || event === "modify") {
 					for (let id of ids) {
 						if (wantsAutoSync(id)) autoSyncQueue.add(id);
@@ -1530,6 +1599,12 @@
 
 	function flushAutoSync() {
 		autoSyncTimer = null;
+		// Turned off while the timer ran: nothing goes out
+		if (!featureOn("sync")) {
+			archiveQueue.clear();
+			autoSyncQueue.clear();
+			return;
+		}
 		// Skip trashed items that were restored before the timer fired
 		let archive = [...archiveQueue].filter(([, id]) => {
 			let item = id !== null && Zotero.Items.get(id);
@@ -1549,6 +1624,14 @@
 	function init(opts) {
 		pluginID = opts.id;
 		rootURI = opts.rootURI;
+		// Feature switches: once per profile, before anything reads them (features.js)
+		try {
+			let migrated = ZB.features.migrate();
+			if (migrated) Zotero.debug(`Zotero Bridge: feature switches set up (${migrated.preset}${migrated.evidence.length ? `; earlier use: ${migrated.evidence.join(", ")}` : ""})`);
+		}
+		catch (e) {
+			Zotero.logError(e);
+		}
 		// Move secrets from plain prefs (earlier versions) into the login manager; readers wait for it
 		ZB.secrets.migrateFromPrefs().then((names) => {
 			if (names.length) Zotero.debug(`Zotero Bridge: moved ${names.join(", ")} from prefs to the login manager`);
@@ -1596,6 +1679,8 @@
 	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime,
 		// for status.js
 		enqueue, notify, buildObsidianIndex, saveQuietly,
+		// for the modules whose features can be switched off (features.js)
+		notifyFeatureOff,
 		// for appraisal-form.js
 		markSelfModified,
 		// for review-draft.js

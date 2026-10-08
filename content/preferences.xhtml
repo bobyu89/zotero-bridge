@@ -1,7 +1,247 @@
+<linkset>
+	<html:link rel="localization" href="zotero-bridge.ftl"/>
+</linkset>
 <vbox id="zotero-bridge-prefs" onload="ZoteroBridgePrefs.init()" class="zotero-bridge-prefs">
+	<!--
+		Layout and tokens: DESIGN.md. Sections carry data-zb-feature="<feature IDs>" (content/features.js):
+		preferences.js hides a section while none of its features is on, so a 研究生引導 profile sees a short pane.
+	-->
+	<groupbox id="zb-features-box" class="zb-features-box">
+		<label><html:h2 data-l10n-id="zotero-bridge-features-heading">功能</html:h2></label>
+		<html:p class="zb-lead" data-l10n-id="zotero-bridge-features-intro">先選一個起點，再逐項調整。開關馬上生效；關掉的功能，下面的設定也會收起來。</html:p>
+		<html:div id="zb-features" class="zb-features"/>
+	</groupbox>
+
 	<groupbox>
-		<label><html:h2>AI 文獻筆記</html:h2></label>
-		<checkbox label="同步時用 LLM 產生結構化文獻筆記（存成 Zotero 子筆記，並同步到 Notion / Obsidian）" preference="extensions.zotero-bridge.llm.enabled"/>
+		<label><html:h2>Obsidian</html:h2></label>
+		<label value="Vault 資料夾路徑："/>
+		<hbox align="center">
+			<html:input id="zb-vault-path" type="text" preference="extensions.zotero-bridge.obsidian.vaultPath" style="flex: 1"/>
+			<button label="選擇資料夾…" oncommand="ZoteroBridgePrefs.pickVault()"/>
+		</hbox>
+		<hbox align="center">
+			<label value="Vault 名稱（選填，預設為資料夾名稱；用於 obsidian:// 連結）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.obsidian.vaultName"/>
+		</hbox>
+		<hbox align="center">
+			<label value="預設子資料夾："/>
+			<html:input type="text" preference="extensions.zotero-bridge.obsidian.folder" placeholder="Zotero"/>
+		</hbox>
+		<hbox align="center">
+			<label value="檔名格式："/>
+			<menulist preference="extensions.zotero-bridge.obsidian.filenameFormat" native="true">
+				<menupopup>
+					<menuitem label="Citation key（沒有時用 作者 年份 - 標題）" value="citekey"/>
+					<menuitem label="作者 年份 - 標題" value="authorYearTitle"/>
+					<menuitem label="標題" value="title"/>
+				</menupopup>
+			</menulist>
+		</hbox>
+		<vbox data-zb-feature="sync">
+			<checkbox label="一併同步 Zotero 子筆記" preference="extensions.zotero-bridge.includeNotes"/>
+			<checkbox label="建立「Zotero 文獻庫.base」總表（表格 + 閱讀進度看板，需要 Obsidian 1.14 以上）" preference="extensions.zotero-bridge.obsidian.createBase"/>
+		</vbox>
+		<vbox data-zb-feature="dashboard">
+			<checkbox label="手動同步後更新「研究儀表板」筆記（只讀 vault 裡的筆記，不連網、不呼叫 AI；也可從 工具 → 更新研究儀表板）" preference="extensions.zotero-bridge.dashboard.autoUpdate"/>
+		</vbox>
+	</groupbox>
+
+	<groupbox data-zb-feature="sync screening progressReport synthesis">
+		<label><html:h2>Notion</html:h2></label>
+		<label value="Integration token（notion.so/profile/integrations 建立，並把資料庫分享給這個 integration）："/>
+		<html:input id="zb-notion-token" type="password" placeholder="ntn_..." autocomplete="off"/>
+		<vbox data-zb-feature="sync">
+			<label value="預設資料庫連結（沒有符合任何分流規則時使用）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.notion.database" placeholder="https://www.notion.so/..."/>
+		</vbox>
+		<vbox data-zb-feature="synthesis">
+			<label value="文獻比較表的 Notion 父頁面（選填；比較表會建立成這個頁面底下的子頁面，頁面也要分享給 integration）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.notion.synthesisParent" placeholder="https://www.notion.so/..."/>
+		</vbox>
+		<hbox align="center" data-zb-feature="sync">
+			<button label="測試連線並補齊資料庫欄位" oncommand="ZoteroBridgePrefs.testNotion()"/>
+		</hbox>
+		<html:pre id="zb-notion-status" class="zb-status"/>
+	</groupbox>
+
+	<groupbox data-zb-feature="sync">
+		<label><html:h2>分流規則（不同文獻庫／分類 → 不同 Notion 資料庫與 Obsidian 資料夾）</html:h2></label>
+		<description>由上往下比對，第一條符合的規則生效；欄位留空時使用上方預設值。「分類路徑」用 / 分隔，例如 碩論/文獻回顧，會包含子分類。</description>
+		<html:div id="zb-rules"/>
+		<hbox>
+			<button label="新增規則" oncommand="ZoteroBridgePrefs.addRule()"/>
+		</hbox>
+		<html:pre id="zb-rules-status" class="zb-status"/>
+	</groupbox>
+
+	<groupbox data-zb-feature="sync">
+		<label><html:h2>自動同步</html:h2></label>
+		<checkbox label="Zotero 條目、註記或筆記變更時自動同步到 Notion 與 Obsidian（不會自動呼叫 AI，沿用既有 AI 筆記）" preference="extensions.zotero-bridge.autoSync"/>
+	</groupbox>
+
+	<groupbox data-zb-feature="status">
+		<label><html:h2>閱讀狀態</html:h2></label>
+		<hbox align="center">
+			<label value="Zotero 標籤前綴："/>
+			<html:input type="text" preference="extensions.zotero-bridge.status.tagPrefix" placeholder="狀態/"/>
+		</hbox>
+		<checkbox label="標籤加上 emoji（例如「狀態/已讀 ✅」），Zotero 會把它顯示在條目清單的標題旁" preference="extensions.zotero-bridge.status.tagEmoji"/>
+		<description class="zb-hint">Zotero 用標籤（每篇只留一個）、Notion 用 Status 欄位、Obsidian 用 frontmatter 的 status。每次同步時，哪一邊改過就以那一邊為準；同時在不同地方改成不同狀態時，依 Obsidian &gt; Zotero &gt; Notion 採用並在進度視窗提示（自動同步時 Zotero 優先）。Notion／Obsidian 的修改會在下一次同步時帶回，或用 工具 → 同步閱讀狀態 一次更新全部。</description>
+	</groupbox>
+
+	<groupbox data-zb-feature="apaZh">
+		<label><html:h2>中文文獻與中文 APA</html:h2></label>
+		<description>標題是中文的文獻（或沒有標題、作者是中文姓名）改用中文 APA 7：作者全名以「、」相連、（年份）全形括號、內文引用「陳美玲等，2023」。用在筆記的 APA 7、Notion 的 APA 欄位、文獻比較表的引文與參考文獻；references.json 裡的中文姓名會寫成完整姓名。不會修改 Zotero 條目。</description>
+		<hbox align="center">
+			<label value="標點："/>
+			<menulist preference="extensions.zotero-bridge.apaZh.style" native="true">
+				<menupopup>
+					<menuitem label="陳美玲（2023）。題目。護理雜誌，70(2)，45–56。（各校論文 APA 7 指引常用）" value="thesis"/>
+					<menuitem label="陳美玲（2023）．題目．護理雜誌，70(2)，45–56。（台灣護理學會期刊）" value="twna"/>
+				</menupopup>
+			</menulist>
+		</hbox>
+		<checkbox label="中文文獻排在英文前（中文依筆畫、英文依字母；用於文獻比較表的參考文獻）" preference="extensions.zotero-bridge.apaZh.chineseFirst"/>
+	</groupbox>
+
+	<groupbox data-zb-feature="bibliography">
+		<label><html:h2>參考文獻檔（Pandoc／Obsidian 引用）</html:h2></label>
+		<description>匯出 CSL JSON 到 Obsidian 預設子資料夾的 references.json，條目 id 就是筆記的 citekey，可以用 [@citekey] 引用並用 Pandoc 產生 APA Word。手動匯出：工具 → 匯出參考文獻到 Obsidian；在分類上按右鍵可只匯出該分類。</description>
+		<checkbox label="同步時自動更新參考文獻檔（整個文獻庫，只有內容變更時才寫入）" preference="extensions.zotero-bridge.export.autoUpdate"/>
+		<checkbox label="同時匯出 references.bib（BibTeX，使用 Zotero 內建 BibTeX 匯出器）" preference="extensions.zotero-bridge.export.bibtex"/>
+	</groupbox>
+
+	<groupbox data-zb-feature="concepts">
+		<label><html:h2>概念卡片（Obsidian）</html:h2></label>
+		<description>把 AI 文獻筆記「關鍵概念」中的 [[概念]] 整理成概念卡片：每個概念一份筆記（別名、MeSH／PubMed 連結、提到它的文獻表、常一起出現的概念），加上「概念索引」。只讀 vault 裡的筆記，不連網、不呼叫 AI；也可從 工具 → 更新概念卡片。你寫在自動區塊外的定義與筆記不會被覆寫，概念卡片也不會被刪除。</description>
+		<checkbox label="手動同步後更新概念卡片" preference="extensions.zotero-bridge.concepts.autoUpdate"/>
+		<hbox align="center">
+			<label value="概念卡片資料夾（在 Obsidian 資料夾之下）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.concepts.folder" placeholder="概念"/>
+		</hbox>
+		<checkbox label="測量工具（研讀資料的 measures）也做成概念卡片" preference="extensions.zotero-bridge.concepts.measures"/>
+		<checkbox label="結果指標（研讀資料的 outcomes，以頓號、逗號拆開）也做成概念卡片" preference="extensions.zotero-bridge.concepts.outcomes"/>
+		<label value="同義詞合併（一行一組，第一個是卡片名稱，用 = 分隔）："/>
+		<html:textarea rows="4" preference="extensions.zotero-bridge.concepts.aliases" placeholder="跌倒 = Accidental Falls = falls&#10;自我效能 = Self-efficacy"/>
+	</groupbox>
+
+	<groupbox data-zb-feature="searchLinks">
+		<label><html:h2>醫學文獻快速搜尋</html:h2></label>
+		<description>條目右鍵「在醫學資料庫搜尋」、右側面板的搜尋連結、文獻筆記的「🔎 延伸搜尋」與 工具 → 醫學文獻快速搜尋… 使用的資料庫。沒有公開搜尋網址的資料庫（Embase、JBI、華藝、博碩士論文等）會開啟首頁並把檢索詞複製到剪貼簿。</description>
+		<checkbox label="在條目右側面板顯示搜尋連結（有 AI 筆記的 PICO 時另列 PICO 檢索連結）" preference="extensions.zotero-bridge.searchLinks.paneLinks"/>
+		<checkbox label="在 Obsidian／Notion 文獻筆記加入「🔎 延伸搜尋」（找這篇、相似文獻、MeSH、PICO 檢索式）" preference="extensions.zotero-bridge.searchLinks.noteCallout"/>
+		<checkbox label="PICO 檢索式包含對照組（C；預設只用 P AND I AND O）" preference="extensions.zotero-bridge.searchLinks.picoComparison"/>
+		<checkbox label="快速搜尋英文關鍵字時向 NCBI 查 MeSH 主題詞建議（使用下方 NCBI 的 Email 與 API key）" preference="extensions.zotero-bridge.searchLinks.meshHelper"/>
+		<label value="圖書館代理伺服器前綴（EZproxy；只套用在需要機構權限的資料庫，例如 CINAHL、Embase、UpToDate）："/>
+		<html:input type="text" preference="extensions.zotero-bridge.searchLinks.proxyPrefix" placeholder="例如：https://ezproxy.example.edu.tw/login?url="/>
+		<description class="zb-hint">到學校圖書館網站的「校外連線」或「遠端存取」說明找前綴（通常以 /login?url= 結尾），或從圖書館資料庫清單複製一個資料庫連結，取 https://…/login?url= 這一段。留空 = 不經代理（在校內網路通常不需要）。</description>
+		<html:details class="zb-more">
+			<html:summary>更多搜尋設定：資料庫順序、隱藏、自訂資料庫</html:summary>
+			<hbox align="center">
+				<label value="不套用代理的資料庫 ID："/>
+				<html:input type="text" preference="extensions.zotero-bridge.searchLinks.proxyExclude" placeholder="例如：uptodate"/>
+			</hbox>
+			<label value="資料庫順序（ID 以逗號分隔，列在前面的優先；其餘依預設順序）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.searchLinks.order" placeholder="例如：pubmed, cinahl, cochrane, airiti, scholar"/>
+			<label value="隱藏的資料庫 ID（以逗號分隔）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.searchLinks.disabled" placeholder="例如：embase, uptodate"/>
+			<hbox align="center">
+				<label value="右鍵選單最多列出"/>
+				<html:input type="number" min="1" max="8" preference="extensions.zotero-bridge.searchLinks.menuCount" style="min-width: 4em; width: 4em"/>
+				<label value="個資料庫（其餘在「更多資料庫…」）"/>
+			</hbox>
+			<label value="自訂資料庫（JSON 陣列；網址中的 {q} 會換成檢索詞，沒有 {q} 的網址會開啟並複製檢索詞；用內建 ID 可以改內建資料庫的網址）："/>
+			<html:textarea rows="3" preference="extensions.zotero-bridge.searchLinks.custom" placeholder='[{ "name": "學校館藏", "url": "https://example.edu.tw/search?q={q}", "needsAccess": false }]'/>
+			<html:pre id="zb-search-sources" class="zb-status"/>
+		</html:details>
+	</groupbox>
+
+	<groupbox data-zb-feature="pubmedWatch searchLinks">
+		<label><html:h2>NCBI（PubMed）連線</html:h2></label>
+		<description>PubMed 新文獻追蹤與 MeSH 主題詞建議都透過 NCBI 查詢。</description>
+		<hbox align="center">
+			<label value="Email（NCBI 要求附上聯絡信箱）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.pubmedWatch.email" placeholder="you@example.com"/>
+		</hbox>
+		<label value="NCBI API key（選填；ncbi.nlm.nih.gov 帳號設定 → API Key Management，每秒可查詢 10 次而非 3 次）："/>
+		<html:input id="zb-ncbi-key" type="password" autocomplete="off"/>
+	</groupbox>
+
+	<groupbox data-zb-feature="pubmedWatch">
+		<label><html:h2>PubMed 新文獻追蹤</html:h2></label>
+		<description>儲存 PubMed 檢索式（可用 MeSH、欄位標記等完整語法），定期把新文獻匯入 Zotero 分類，加上標籤「新文獻」「追蹤/名稱」「來源/PubMed」。手動檢查：工具 → 檢查新文獻（PubMed 追蹤）。</description>
+		<html:div id="zb-pubmed-watches"/>
+		<hbox>
+			<button label="新增追蹤" oncommand="ZoteroBridgePrefs.addWatch()"/>
+			<button label="立即檢查全部" oncommand="ZoteroBridgePrefs.checkWatchesNow()"/>
+		</hbox>
+		<hbox align="center">
+			<label value="每個追蹤每次最多匯入："/>
+			<html:input type="number" min="1" max="200" preference="extensions.zotero-bridge.pubmedWatch.maxPerWatch" style="min-width: 5em; width: 5em"/>
+			<label value="篇（其餘留待下次檢查）"/>
+		</hbox>
+		<hbox align="center">
+			<checkbox label="自動檢查：Zotero 啟動後與每隔" preference="extensions.zotero-bridge.pubmedWatch.autoCheck"/>
+			<html:input type="number" min="1" preference="extensions.zotero-bridge.pubmedWatch.intervalHours" style="min-width: 4em; width: 4em"/>
+			<label value="小時"/>
+		</hbox>
+		<checkbox label="在 Obsidian 建立每日新文獻清單（預設子資料夾的 新文獻/YYYY-MM-DD.md）" preference="extensions.zotero-bridge.pubmedWatch.digest"/>
+		<checkbox data-zb-feature="aiNotes" label="手動檢查後為新文獻產生 AI 筆記並同步（會產生 API 費用；自動檢查不會呼叫 AI）" preference="extensions.zotero-bridge.pubmedWatch.runAI"/>
+		<description class="zb-hint">已在文獻庫的文獻（Extra 有相同 PMID 或 DOI 相同）不會重複匯入；匯入後移到垃圾桶的也不會再匯入。每次只查上次檢查之後加入 PubMed 的文獻（Entrez Date）。</description>
+	</groupbox>
+
+	<groupbox data-zb-feature="citationChase">
+		<label><html:h2>引文追蹤（OpenAlex）</html:h2></label>
+		<description>從納入研究查詢參考文獻（往回）與引用它的文獻（往前），列成 Obsidian 候選清單；勾選後再匯入 Zotero。OpenAlex 免費、不需要 API key。</description>
+		<hbox align="center">
+			<label value="Email（OpenAlex polite pool，建議填）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.citationChase.email" placeholder="you@example.com"/>
+		</hbox>
+		<hbox align="center">
+			<label value="方向："/>
+			<menulist preference="extensions.zotero-bridge.citationChase.direction" native="true">
+				<menupopup>
+					<menuitem label="往回＋往前（預設）" value="both"/>
+					<menuitem label="只查參考文獻（往回）" value="backward"/>
+					<menuitem label="只查引用它的文獻（往前）" value="forward"/>
+				</menupopup>
+			</menulist>
+			<label value="每次最多請求："/>
+			<html:input type="text" preference="extensions.zotero-bridge.citationChase.maxRequests" placeholder="100" size="5"/>
+			<label value="每篇每個方向最多："/>
+			<html:input type="text" preference="extensions.zotero-bridge.citationChase.maxPerSeed" placeholder="200" size="5"/>
+		</hbox>
+	</groupbox>
+
+	<groupbox data-zb-feature="screening">
+		<label><html:h2>系統性／範圍回顧篩選</html:h2></label>
+		<description>篩選決定存成 Zotero 標籤：在條目上按右鍵 → Zotero Bridge：篩選；在回顧專案的分類上按右鍵可找重複、產生 PRISMA 流程圖與證據表（存到 Obsidian 預設子資料夾的 Reviews/）。</description>
+		<label value="全文排除原因（一行一個，會成為標籤「排除原因/…」與右鍵選單；留空 = 內建清單）："/>
+		<html:textarea id="zb-screening-reasons" rows="7" preference="extensions.zotero-bridge.screening.reasons" placeholder="族群不符（wrong population）&#10;介入不符（wrong intervention）&#10;結果指標不符（wrong outcome）&#10;研究設計不符（wrong study design）&#10;非全文／研討會摘要（conference abstract）&#10;語言不符（language）&#10;重複發表（duplicate publication）"/>
+		<hbox>
+			<button label="載入內建排除原因來修改" oncommand="ZoteroBridgePrefs.loadDefaultReasons()"/>
+		</hbox>
+		<html:details class="zb-more">
+			<html:summary>更多篩選設定：標籤前綴、PRISMA 的 Notion 頁面與其他來源</html:summary>
+			<hbox align="center">
+				<label value="篩選標籤前綴："/>
+				<html:input type="text" preference="extensions.zotero-bridge.screening.tagPrefix" placeholder="篩選/"/>
+				<label value="排除原因前綴："/>
+				<html:input type="text" preference="extensions.zotero-bridge.screening.reasonPrefix" placeholder="排除原因/"/>
+				<label value="資料庫來源前綴："/>
+				<html:input type="text" preference="extensions.zotero-bridge.screening.sourcePrefix" placeholder="來源/"/>
+			</hbox>
+			<label value="PRISMA 頁面的 Notion 父頁面（選填；留空時使用文獻比較表的父頁面，頁面也要分享給 integration）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.screening.notionParent" placeholder="https://www.notion.so/..."/>
+			<description class="zb-hint">改了前綴或排除原因後，舊標籤不會自動改名。資料庫來源：在匯入的文獻加上標籤「來源/PubMed」等；沒有標籤時使用條目的「圖書館目錄」（Library Catalog）欄位（例如從 PubMed 匯入的是「PubMed」）。</description>
+			<label value="其他方法的來源（PRISMA 流程圖右側欄；以逗號分隔，留空 = 引文追蹤、網站、機構）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.screening.otherSources" placeholder="引文追蹤, 網站, 機構"/>
+		</html:details>
+	</groupbox>
+
+	<groupbox data-zb-feature="aiNotes aiBatch synthesis reviewDraft ebhcReport progressReport conceptsAI">
+		<label><html:h2>AI 服務</html:h2></label>
+		<description class="zb-hint">打開的 AI 功能共用這裡的服務商與 API key。費用由你的帳號支付，用量記在下方「本月 AI 用量」。</description>
 		<hbox align="center">
 			<label value="服務商："/>
 			<menulist id="zb-provider" preference="extensions.zotero-bridge.llm.provider" native="true">
@@ -41,252 +281,58 @@
 		</vbox>
 		<description class="zb-hint">API key 與 Notion token 存在 Zotero 的密碼管理員（有作業系統鑰匙圈時會再加密），不會寫進設定檔 prefs.js。</description>
 		<html:div id="zb-secrets-status" class="zb-status"/>
-		<hbox align="center">
-			<label value="全文最多送出字元數（0 = 不送全文，只用摘要與註記）："/>
-			<html:input type="number" min="0" step="10000" preference="extensions.zotero-bridge.llm.fullTextLimit"/>
-		</hbox>
-		<checkbox label="掃描版 PDF 直接傳給 AI 讀（Claude；較耗 token）" preference="extensions.zotero-bridge.llm.sendScannedPDF"/>
-		<description class="zb-hint">PDF 沒有文字層（掃描檔）時，把 PDF 檔本身傳給 AI 看每一頁（上限 20 MB、100 頁）；OpenAI 官方 API 也適用。比較省錢的做法是先用 OCR（例如 OCRmyPDF）加上文字層，或重新下載有文字的 PDF。</description>
-		<checkbox label="AI 也看圖片劃線（把圖片／手繪註記的截圖一起傳給 Claude，例如圈選的表格或圖；會增加 token 用量，OpenAI 不適用）" preference="extensions.zotero-bridge.images.sendToAI"/>
-		<checkbox label="大量產生 AI 筆記時使用批次 API（約半價，最長 24 小時）" preference="extensions.zotero-bridge.llm.batchAPI"/>
-		<hbox align="center">
-			<label value="需要產生 AI 筆記的文獻達幾筆才用批次 API："/>
-			<html:input type="number" min="2" step="1" preference="extensions.zotero-bridge.llm.batchThreshold"/>
-		</hbox>
-		<description class="zb-hint">只適用 Claude。送出前會讓你選擇批次或一般模式；批次通常 1 小時內完成，完成後自動寫入 AI 筆記並同步（Zotero 關閉也沒關係，下次開啟會繼續檢查）。進度與取消：工具 → 檢查 AI 批次進度／取消 AI 批次。</description>
-		<label value="筆記模板（system prompt；留空 = 使用內建的護理／醫學文獻模板）："/>
-		<html:textarea id="zb-system-prompt" rows="8" preference="extensions.zotero-bridge.llm.systemPrompt"/>
-		<hbox>
-			<button label="載入內建模板來修改" oncommand="ZoteroBridgePrefs.loadDefaultPrompt()"/>
-		</hbox>
-		<label value="文獻比較表模板（留空 = 內建：比較表、主題整理、研究缺口）："/>
-		<html:textarea id="zb-synthesis-prompt" rows="6" preference="extensions.zotero-bridge.llm.synthesisPrompt"/>
-		<hbox>
-			<button label="載入內建比較表模板來修改" oncommand="ZoteroBridgePrefs.loadDefaultSynthesisPrompt()"/>
-		</hbox>
+
+		<vbox data-zb-feature="aiNotes" class="zb-subsection">
+			<label><html:h3>AI 文獻筆記</html:h3></label>
+			<hbox align="center">
+				<label value="全文最多送出字元數（0 = 不送全文，只用摘要與註記）："/>
+				<html:input type="number" min="0" step="10000" preference="extensions.zotero-bridge.llm.fullTextLimit"/>
+			</hbox>
+			<checkbox label="掃描版 PDF 直接傳給 AI 讀（Claude；較耗 token）" preference="extensions.zotero-bridge.llm.sendScannedPDF"/>
+			<description class="zb-hint">PDF 沒有文字層（掃描檔）時，把 PDF 檔本身傳給 AI 看每一頁（上限 20 MB、100 頁）；OpenAI 官方 API 也適用。比較省錢的做法是先用 OCR（例如 OCRmyPDF）加上文字層，或重新下載有文字的 PDF。</description>
+			<checkbox label="AI 也看圖片劃線（把圖片／手繪註記的截圖一起傳給 Claude，例如圈選的表格或圖；會增加 token 用量，OpenAI 不適用）" preference="extensions.zotero-bridge.images.sendToAI"/>
+			<html:details class="zb-more">
+				<html:summary>筆記模板（system prompt）：照你的課程或指導教授的要求改</html:summary>
+				<label value="留空 = 使用內建的護理／醫學文獻模板："/>
+				<html:textarea id="zb-system-prompt" rows="8" preference="extensions.zotero-bridge.llm.systemPrompt"/>
+				<hbox>
+					<button label="載入內建模板來修改" oncommand="ZoteroBridgePrefs.loadDefaultPrompt()"/>
+				</hbox>
+			</html:details>
+		</vbox>
+
+		<vbox data-zb-feature="aiBatch" class="zb-subsection">
+			<label><html:h3>批次 API</html:h3></label>
+			<hbox align="center">
+				<label value="需要產生 AI 筆記的文獻達幾筆才用批次 API："/>
+				<html:input type="number" min="2" step="1" preference="extensions.zotero-bridge.llm.batchThreshold"/>
+			</hbox>
+			<description class="zb-hint">只適用 Claude。送出前會讓你選擇批次或一般模式；批次通常 1 小時內完成，完成後自動寫入 AI 筆記並同步（Zotero 關閉也沒關係，下次開啟會繼續檢查）。進度與取消：工具 → 檢查 AI 批次進度／取消 AI 批次。</description>
+		</vbox>
+
+		<vbox data-zb-feature="synthesis" class="zb-subsection">
+			<label><html:h3>文獻比較表</html:h3></label>
+			<label value="比較表模板（留空 = 內建：比較表、主題整理、研究缺口）："/>
+			<html:textarea id="zb-synthesis-prompt" rows="6" preference="extensions.zotero-bridge.llm.synthesisPrompt"/>
+			<hbox>
+				<button label="載入內建比較表模板來修改" oncommand="ZoteroBridgePrefs.loadDefaultSynthesisPrompt()"/>
+			</hbox>
+		</vbox>
 	</groupbox>
 
-	<groupbox>
+	<groupbox data-zb-feature="aiNotes aiBatch synthesis reviewDraft ebhcReport progressReport conceptsAI">
 		<label><html:h2>本月 AI 用量</html:h2></label>
 		<html:pre id="zb-usage" class="zb-status"/>
 		<hbox>
 			<button label="重設用量統計" oncommand="ZoteroBridgePrefs.resetUsage()"/>
 		</hbox>
-		<label value="價格表（每百萬 tokens 的美元價格，JSON；留空 = 內建 Claude 價格。OpenAI 模型未內建價格，只顯示 tokens，可自行加入）："/>
-		<html:textarea id="zb-prices" rows="5" preference="extensions.zotero-bridge.usage.prices" placeholder='{ "claude-opus-5-5": { "input": 4, "output": 20 } }'/>
-		<hbox>
-			<button label="載入內建價格表來修改" oncommand="ZoteroBridgePrefs.loadDefaultPrices()"/>
-		</hbox>
-	</groupbox>
-
-	<groupbox>
-		<label><html:h2>Obsidian</html:h2></label>
-		<label value="Vault 資料夾路徑："/>
-		<hbox align="center">
-			<html:input id="zb-vault-path" type="text" preference="extensions.zotero-bridge.obsidian.vaultPath" style="flex: 1"/>
-			<button label="選擇資料夾…" oncommand="ZoteroBridgePrefs.pickVault()"/>
-		</hbox>
-		<hbox align="center">
-			<label value="Vault 名稱（選填，預設為資料夾名稱；用於 obsidian:// 連結）："/>
-			<html:input type="text" preference="extensions.zotero-bridge.obsidian.vaultName"/>
-		</hbox>
-		<hbox align="center">
-			<label value="預設子資料夾："/>
-			<html:input type="text" preference="extensions.zotero-bridge.obsidian.folder" placeholder="Zotero"/>
-		</hbox>
-		<hbox align="center">
-			<label value="檔名格式："/>
-			<menulist preference="extensions.zotero-bridge.obsidian.filenameFormat" native="true">
-				<menupopup>
-					<menuitem label="Citation key（沒有時用 作者 年份 - 標題）" value="citekey"/>
-					<menuitem label="作者 年份 - 標題" value="authorYearTitle"/>
-					<menuitem label="標題" value="title"/>
-				</menupopup>
-			</menulist>
-		</hbox>
-		<checkbox label="一併同步 Zotero 子筆記" preference="extensions.zotero-bridge.includeNotes"/>
-		<checkbox label="匯出圖片劃線（PDF 圖片／手繪註記的截圖：Obsidian 存到筆記旁的 attachments 資料夾，Notion 上傳成圖片）" preference="extensions.zotero-bridge.images.export"/>
-		<checkbox label="建立「Zotero 文獻庫.base」總表（表格 + 閱讀進度看板，需要 Obsidian 1.14 以上）" preference="extensions.zotero-bridge.obsidian.createBase"/>
-		<checkbox label="手動同步後更新「研究儀表板」筆記（只讀 vault 裡的筆記，不連網、不呼叫 AI；也可從 工具 → 更新研究儀表板）" preference="extensions.zotero-bridge.dashboard.autoUpdate"/>
-	</groupbox>
-
-	<groupbox>
-		<label><html:h2>參考文獻檔（Pandoc／Obsidian 引用）</html:h2></label>
-		<description>匯出 CSL JSON 到 Obsidian 預設子資料夾的 references.json，條目 id 就是筆記的 citekey，可以用 [@citekey] 引用並用 Pandoc 產生 APA Word。手動匯出：工具 → 匯出參考文獻到 Obsidian；在分類上按右鍵可只匯出該分類。</description>
-		<checkbox label="同步時自動更新參考文獻檔（整個文獻庫，只有內容變更時才寫入）" preference="extensions.zotero-bridge.export.autoUpdate"/>
-		<checkbox label="同時匯出 references.bib（BibTeX，使用 Zotero 內建 BibTeX 匯出器）" preference="extensions.zotero-bridge.export.bibtex"/>
-	</groupbox>
-
-	<groupbox>
-		<label><html:h2>中文文獻與中文 APA</html:h2></label>
-		<description>標題是中文的文獻（或沒有標題、作者是中文姓名）改用中文 APA 7：作者全名以「、」相連、（年份）全形括號、內文引用「陳美玲等，2023」。用在筆記的 APA 7、Notion 的 APA 欄位、文獻比較表的引文與參考文獻；references.json 裡的中文姓名會寫成完整姓名。不會修改 Zotero 條目。</description>
-		<checkbox label="中文文獻使用中文 APA 格式" preference="extensions.zotero-bridge.apaZh.enabled"/>
-		<hbox align="center">
-			<label value="標點："/>
-			<menulist preference="extensions.zotero-bridge.apaZh.style" native="true">
-				<menupopup>
-					<menuitem label="陳美玲（2023）。題目。護理雜誌，70(2)，45–56。（各校論文 APA 7 指引常用）" value="thesis"/>
-					<menuitem label="陳美玲（2023）．題目．護理雜誌，70(2)，45–56。（台灣護理學會期刊）" value="twna"/>
-				</menupopup>
-			</menulist>
-		</hbox>
-		<checkbox label="中文文獻排在英文前（中文依筆畫、英文依字母；用於文獻比較表的參考文獻）" preference="extensions.zotero-bridge.apaZh.chineseFirst"/>
-	</groupbox>
-
-	<groupbox>
-		<label><html:h2>概念卡片（Obsidian）</html:h2></label>
-		<description>把 AI 文獻筆記「關鍵概念」中的 [[概念]] 整理成概念卡片：每個概念一份筆記（別名、MeSH／PubMed 連結、提到它的文獻表、常一起出現的概念），加上「概念索引」。只讀 vault 裡的筆記，不連網、不呼叫 AI；也可從 工具 → 更新概念卡片。你寫在自動區塊外的定義與筆記不會被覆寫，概念卡片也不會被刪除。</description>
-		<checkbox label="手動同步後更新概念卡片" preference="extensions.zotero-bridge.concepts.autoUpdate"/>
-		<hbox align="center">
-			<label value="概念卡片資料夾（在 Obsidian 資料夾之下）："/>
-			<html:input type="text" preference="extensions.zotero-bridge.concepts.folder" placeholder="概念"/>
-		</hbox>
-		<checkbox label="測量工具（研讀資料的 measures）也做成概念卡片" preference="extensions.zotero-bridge.concepts.measures"/>
-		<checkbox label="結果指標（研讀資料的 outcomes，以頓號、逗號拆開）也做成概念卡片" preference="extensions.zotero-bridge.concepts.outcomes"/>
-		<label value="同義詞合併（一行一組，第一個是卡片名稱，用 = 分隔）："/>
-		<html:textarea rows="4" preference="extensions.zotero-bridge.concepts.aliases" placeholder="跌倒 = Accidental Falls = falls&#10;自我效能 = Self-efficacy"/>
-	</groupbox>
-
-	<groupbox>
-		<label><html:h2>Notion</html:h2></label>
-		<label value="Integration token（notion.so/profile/integrations 建立，並把資料庫分享給這個 integration）："/>
-		<html:input id="zb-notion-token" type="password" placeholder="ntn_..." autocomplete="off"/>
-		<label value="預設資料庫連結（沒有符合任何分流規則時使用）："/>
-		<html:input type="text" preference="extensions.zotero-bridge.notion.database" placeholder="https://www.notion.so/..."/>
-		<label value="文獻比較表的 Notion 父頁面（選填；比較表會建立成這個頁面底下的子頁面，頁面也要分享給 integration）："/>
-		<html:input type="text" preference="extensions.zotero-bridge.notion.synthesisParent" placeholder="https://www.notion.so/..."/>
-		<hbox align="center">
-			<button label="測試連線並補齊資料庫欄位" oncommand="ZoteroBridgePrefs.testNotion()"/>
-		</hbox>
-		<html:pre id="zb-notion-status" class="zb-status"/>
-	</groupbox>
-
-	<groupbox>
-		<label><html:h2>分流規則（不同文獻庫／分類 → 不同 Notion 資料庫與 Obsidian 資料夾）</html:h2></label>
-		<description>由上往下比對，第一條符合的規則生效；欄位留空時使用上方預設值。「分類路徑」用 / 分隔，例如 碩論/文獻回顧，會包含子分類。</description>
-		<html:div id="zb-rules"/>
-		<hbox>
-			<button label="新增規則" oncommand="ZoteroBridgePrefs.addRule()"/>
-		</hbox>
-		<html:pre id="zb-rules-status" class="zb-status"/>
-	</groupbox>
-
-	<groupbox>
-		<label><html:h2>閱讀狀態</html:h2></label>
-		<checkbox label="在 Zotero、Notion、Obsidian 之間同步閱讀狀態（待讀／閱讀中／已讀／已引用）" preference="extensions.zotero-bridge.status.enabled"/>
-		<hbox align="center">
-			<label value="Zotero 標籤前綴："/>
-			<html:input type="text" preference="extensions.zotero-bridge.status.tagPrefix" placeholder="狀態/"/>
-		</hbox>
-		<checkbox label="標籤加上 emoji（例如「狀態/已讀 ✅」），Zotero 會把它顯示在條目清單的標題旁" preference="extensions.zotero-bridge.status.tagEmoji"/>
-		<description class="zb-hint">Zotero 用標籤（每篇只留一個）、Notion 用 Status 欄位、Obsidian 用 frontmatter 的 status。每次同步時，哪一邊改過就以那一邊為準；同時在不同地方改成不同狀態時，依 Obsidian &gt; Zotero &gt; Notion 採用並在進度視窗提示（自動同步時 Zotero 優先）。Notion／Obsidian 的修改會在下一次同步時帶回，或用 工具 → 同步閱讀狀態 一次更新全部。</description>
-	</groupbox>
-
-	<groupbox>
-		<label><html:h2>系統性／範圍回顧篩選</html:h2></label>
-		<description>篩選決定存成 Zotero 標籤：在條目上按右鍵 → Zotero Bridge：篩選；在回顧專案的分類上按右鍵可找重複、產生 PRISMA 流程圖與證據表（存到 Obsidian 預設子資料夾的 Reviews/）。</description>
-		<label value="全文排除原因（一行一個，會成為標籤「排除原因/…」與右鍵選單；留空 = 內建清單）："/>
-		<html:textarea id="zb-screening-reasons" rows="7" preference="extensions.zotero-bridge.screening.reasons" placeholder="族群不符（wrong population）&#10;介入不符（wrong intervention）&#10;結果指標不符（wrong outcome）&#10;研究設計不符（wrong study design）&#10;非全文／研討會摘要（conference abstract）&#10;語言不符（language）&#10;重複發表（duplicate publication）"/>
-		<hbox>
-			<button label="載入內建排除原因來修改" oncommand="ZoteroBridgePrefs.loadDefaultReasons()"/>
-		</hbox>
-		<hbox align="center">
-			<label value="篩選標籤前綴："/>
-			<html:input type="text" preference="extensions.zotero-bridge.screening.tagPrefix" placeholder="篩選/"/>
-			<label value="排除原因前綴："/>
-			<html:input type="text" preference="extensions.zotero-bridge.screening.reasonPrefix" placeholder="排除原因/"/>
-			<label value="資料庫來源前綴："/>
-			<html:input type="text" preference="extensions.zotero-bridge.screening.sourcePrefix" placeholder="來源/"/>
-		</hbox>
-		<label value="PRISMA 頁面的 Notion 父頁面（選填；留空時使用文獻比較表的父頁面，頁面也要分享給 integration）："/>
-		<html:input type="text" preference="extensions.zotero-bridge.screening.notionParent" placeholder="https://www.notion.so/..."/>
-		<description class="zb-hint">改了前綴或排除原因後，舊標籤不會自動改名。資料庫來源：在匯入的文獻加上標籤「來源/PubMed」等；沒有標籤時使用條目的「圖書館目錄」（Library Catalog）欄位（例如從 PubMed 匯入的是「PubMed」）。</description>
-		<label value="其他方法的來源（PRISMA 流程圖右側欄；以逗號分隔，留空 = 引文追蹤、網站、機構）："/>
-		<html:input type="text" preference="extensions.zotero-bridge.screening.otherSources" placeholder="引文追蹤, 網站, 機構"/>
-	</groupbox>
-
-	<groupbox>
-		<label><html:h2>引文追蹤（OpenAlex）</html:h2></label>
-		<description>從納入研究查詢參考文獻（往回）與引用它的文獻（往前），列成 Obsidian 候選清單；勾選後再匯入 Zotero。OpenAlex 免費、不需要 API key。</description>
-		<hbox align="center">
-			<label value="Email（OpenAlex polite pool，建議填）："/>
-			<html:input type="text" preference="extensions.zotero-bridge.citationChase.email" placeholder="you@example.com"/>
-		</hbox>
-		<hbox align="center">
-			<label value="方向："/>
-			<menulist preference="extensions.zotero-bridge.citationChase.direction" native="true">
-				<menupopup>
-					<menuitem label="往回＋往前（預設）" value="both"/>
-					<menuitem label="只查參考文獻（往回）" value="backward"/>
-					<menuitem label="只查引用它的文獻（往前）" value="forward"/>
-				</menupopup>
-			</menulist>
-			<label value="每次最多請求："/>
-			<html:input type="text" preference="extensions.zotero-bridge.citationChase.maxRequests" placeholder="100" size="5"/>
-			<label value="每篇每個方向最多："/>
-			<html:input type="text" preference="extensions.zotero-bridge.citationChase.maxPerSeed" placeholder="200" size="5"/>
-		</hbox>
-	</groupbox>
-
-	<groupbox>
-		<label><html:h2>PubMed 新文獻追蹤</html:h2></label>
-		<description>儲存 PubMed 檢索式（可用 MeSH、欄位標記等完整語法），定期把新文獻匯入 Zotero 分類，加上標籤「新文獻」「追蹤/名稱」「來源/PubMed」。手動檢查：工具 → 檢查新文獻（PubMed 追蹤）。</description>
-		<html:div id="zb-pubmed-watches"/>
-		<hbox>
-			<button label="新增追蹤" oncommand="ZoteroBridgePrefs.addWatch()"/>
-			<button label="立即檢查全部" oncommand="ZoteroBridgePrefs.checkWatchesNow()"/>
-		</hbox>
-		<hbox align="center">
-			<label value="Email（NCBI 要求附上聯絡信箱）："/>
-			<html:input type="text" preference="extensions.zotero-bridge.pubmedWatch.email" placeholder="you@example.com"/>
-		</hbox>
-		<label value="NCBI API key（選填；ncbi.nlm.nih.gov 帳號設定 → API Key Management，每秒可查詢 10 次而非 3 次）："/>
-		<html:input id="zb-ncbi-key" type="password" autocomplete="off"/>
-		<hbox align="center">
-			<label value="每個追蹤每次最多匯入："/>
-			<html:input type="number" min="1" max="200" preference="extensions.zotero-bridge.pubmedWatch.maxPerWatch" style="min-width: 5em; width: 5em"/>
-			<label value="篇（其餘留待下次檢查）"/>
-		</hbox>
-		<hbox align="center">
-			<checkbox label="自動檢查：Zotero 啟動後與每隔" preference="extensions.zotero-bridge.pubmedWatch.autoCheck"/>
-			<html:input type="number" min="1" preference="extensions.zotero-bridge.pubmedWatch.intervalHours" style="min-width: 4em; width: 4em"/>
-			<label value="小時"/>
-		</hbox>
-		<checkbox label="在 Obsidian 建立每日新文獻清單（預設子資料夾的 新文獻/YYYY-MM-DD.md）" preference="extensions.zotero-bridge.pubmedWatch.digest"/>
-		<checkbox label="手動檢查後為新文獻產生 AI 筆記並同步（會產生 API 費用；自動檢查不會呼叫 AI）" preference="extensions.zotero-bridge.pubmedWatch.runAI"/>
-		<description class="zb-hint">已在文獻庫的文獻（Extra 有相同 PMID 或 DOI 相同）不會重複匯入；匯入後移到垃圾桶的也不會再匯入。每次只查上次檢查之後加入 PubMed 的文獻（Entrez Date）。</description>
-	</groupbox>
-
-	<groupbox>
-		<label><html:h2>醫學文獻快速搜尋</html:h2></label>
-		<description>條目右鍵「在醫學資料庫搜尋」、右側面板的搜尋連結、文獻筆記的「🔎 延伸搜尋」與 工具 → 醫學文獻快速搜尋… 使用的資料庫。沒有公開搜尋網址的資料庫（Embase、JBI、華藝、博碩士論文等）會開啟首頁並把檢索詞複製到剪貼簿。</description>
-		<checkbox label="在條目右側面板顯示搜尋連結（有 AI 筆記的 PICO 時另列 PICO 檢索連結）" preference="extensions.zotero-bridge.searchLinks.paneLinks"/>
-		<checkbox label="在 Obsidian／Notion 文獻筆記加入「🔎 延伸搜尋」（找這篇、相似文獻、MeSH、PICO 檢索式）" preference="extensions.zotero-bridge.searchLinks.noteCallout"/>
-		<checkbox label="PICO 檢索式包含對照組（C；預設只用 P AND I AND O）" preference="extensions.zotero-bridge.searchLinks.picoComparison"/>
-		<checkbox label="快速搜尋英文關鍵字時向 NCBI 查 MeSH 主題詞建議（使用 PubMed 新文獻追蹤的 Email 與 API key）" preference="extensions.zotero-bridge.searchLinks.meshHelper"/>
-		<label value="圖書館代理伺服器前綴（EZproxy；只套用在需要機構權限的資料庫，例如 CINAHL、Embase、UpToDate）："/>
-		<html:input type="text" preference="extensions.zotero-bridge.searchLinks.proxyPrefix" placeholder="例如：https://ezproxy.example.edu.tw/login?url="/>
-		<description class="zb-hint">到學校圖書館網站的「校外連線」或「遠端存取」說明找前綴（通常以 /login?url= 結尾），或從圖書館資料庫清單複製一個資料庫連結，取 https://…/login?url= 這一段。留空 = 不經代理（在校內網路通常不需要）。</description>
-		<hbox align="center">
-			<label value="不套用代理的資料庫 ID："/>
-			<html:input type="text" preference="extensions.zotero-bridge.searchLinks.proxyExclude" placeholder="例如：uptodate"/>
-		</hbox>
-		<label value="資料庫順序（ID 以逗號分隔，列在前面的優先；其餘依預設順序）："/>
-		<html:input type="text" preference="extensions.zotero-bridge.searchLinks.order" placeholder="例如：pubmed, cinahl, cochrane, airiti, scholar"/>
-		<label value="隱藏的資料庫 ID（以逗號分隔）："/>
-		<html:input type="text" preference="extensions.zotero-bridge.searchLinks.disabled" placeholder="例如：embase, uptodate"/>
-		<hbox align="center">
-			<label value="右鍵選單最多列出"/>
-			<html:input type="number" min="1" max="8" preference="extensions.zotero-bridge.searchLinks.menuCount" style="min-width: 4em; width: 4em"/>
-			<label value="個資料庫（其餘在「更多資料庫…」）"/>
-		</hbox>
-		<label value="自訂資料庫（JSON 陣列；網址中的 {q} 會換成檢索詞，沒有 {q} 的網址會開啟並複製檢索詞；用內建 ID 可以改內建資料庫的網址）："/>
-		<html:textarea rows="3" preference="extensions.zotero-bridge.searchLinks.custom" placeholder='[{ "name": "學校館藏", "url": "https://example.edu.tw/search?q={q}", "needsAccess": false }]'/>
-		<html:pre id="zb-search-sources" class="zb-status"/>
-	</groupbox>
-
-	<groupbox>
-		<label><html:h2>自動同步</html:h2></label>
-		<checkbox label="Zotero 條目、註記或筆記變更時自動同步到 Notion 與 Obsidian（不會自動呼叫 AI，沿用既有 AI 筆記）" preference="extensions.zotero-bridge.autoSync"/>
+		<html:details class="zb-more">
+			<html:summary>價格表：用來估算費用</html:summary>
+			<label value="每百萬 tokens 的美元價格，JSON；留空 = 內建 Claude 價格。OpenAI 模型未內建價格，只顯示 tokens，可自行加入："/>
+			<html:textarea id="zb-prices" rows="5" preference="extensions.zotero-bridge.usage.prices" placeholder='{ "claude-opus-5-5": { "input": 4, "output": 20 } }'/>
+			<hbox>
+				<button label="載入內建價格表來修改" oncommand="ZoteroBridgePrefs.loadDefaultPrices()"/>
+			</hbox>
+		</html:details>
 	</groupbox>
 </vbox>

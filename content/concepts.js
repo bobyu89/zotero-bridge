@@ -782,7 +782,7 @@
 	/** After a manual sync run (main.js): rebuild when 「同步後更新概念卡片」 is on. Never throws. */
 	async function afterSync(settings) {
 		try {
-			if (pref("concepts.autoUpdate") === false || !settings || !settings.vaultPath) return null;
+			if (!featureOn("concepts") || pref("concepts.autoUpdate") === false || !settings || !settings.vaultPath) return null;
 			return await update(settings);
 		}
 		catch (e) {
@@ -887,6 +887,11 @@
 	/** Tools menu: pick one of the most cited concepts, confirm the cost, then generate after any sync in progress. */
 	async function synthesizeFromMenu() {
 		let ZB = scope.ZB;
+		// 「概念卡片 AI 綜整」 off (the 研究生引導 preset): no AI call
+		if (!featureOn("conceptsAI")) {
+			ZB.main.notifyFeatureOff("conceptsAI");
+			return null;
+		}
 		let settings = await settingsOrNotify();
 		if (!settings) return null;
 		if (!settings.llm.apiKey) {
@@ -976,25 +981,38 @@
 		}
 	}
 
+	// Feature switches (features.js): checked live; always on when this file runs without them (Node tests)
+	function featureOn(id) {
+		let f = scope.ZB && scope.ZB.features;
+		return !f || f.isEnabled(id);
+	}
+
+	/** Menu entries that hide while the feature is off (features.js gateMenus). */
+	function gated(id, menus) {
+		let f = scope.ZB && scope.ZB.features;
+		return f ? f.gateMenus(id, menus) : menus;
+	}
+
 	/** Tools menu entries; returns the menu IDs to unregister. */
 	function registerMenus({ pluginID }) {
 		return [Zotero.MenuManager.registerMenu({
 			menuID: "zotero-bridge-concepts-tools",
 			pluginID,
 			target: "main/menubar/tools",
-			menus: [{
+			menus: [...gated("concepts", [{
 				menuType: "menuitem",
 				l10nID: "zotero-bridge-menu-concepts-update",
 				onCommand: () => {
 					runFromMenu().catch(e => Zotero.logError(e));
 				},
-			}, {
+			}]), ...gated("conceptsAI", [{
+				// The AI part has its own switch (off in the 研究生引導 preset)
 				menuType: "menuitem",
 				l10nID: "zotero-bridge-menu-concepts-ai",
 				onCommand: () => {
 					synthesizeFromMenu().catch(e => Zotero.logError(e));
 				},
-			}],
+			}])],
 		})].filter(Boolean);
 	}
 

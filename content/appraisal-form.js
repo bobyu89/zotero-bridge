@@ -1042,6 +1042,12 @@
 		for (let c of collections) await exportSummary(c);
 	}
 
+	/** Menu entries that hide while the feature is off (features.js gateMenus; as is without it: Node tests). */
+	function gated(id, menus) {
+		let f = scope.ZB && scope.ZB.features;
+		return f ? f.gateMenus(id, menus) : menus;
+	}
+
 	/** Collection and Tools menu entries; returns the menu IDs to unregister. */
 	function registerMenus({ pluginID, icon }) {
 		let ids = [];
@@ -1049,7 +1055,7 @@
 			menuID: "zotero-bridge-appraisal-collection",
 			pluginID,
 			target: "main/library/collection",
-			menus: [{
+			menus: gated("appraisalForm", [{
 				menuType: "menuitem",
 				l10nID: "zotero-bridge-appraisal-summary",
 				icon,
@@ -1057,19 +1063,19 @@
 				onCommand: (ev, context) => {
 					exportCollections(selectedCollections(context)).catch(e => Zotero.logError(e));
 				},
-			}],
+			}]),
 		}));
 		ids.push(Zotero.MenuManager.registerMenu({
 			menuID: "zotero-bridge-appraisal-tools",
 			pluginID,
 			target: "main/menubar/tools",
-			menus: [{
+			menus: gated("appraisalForm", [{
 				menuType: "menuitem",
 				l10nID: "zotero-bridge-appraisal-tools-summary",
 				onCommand: () => {
 					exportCollections([activeCollection()].filter(Boolean)).catch(e => Zotero.logError(e));
 				},
-			}],
+			}]),
 		}));
 		return ids.filter(Boolean);
 	}

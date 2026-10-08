@@ -1193,6 +1193,11 @@ end
 	 */
 	async function run(items, scope, context) {
 		let ZB = root.ZB;
+		// 「實證報告草稿」 off (the 研究生引導 preset): no AI call
+		if (ZB.features && !ZB.features.isEnabled("ebhcReport")) {
+			ZB.main.notifyFeatureOff("ebhcReport");
+			return null;
+		}
 		let collection = (scope && scope.collection) || selectedCollections(context)[0] || null;
 		let ctx = collectionContext(collection);
 		items = ZB.adapter.toRegularItems(items);

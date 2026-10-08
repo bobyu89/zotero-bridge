@@ -216,6 +216,8 @@ async function setup(opts = {}) {
 			"extensions.zotero-bridge.llm.anthropicModel": "test-model",
 			"extensions.zotero-bridge.notion.token": "ntn_test",
 			"extensions.zotero-bridge.notion.synthesisParent": PARENT,
+			// Off in the 研究生引導 preset (features.js); on here, also for a profile without a vault
+			"extensions.zotero-bridge.feature.progressReport": true,
 		}, opts.prefs),
 	});
 	await vm.runInContext(`startup({ id: "zotero-bridge@bobyu89.github.io", version: "0.0.0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);

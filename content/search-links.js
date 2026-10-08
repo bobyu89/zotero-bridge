@@ -669,6 +669,8 @@
 
 	/** For the Obsidian/Notion note (main.js); never throws. */
 	function calloutFor(data, study) {
+		// 「醫學資料庫搜尋連結」 off: no 🔎 延伸搜尋 in the notes either
+		if (!featureOn("searchLinks")) return "";
 		try {
 			return noteCallout(data, study, readConfig());
 		}
@@ -819,6 +821,10 @@
 
 	/** Tools → 醫學文獻快速搜尋…: keywords → (MeSH suggestions) → pick databases to open. */
 	async function quickSearch() {
+		if (!featureOn("searchLinks")) {
+			scope.ZB.main.notifyFeatureOff("searchLinks");
+			return null;
+		}
 		let win = Zotero.getMainWindow();
 		let input = { value: "" };
 		if (!Services.prompt.prompt(win, TITLE, "輸入關鍵字（中文或英文；不同概念用逗號分隔，例如：falls, older adults）：", input, null, { value: false })) return null;
@@ -840,7 +846,8 @@
 		}
 		if (chinese) lines.push("中文關鍵字：中文資料庫排在前面；英文資料庫建議改用英文關鍵字。");
 		lines.push("選一個開啟；開啟後會回到這個清單，按取消結束。");
-		let entries = quickEntries(cfg, q, mesh).map(e => Object.assign(e, {
+		// 「存成 PubMed 新文獻追蹤」 only while that feature is on
+		let entries = quickEntries(cfg, q, mesh).filter(e => e.kind !== "watch" || featureOn("pubmedWatch")).map(e => Object.assign(e, {
 			run: async () => {
 				if (e.kind === "open") openTarget(e.target);
 				else if (e.kind === "copy") runtime.copy(e.text);
@@ -853,6 +860,18 @@
 
 	function contextItem(context) {
 		return ((context && context.items) || []).find(i => i && i.isRegularItem && i.isRegularItem()) || null;
+	}
+
+	// Feature switches (features.js): checked live; always on when this file runs without them (Node tests)
+	function featureOn(id) {
+		let f = scope.ZB && scope.ZB.features;
+		return !f || f.isEnabled(id);
+	}
+
+	/** Menu entries that hide while the feature is off (features.js gateMenus). */
+	function gated(id, menus) {
+		let f = scope.ZB && scope.ZB.features;
+		return f ? f.gateMenus(id, menus) : menus;
 	}
 
 	/** Item context menu 「在醫學資料庫搜尋」 and Tools → 醫學文獻快速搜尋…; returns the menu IDs. */
@@ -883,7 +902,7 @@
 			menuID: "zotero-bridge-search-item",
 			pluginID,
 			target: "main/library/item",
-			menus: [{
+			menus: gated("searchLinks", [{
 				menuType: "submenu",
 				l10nID: "zotero-bridge-search-menu",
 				icon,
@@ -912,17 +931,17 @@
 						},
 					},
 				],
-			}],
+			}]),
 		}));
 		ids.push(Zotero.MenuManager.registerMenu({
 			menuID: "zotero-bridge-search-tools",
 			pluginID,
 			target: "main/menubar/tools",
-			menus: [{
+			menus: gated("searchLinks", [{
 				menuType: "menuitem",
 				l10nID: "zotero-bridge-search-tools",
 				onCommand: () => quickSearch().catch(e => Zotero.logError(e)),
-			}],
+			}]),
 		}));
 		return ids.filter(Boolean);
 	}

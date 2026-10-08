@@ -737,7 +737,7 @@
 	/** After a manual sync run (main.js): rebuild when 「同步後更新研究儀表板」 is on. Never throws. */
 	async function afterSync(settings) {
 		try {
-			if (pref("dashboard.autoUpdate") === false || !settings || !settings.vaultPath) return null;
+			if (!featureOn("dashboard") || pref("dashboard.autoUpdate") === false || !settings || !settings.vaultPath) return null;
 			return await update(settings);
 		}
 		catch (e) {
@@ -778,19 +778,31 @@
 		});
 	}
 
+	// Feature switches (features.js): checked live; always on when this file runs without them (Node tests)
+	function featureOn(id) {
+		let f = scope.ZB && scope.ZB.features;
+		return !f || f.isEnabled(id);
+	}
+
+	/** Menu entries that hide while the feature is off (features.js gateMenus). */
+	function gated(id, menus) {
+		let f = scope.ZB && scope.ZB.features;
+		return f ? f.gateMenus(id, menus) : menus;
+	}
+
 	/** Tools menu entry; returns the menu IDs to unregister. */
 	function registerMenus({ pluginID }) {
 		return [Zotero.MenuManager.registerMenu({
 			menuID: "zotero-bridge-dashboard-tools",
 			pluginID,
 			target: "main/menubar/tools",
-			menus: [{
+			menus: gated("dashboard", [{
 				menuType: "menuitem",
 				l10nID: "zotero-bridge-menu-dashboard",
 				onCommand: () => {
 					runFromMenu().catch(e => Zotero.logError(e));
 				},
-			}],
+			}]),
 		})].filter(Boolean);
 	}
 

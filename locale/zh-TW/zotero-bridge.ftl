@@ -106,3 +106,77 @@ zotero-bridge-appraisal-summary =
     .label = Zotero Bridge：匯出文獻評讀總表
 zotero-bridge-appraisal-tools-summary =
     .label = 匯出文獻評讀總表（目前分類）
+
+## Settings → 功能: presets and feature switches (content/features.js, preferences.js)
+zotero-bridge-features-heading = 功能
+zotero-bridge-features-intro = 先選一個起點，再逐項調整。開關馬上生效；關掉的功能，下面的設定也會收起來。
+zotero-bridge-preset-group =
+    .aria-label = 模式
+zotero-bridge-preset-guided = 研究生引導
+zotero-bridge-preset-guided-desc = 找文獻與寫作留給你自己：自動找新文獻、引文追蹤和 AI 寫的草稿先關著，整理、評讀和搜尋連結照常幫你。
+zotero-bridge-preset-advanced = 進階
+zotero-bridge-preset-advanced-desc = 全部打開，包括 AI 草稿、批次 API 和自動追蹤新文獻。
+zotero-bridge-preset-custom = 自訂
+zotero-bridge-preset-custom-desc = 開關跟兩種模式都不完全一樣。
+zotero-bridge-preset-current =
+    { $preset ->
+        [guided] 目前：研究生引導
+        [advanced] 目前：進階
+       *[custom] 目前：自訂（開關跟兩種模式都不完全一樣）
+    }
+zotero-bridge-preset-applied =
+    { $preset ->
+        [guided] 已切換到「研究生引導」。
+       *[advanced] 已切換到「進階」。
+    }
+zotero-bridge-preset-undo = 復原
+zotero-bridge-feature-group-organize = 整理與同步
+zotero-bridge-feature-group-search = 找文獻
+zotero-bridge-feature-group-appraise = 篩選與評讀
+zotero-bridge-feature-group-ai = AI 輔助與寫作
+zotero-bridge-feature-tag-ai = AI・要付費
+zotero-bridge-feature-tag-network = 連網
+zotero-bridge-feature-requires =
+    { $req ->
+        [sync] 要先打開「同步到 Obsidian／Notion」才會生效。
+        [aiNotes] 要先打開「AI 文獻筆記」才會生效。
+       *[concepts] 要先打開「概念卡片」才會生效。
+    }
+zotero-bridge-feature-sync = 同步到 Obsidian／Notion
+zotero-bridge-feature-sync-desc = 把書目、劃線、你的筆記和評讀整理進自己的筆記空間，是這個外掛的核心。設定 Notion 時會連到 Notion。
+zotero-bridge-feature-status = 閱讀狀態
+zotero-bridge-feature-status-desc = 待讀、閱讀中、已讀、已引用，在 Zotero、Notion、Obsidian 三邊保持一致。
+zotero-bridge-feature-apa-zh = 中文 APA
+zotero-bridge-feature-apa-zh-desc = 中文文獻改用中文 APA 7：作者全名、「等」、全形括號。不會改動 Zotero 條目。
+zotero-bridge-feature-annotation-images = 圖片劃線
+zotero-bridge-feature-annotation-images-desc = PDF 上框選的圖表截圖一起放進筆記：Obsidian 存成附件，Notion 上傳成圖片。
+zotero-bridge-feature-bibliography = 參考文獻檔
+zotero-bridge-feature-bibliography-desc = 匯出 references.json（可加 BibTeX），寫作時用 Pandoc 或 Obsidian 外掛引用。
+zotero-bridge-feature-dashboard = 研究儀表板
+zotero-bridge-feature-dashboard-desc = 在 Obsidian 整理閱讀進度、待讀清單和資料缺漏。只讀 vault，不連網。
+zotero-bridge-feature-concepts = 概念卡片
+zotero-bridge-feature-concepts-desc = 把筆記裡的 [[概念]] 整理成卡片和索引，看得出哪些文獻談同一件事。不呼叫 AI。
+zotero-bridge-feature-search-links = 醫學資料庫搜尋連結
+zotero-bridge-feature-search-links-desc = 把題目、MeSH、PICO 帶到 PubMed、CINAHL、Cochrane、華藝等資料庫。檢索式還是你自己決定。
+zotero-bridge-feature-pubmed-watch = PubMed 新文獻追蹤
+zotero-bridge-feature-pubmed-watch-desc = 定期用你存的檢索式查 PubMed，新文獻自動匯入 Zotero。
+zotero-bridge-feature-citation-chase = 引文追蹤
+zotero-bridge-feature-citation-chase-desc = 用 OpenAlex 找納入研究的參考文獻和引用它的文獻，列成候選清單給你勾選。
+zotero-bridge-feature-screening = 篩選與 PRISMA
+zotero-bridge-feature-screening-desc = 標題摘要、全文篩選記成 Zotero 標籤，產生 PRISMA 2020 流程圖與證據表。決定由你做。
+zotero-bridge-feature-appraisal-form = 文獻評讀表
+zotero-bridge-feature-appraisal-form-desc = 在條目旁用 CASP、JBI 逐題評讀，存回 Zotero 並同步到筆記。關掉只是隱藏表單，已填的評讀照樣同步。
+zotero-bridge-feature-ai-notes = AI 文獻筆記
+zotero-bridge-feature-ai-notes-desc = 同步時請 AI 整理研讀筆記（設計、樣本、PICO、評讀初稿），引文會回原文核對。自備 API key。
+zotero-bridge-feature-ai-batch = 批次 API
+zotero-bridge-feature-ai-batch-desc = 一次產生很多篇 AI 筆記時改用 Claude 批次 API：約半價，但最久要等 24 小時。
+zotero-bridge-feature-synthesis = 文獻比較表
+zotero-bridge-feature-synthesis-desc = 選幾篇文獻，讓 AI 做比較表、主題整理和研究缺口。
+zotero-bridge-feature-review-draft = 文獻探討草稿
+zotero-bridge-feature-review-draft-desc = 讓 AI 依你選的文獻寫第二章文獻探討的草稿。
+zotero-bridge-feature-ebhc-report = 實證報告草稿
+zotero-bridge-feature-ebhc-report-desc = 讓 AI 依台灣護理學會 EBHC 格式寫實證健康照護報告的草稿。
+zotero-bridge-feature-progress-report = 進度報告
+zotero-bridge-feature-progress-report-desc = 整理這段時間讀了什麼、篩選到哪裡、下一步，給指導教授看；可以選擇加上 AI 摘要。
+zotero-bridge-feature-concepts-ai = 概念卡片 AI 綜整
+zotero-bridge-feature-concepts-ai-desc = 讓 AI 為一張概念卡片寫綜整草稿，附數字查核清單。

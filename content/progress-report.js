@@ -1241,6 +1241,11 @@ end
 	/** Tools menu: the dialog, then the report after any sync in progress. */
 	async function run() {
 		let ZB = scope.ZB;
+		// 「進度報告」 off (the 研究生引導 preset)
+		if (!featureOn("progressReport")) {
+			ZB.main.notifyFeatureOff("progressReport");
+			return null;
+		}
 		let settings;
 		try {
 			settings = await ZB.main.readSettings();
@@ -1468,20 +1473,32 @@ end
 		}
 	}
 
+	// Feature switches (features.js): checked live; always on when this file runs without them (Node tests)
+	function featureOn(id) {
+		let f = scope.ZB && scope.ZB.features;
+		return !f || f.isEnabled(id);
+	}
+
+	/** Menu entries that hide while the feature is off (features.js gateMenus). */
+	function gated(id, menus) {
+		let f = scope.ZB && scope.ZB.features;
+		return f ? f.gateMenus(id, menus) : menus;
+	}
+
 	/** Tools menu entry; returns the menu IDs to unregister. */
 	function registerMenus({ pluginID }) {
 		return [Zotero.MenuManager.registerMenu({
 			menuID: "zotero-bridge-progress-report-tools",
 			pluginID,
 			target: "main/menubar/tools",
-			menus: [{
+			menus: gated("progressReport", [{
 				menuType: "menuitem",
 				l10nID: "zotero-bridge-menu-progress-report",
 				onCommand: () => {
 					// Through the exported object, so tests can wait for the run
 					api.run().catch(e => Zotero.logError(e));
 				},
-			}],
+			}]),
 		})].filter(Boolean);
 	}
 

@@ -266,6 +266,7 @@ const TESTS = [
 				ebhcReport: ["run", "askOptions", "processReport", "buildReportNote"],
 				appraisalForm: ["renderPaneRow", "syncInfo", "saveRecord", "exportSummary", "registerMenus"],
 				progressReport: ["run", "askOptions", "logStatusChange", "latestReport", "registerMenus"],
+				features: ["isEnabled", "rawValue", "applyPreset", "currentPreset", "snapshot", "restore", "migrate", "gateMenus"],
 				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly"],
 			};
 			let missing = [];
@@ -419,7 +420,7 @@ const TESTS = [
 				if (!ctx.l10n.has(m[1])) ctx.l10n.set(m[1], null);
 			}
 			let ids = [...ctx.l10n.keys()];
-			let args = { count: 3, reason: "E2E", name: "E2E" };
+			let args = { count: 3, reason: "E2E", name: "E2E", preset: "guided", req: "sync" };
 			let report = {};
 			let problems = [];
 			for (let locale of ["en-US", "zh-TW"]) {
@@ -935,6 +936,23 @@ const TESTS = [
 				check(!untranslated.length, `untranslated l10n elements: ${d.untranslated.join(", ")}`);
 				let anthropicBox = c.querySelector("#zb-anthropic-box");
 				check(anthropicBox && !anthropicBox.hidden, "provider anthropic: #zb-anthropic-box should be visible");
+				// 功能: one switch per feature, the preset of this fresh profile, and progressive disclosure
+				let F = zb().features;
+				let switches = c.querySelectorAll("#zb-features input[type=checkbox]");
+				eq(switches.length, F.FEATURES.length, "feature switches in #zb-features");
+				let guidedRadio = c.querySelector("#zb-preset-guided");
+				check(guidedRadio && guidedRadio.checked, "a fresh profile should show 研究生引導 as the current preset");
+				let chaseBox = c.querySelector('groupbox[data-zb-feature="citationChase"]');
+				check(chaseBox && chaseBox.hasAttribute("hidden"), "引文追蹤 is off in 研究生引導: its settings section should be hidden");
+				let chaseSwitch = c.querySelector("#zb-feature-citationChase");
+				chaseSwitch.click();
+				await waitFor(() => F.rawValue("citationChase") === true && !chaseBox.hasAttribute("hidden"),
+					"turning 引文追蹤 on in the pane to show its section", 5000);
+				check(!guidedRadio.checked, "after changing one switch the preset is no longer 研究生引導 (自訂)");
+				chaseSwitch.click();
+				await waitFor(() => F.rawValue("citationChase") === false && chaseBox.hasAttribute("hidden"),
+					"turning 引文追蹤 off again to hide its section", 5000);
+				d.featureHeading = (c.querySelector("[data-l10n-id=zotero-bridge-features-heading]") || {}).textContent;
 				// A key typed just before closing (the pane saves 600 ms after the last keystroke)
 				let key = c.querySelector("#zb-openai-key");
 				key.value = "sk-e2e-typed-then-closed";
@@ -958,6 +976,9 @@ const TESTS = [
 			setPref("llm.provider", "anthropic");
 			setPref("usage.prices", "{}");
 			Zotero.Prefs.clear(ZB_PREF + "usage.prices", true);
+			// …and the observers on the feature switches
+			setPref("feature.synthesis", true);
+			Zotero.Prefs.clear(ZB_PREF + "feature.synthesis", true);
 			await delay(500);
 			let dead = messages.slice(from).filter(m => m.kind === "error");
 			check(!dead.length, `changing prefs after the settings window closed logged: ${dead.map(m => m.text).join(" | ")} (pref observers of the closed pane are still registered)`);
@@ -968,6 +989,105 @@ const TESTS = [
 		// Errors Zotero's own preferences window logs as well (control test above)
 		get allowUnattributed() {
 			return ctx.prefsControlErrors || [];
+		},
+	},
+	{
+		name: "feature presets gate menus and the item pane live (研究生引導 hides, 進階 shows)",
+		needs: ["menus are registered with Zotero.MenuManager"],
+		async fn(d) {
+			let ZB = zb();
+			let F = ZB.features;
+			// The one-time migration ran at startup; this profile had no earlier use, so 研究生引導
+			d.migration = Zotero.Prefs.get(ZB_PREF + "features.version", true);
+			eq(d.migration, F.MIGRATION_VERSION, "features.version after startup (ZB.features.migrate())");
+			d.startPreset = F.currentPreset();
+			eq(d.startPreset, "guided", "preset of a fresh profile");
+			let mine = Zotero.MenuManager._menuManager.options.filter(o => o.pluginID === PLUGIN_ID);
+			let find = (l10nID) => {
+				let found = null;
+				let walk = (menus) => {
+					for (let m of menus || []) {
+						if (found) return;
+						if (m.l10nID === l10nID) found = m;
+						else walk(m.menus);
+					}
+				};
+				for (let o of mine) walk(o.menus);
+				return found;
+			};
+			// Off in 研究生引導, on in 進階 (features.js); none of these has its own onShowing condition
+			const GATED = [
+				"zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-menu-ebhc-report",
+				"zotero-bridge-menu-pubmed-watch", "zotero-bridge-chase-items", "zotero-bridge-chase-tools-included",
+				"zotero-bridge-menu-progress-report", "zotero-bridge-menu-concepts-ai",
+			];
+			// On in both presets
+			const ALWAYS = ["zotero-bridge-menu-sync", "zotero-bridge-search-tools", "zotero-bridge-screen-tools-dedup",
+				"zotero-bridge-menu-dashboard", "zotero-bridge-menu-concepts-update"];
+			// What a menu's onShowing decides, with the context MenuManager would pass
+			let visibility = (menu) => {
+				let visible = null;
+				menu.onShowing({}, {
+					items: [], collectionTreeRows: [], menuElem: null,
+					setVisible: (v) => {
+						visible = !!v;
+					},
+					setEnabled() {}, setL10nArgs() {}, setIcon() {},
+				});
+				return visible;
+			};
+			let before = F.snapshot();
+			let problems = [];
+			d.visible = {};
+			try {
+				for (let [preset, gatedVisible] of [["guided", false], ["advanced", true], ["guided", false]]) {
+					F.applyPreset(preset);
+					eq(F.currentPreset(), preset, `currentPreset() after applyPreset("${preset}")`);
+					let seen = {};
+					for (let id of [...GATED, ...ALWAYS]) {
+						let m = find(id);
+						if (!m) {
+							problems.push(`${id}: not registered`);
+							continue;
+						}
+						if (typeof m.onShowing !== "function") {
+							problems.push(`${id}: no onShowing hook (features.gateMenus)`);
+							continue;
+						}
+						let want = GATED.includes(id) ? gatedVisible : true;
+						let got = visibility(m);
+						seen[id] = got;
+						if (got !== want) problems.push(`${preset}: ${id} setVisible(${got}), expected ${want}`);
+					}
+					d.visible[preset] = seen;
+				}
+				// One switch away from a preset is 自訂
+				F.setEnabled("synthesis", true);
+				eq(F.currentPreset(), "custom", "currentPreset() with one switch changed");
+				// The item pane drops the rows of features that are off, without a restart
+				if (ctx.english) {
+					let doc = mainWindow().document;
+					let render = () => {
+						let body = doc.createElement("div");
+						ZB.main.renderPane({ doc, body, item: ctx.english, setSectionSummary: () => {} });
+						return body;
+					};
+					check(render().querySelector("[data-zb-appraisal]"), "with 文獻評讀表 on, the item pane should show its row");
+					F.setEnabled("appraisalForm", false);
+					check(!render().querySelector("[data-zb-appraisal]"), "with 文獻評讀表 off, the item pane should not show its row");
+				}
+				// The PubMed watch timer only runs while the feature is on (no watches are saved: nothing is fetched)
+				setPref("pubmedWatch.autoCheck", true);
+				F.applyPreset("advanced");
+				await waitFor(() => ZB.pubmedWatch.timerActive, "the PubMed timer to start when the feature is turned on", 5000);
+				F.applyPreset("guided");
+				await waitFor(() => !ZB.pubmedWatch.timerActive, "the PubMed timer to stop when the feature is turned off", 5000);
+			}
+			finally {
+				Zotero.Prefs.clear(ZB_PREF + "pubmedWatch.autoCheck", true);
+				F.restore(before);
+			}
+			check(!problems.length, problems.join("; "));
 		},
 	},
 	{
