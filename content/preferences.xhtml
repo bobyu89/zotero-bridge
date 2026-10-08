@@ -111,6 +111,22 @@
 	</groupbox>
 
 	<groupbox>
+		<label><html:h2>中文文獻與中文 APA</html:h2></label>
+		<description>標題是中文的文獻（或沒有標題、作者是中文姓名）改用中文 APA 7：作者全名以「、」相連、（年份）全形括號、內文引用「陳美玲等，2023」。用在筆記的 APA 7、Notion 的 APA 欄位、文獻比較表的引文與參考文獻；references.json 裡的中文姓名會寫成完整姓名。不會修改 Zotero 條目。</description>
+		<checkbox label="中文文獻使用中文 APA 格式" preference="extensions.zotero-bridge.apaZh.enabled"/>
+		<hbox align="center">
+			<label value="標點："/>
+			<menulist preference="extensions.zotero-bridge.apaZh.style" native="true">
+				<menupopup>
+					<menuitem label="陳美玲（2023）。題目。護理雜誌，70(2)，45–56。（各校論文 APA 7 指引常用）" value="thesis"/>
+					<menuitem label="陳美玲（2023）．題目．護理雜誌，70(2)，45–56。（台灣護理學會期刊）" value="twna"/>
+				</menupopup>
+			</menulist>
+		</hbox>
+		<checkbox label="中文文獻排在英文前（中文依筆畫、英文依字母；用於文獻比較表的參考文獻）" preference="extensions.zotero-bridge.apaZh.chineseFirst"/>
+	</groupbox>
+
+	<groupbox>
 		<label><html:h2>Notion</html:h2></label>
 		<label value="Integration token（notion.so/profile/integrations 建立，並把資料庫分享給這個 integration）："/>
 		<html:input id="zb-notion-token" type="password" placeholder="ntn_..." autocomplete="off"/>
