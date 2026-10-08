@@ -13,24 +13,31 @@
 	let notifierID = null;
 	let autoSyncTimer = null;
 	let autoSyncQueue = new Set();
+	// Items trashed or deleted in Zotero: zotero key → item ID (null once the item is gone)
+	let archiveQueue = new Map();
 	// Item IDs we just wrote ourselves (AI notes), so auto-sync doesn't react to them
 	let selfModified = new Set();
 	let running = Promise.resolve();
+	// Test hook: extra options for LLM calls (e.g. { sleep } to skip retry delays)
+	let runtime = { retry: {} };
 
 	function pref(key) {
 		return Zotero.Prefs.get(PREF + key, true);
 	}
 
-	function readSettings() {
+	async function readSettings() {
 		let vaultPath = String(pref("obsidian.vaultPath") || "").trim();
 		let provider = pref("llm.provider") === "openai" ? "openai" : "anthropic";
+		// Secrets live in the login manager (secrets.js), not in prefs
+		let notionToken = await ZB.secrets.get("notionToken");
+		let apiKey = await ZB.secrets.get(provider === "openai" ? "openaiKey" : "anthropicKey");
 		return {
 			vaultPath,
 			vaultName: String(pref("obsidian.vaultName") || "").trim() || (vaultPath ? PathUtils.filename(vaultPath) : ""),
 			filenameFormat: pref("obsidian.filenameFormat") || "citekey",
 			createBase: pref("obsidian.createBase") !== false,
 			includeNotes: pref("includeNotes") !== false,
-			notionToken: String(pref("notion.token") || "").trim(),
+			notionToken: String(notionToken || "").trim(),
 			defaults: {
 				obsidianFolder: pref("obsidian.folder") || "",
 				notionDatabase: String(pref("notion.database") || "").trim(),
@@ -39,7 +46,7 @@
 			llm: {
 				enabled: pref("llm.enabled") !== false,
 				provider,
-				apiKey: String(pref(provider === "openai" ? "llm.openaiKey" : "llm.anthropicKey") || "").trim(),
+				apiKey: String(apiKey || "").trim(),
 				model: String(pref(provider === "openai" ? "llm.openaiModel" : "llm.anthropicModel") || "").trim()
 					|| ZB.llm.DEFAULT_MODELS[provider],
 				effort: pref("llm.effort") || "medium",
@@ -60,13 +67,71 @@
 		return new Date().toISOString();
 	}
 
-	// ---------- AI note ----------
-
-	function aiNoteHTML(md, model, at) {
-		return `<h1>${AI_TITLE}</h1>\n<p><em>由 ${model} 於 ${at} 產生（Zotero Bridge）</em></p>\n${ZB.markdown.mdToHtml(md)}`;
+	function markSelfModified(...ids) {
+		for (let id of ids) {
+			selfModified.add(id);
+			setTimeout(() => selfModified.delete(id), AUTO_SYNC_DELAY_MS * 2);
+		}
 	}
 
-	// Read back an AI note written by aiNoteHTML (the user may have edited it in Zotero)
+	// ---------- AI usage ledger ----------
+
+	function readPrices() {
+		return ZB.usage.parsePrices(pref("usage.prices"));
+	}
+
+	function readLedger() {
+		return ZB.usage.parseLedger(pref("usage.ledger"));
+	}
+
+	/** Add one LLM call to the monthly ledger pref and to the current run's totals. */
+	function recordAIUsage(result, runTotals) {
+		let call = { model: result.model, usage: result.usage };
+		try {
+			Zotero.Prefs.set(PREF + "usage.ledger", JSON.stringify(ZB.usage.recordUsage(readLedger(), call)), true);
+		}
+		catch (e) {
+			Zotero.logError(e);
+		}
+		if (runTotals) runTotals.ledger = ZB.usage.recordUsage(runTotals.ledger, call);
+	}
+
+	/** One-line summary of the AI calls in this run (empty if none). */
+	function runUsageLine(runTotals) {
+		let month = runTotals && Object.values(runTotals.ledger)[0];
+		return month ? ZB.usage.describeRun(month, readPrices().prices) : "";
+	}
+
+	function retryStatus(status) {
+		return ({ attempt, maxRetries, delay, status: code }) => {
+			status(`AI 服務暫時無法使用（${code || "連線錯誤"}），${Math.max(1, Math.round(delay / 1000))} 秒後重試（${attempt}/${maxRetries}）…`);
+		};
+	}
+
+	/** Settings pane: lines for "本月 AI 用量". */
+	function usageReport() {
+		let { prices, error } = readPrices();
+		let lines = ZB.usage.describeMonth(readLedger()[ZB.usage.monthKey()], prices);
+		if (error) lines.push(`⚠️ ${error}（改用內建價格表）`);
+		return lines;
+	}
+
+	function resetUsage() {
+		Zotero.Prefs.set(PREF + "usage.ledger", "{}", true);
+	}
+
+	// ---------- AI note ----------
+
+	// The structured data goes last, as a heading + <pre> (both survive Zotero's note editor),
+	// so a later sync without AI can fill the Notion columns and frontmatter from it
+	function aiNoteHTML(md, model, at, data, raw) {
+		let block = data || raw ? ZB.llm.studyDataBlock(data, raw) : "";
+		return `<h1>${AI_TITLE}</h1>\n<p><em>由 ${model} 於 ${at} 產生（Zotero Bridge）</em></p>\n`
+			+ ZB.markdown.mdToHtml(block ? `${md}\n\n${block}` : md);
+	}
+
+	// Read back an AI note written by aiNoteHTML (the user may have edited it in Zotero).
+	// The structured-data block is removed from `md` and returned as `data`.
 	function readAINote(html) {
 		let md = ZB.markdown.htmlToMd(html, parseHTML);
 		let model = "";
@@ -77,7 +142,27 @@
 			at = t;
 			return "";
 		});
-		return { md: md.trim(), model, at };
+		let parsed = ZB.llm.extractStudyData(md);
+		return { md: parsed.md.trim(), model, at, data: parsed.data, dataError: parsed.found ? parsed.error : "" };
+	}
+
+	/**
+	 * Post-process a freshly generated note: take out the JSON block and verify the quotes.
+	 * Returns { md, data, raw, messages } — messages are short notes for the progress window.
+	 */
+	function processGeneratedNote(text, data) {
+		let messages = [];
+		let parsed = ZB.llm.extractStudyData(text);
+		if (!parsed.found) messages.push("⚠️ AI 沒有輸出結構化資料（JSON），研讀欄位留空");
+		else if (parsed.error) messages.push(`⚠️ 結構化資料：${parsed.error}`);
+		let texts = [data.abstract];
+		for (let att of data.attachments || []) {
+			for (let ann of att.annotations || []) texts.push(ann.text);
+		}
+		let check = ZB.verify.verifyQuotes(parsed.md.trim(), { fullText: data.fullText, texts });
+		let summary = ZB.verify.summarize(check);
+		if (summary) messages.push(summary);
+		return { md: check.md, data: parsed.data, raw: parsed.found && !parsed.data ? parsed.raw : "", messages, check };
 	}
 
 	// ---------- per-item pipeline ----------
@@ -97,6 +182,8 @@
 
 		// A failing step doesn't stop the others; errors are reported together at the end
 		let errors = [];
+		let messages = [];
+		let quoteCheck = null;
 		let ai = null;
 		if (needAI) {
 			ctx.status("AI 產生筆記中…");
@@ -105,12 +192,18 @@
 					systemPrompt: settings.llm.systemPrompt,
 					notesMarkdown,
 					fullTextTruncated: data.fullTextTruncated,
-				}, (url, init) => fetch(url, init));
+				}, (url, init) => fetch(url, init), Object.assign({ onRetry: retryStatus(ctx.status) }, ctx.retry));
+				recordAIUsage(result, ctx.usage);
 				let at = nowISO();
-				ai = { md: result.text.trim(), model: result.model || settings.llm.model, at };
-				let note = await ZB.adapter.saveAINote(item, aiNoteHTML(ai.md, ai.model, at));
-				selfModified.add(note.id);
-				setTimeout(() => selfModified.delete(note.id), AUTO_SYNC_DELAY_MS * 2);
+				let processed = processGeneratedNote(result.text.trim(), data);
+				messages.push(...processed.messages);
+				quoteCheck = processed.check;
+				ai = { md: processed.md, model: result.model || settings.llm.model, at, data: processed.data };
+				// Saving a child note also reports a change of the item itself, and Zotero notifies
+				// before saveTx() returns: mark the item first (the notes are checked again at flush time)
+				markSelfModified(item.id);
+				let saved = await ZB.adapter.saveAINote(item, aiNoteHTML(ai.md, ai.model, at, processed.data, processed.raw));
+				markSelfModified(saved.note.id);
 			}
 			catch (e) {
 				errors.push(`AI 筆記：${e.message || e}`);
@@ -118,6 +211,7 @@
 		}
 		if (!ai && data.aiNote && action.ai !== "none") {
 			ai = readAINote(data.aiNote.html);
+			if (ai.dataError) messages.push(`⚠️ AI 子筆記的結構化資料無法讀取：${ai.dataError}`);
 		}
 
 		let route = ZB.core.resolveRoute(data, settings.rules, settings.defaults);
@@ -125,7 +219,10 @@
 		let basename = ZB.core.noteBasename(data, settings.filenameFormat);
 		let obsidian = null;
 		if (settings.vaultPath) {
-			obsidian = await resolveObsidianPath(settings, folderParts, basename, data);
+			// A changed citekey/title renames the existing note, but only when this run writes Obsidian
+			obsidian = await resolveObsidianPath(settings, folderParts, basename, data, {
+				index: ctx.obsidianIndex, rename: action.targets.has("obsidian"),
+			});
 		}
 
 		let notionUrl = null;
@@ -134,7 +231,7 @@
 			try {
 				if (!route.notionDatabase) throw new Error(`沒有對應的資料庫（規則：${route.ruleName || "預設"}）`);
 				notionUrl = await syncNotion(ctx.notion(settings.notionToken), route.notionDatabase, data, {
-					ai, notesMarkdown, obsidianURI: obsidian && obsidian.uri,
+					ai, notesMarkdown, obsidianURI: obsidian && obsidian.uri, messages,
 				}, ctx);
 			}
 			catch (e) {
@@ -146,35 +243,165 @@
 			ctx.status("寫入 Obsidian…");
 			try {
 				await writeObsidian(obsidian, data, { ai, notesMarkdown, notionUrl });
+				if (ctx.obsidianIndex) ctx.obsidianIndex.add(`${data.libraryPath}/${data.key}`, obsidian.path, obsidian.relParts);
 			}
 			catch (e) {
 				errors.push(`Obsidian：${e.message || e}`);
 			}
 		}
-		if (errors.length) throw new Error(errors.join("；"));
-		return { route, notionUrl, obsidianPath: obsidian && obsidian.relPath, generated: !!ai && needAI };
+		if (errors.length) throw new Error([...errors, ...messages].join("；"));
+		return { route, notionUrl, obsidianPath: obsidian && obsidian.relPath, generated: !!ai && needAI, messages, quoteCheck };
 	}
 
-	async function resolveObsidianPath(settings, folderParts, basename, data) {
-		let zoteroKey = `${data.libraryPath}/${data.key}`;
-		let dir = PathUtils.join(settings.vaultPath, ...folderParts);
-		let name = basename;
-		let path = PathUtils.join(dir, name + ".md");
-		// Two items with the same citekey/title must not overwrite each other
-		if (await IOUtils.exists(path)) {
-			let text = await IOUtils.readUTF8(path);
-			let fm = ZB.core.splitFrontmatter(text).frontmatter || "";
-			let m = /^zotero_key:\s*"?([^"\n]+)"?\s*$/m.exec(fm);
-			if (m && m[1] !== zoteroKey) {
-				name = `${basename} (${data.key})`;
-				path = PathUtils.join(dir, name + ".md");
+	// ---------- Obsidian note lookup ----------
+
+	// Enough for the plugin's frontmatter up to zotero_key unless the author list is very long
+	const HEAD_BYTES = 4096;
+	const MAX_FOLDER_DEPTH = 16;
+
+	/** The zotero_key in a note's frontmatter (null if none), reading only its head when that suffices. */
+	async function readZoteroKey(path) {
+		let bytes = await IOUtils.read(path, { maxBytes: HEAD_BYTES });
+		let key = ZB.core.zoteroKeyFromHead(new TextDecoder().decode(bytes), bytes.length < HEAD_BYTES);
+		if (key !== undefined) return key;
+		return ZB.core.zoteroKeyFromHead(await IOUtils.readUTF8(path));
+	}
+
+	// null: no such file; "": a note without zotero_key; otherwise the item that owns it
+	async function noteOwner(path) {
+		if (!(await IOUtils.exists(path))) return null;
+		return (await readZoteroKey(path)) || "";
+	}
+
+	/** Folders the plugin writes notes to (default and rule folders), minus those inside another one. */
+	function pluginFolders(settings) {
+		let all = [settings.defaults.obsidianFolder, ...settings.rules.map(r => r.obsidianFolder).filter(Boolean)]
+			.map(f => ZB.core.splitFolder(f));
+		let within = (a, b) => b.length <= a.length && b.every((part, i) => part === a[i]);
+		return all.filter((a, i) => !all.some((b, j) => j !== i && within(a, b) && (b.length < a.length || j < i)));
+	}
+
+	function addIndexEntry(index, key, path, relParts) {
+		let list = index.get(key) || [];
+		if (!list.some(e => e.path === path)) list.push({ path, relParts });
+		index.set(key, list);
+	}
+
+	/** zotero_key → [{ path, relParts }] for every .md file under the plugin folders (recursively). */
+	async function buildObsidianIndex(settings) {
+		let index = new Map();
+		let visit = async (dir, relParts) => {
+			let children;
+			try {
+				children = await IOUtils.getChildren(dir);
 			}
+			catch (e) {
+				return; // the folder doesn't exist yet
+			}
+			for (let child of children) {
+				let name = PathUtils.filename(child);
+				// .obsidian, .trash and other hidden folders
+				if (name.startsWith(".")) continue;
+				try {
+					if (/\.md$/i.test(name)) {
+						let key = await readZoteroKey(child);
+						if (key) addIndexEntry(index, key, child, [...relParts, name]);
+					}
+					else if (relParts.length < MAX_FOLDER_DEPTH && (await IOUtils.stat(child)).type === "directory") {
+						await visit(child, [...relParts, name]);
+					}
+				}
+				catch (e) {
+					Zotero.debug(`Zotero Bridge: skipped ${child}: ${e}`);
+				}
+			}
+		};
+		for (let parts of pluginFolders(settings)) {
+			await visit(PathUtils.join(settings.vaultPath, ...parts), parts);
 		}
-		let relPath = [...folderParts, name + ".md"].join("/");
+		return index;
+	}
+
+	/** The vault index for one run: built on first use, then kept up to date with the notes the run writes. */
+	function obsidianIndexCache(settings) {
+		let index = null;
 		return {
-			dir, path, relPath,
+			async get() {
+				if (!index) index = await buildObsidianIndex(settings);
+				return index;
+			},
+			add(key, path, relParts) {
+				if (index) addIndexEntry(index, key, path, relParts);
+			},
+		};
+	}
+
+	function obsidianTarget(settings, folderParts, name) {
+		let relParts = [...folderParts, name + ".md"];
+		let relPath = relParts.join("/");
+		return {
+			dir: PathUtils.join(settings.vaultPath, ...folderParts),
+			path: PathUtils.join(settings.vaultPath, ...relParts),
+			relParts,
+			relPath,
 			uri: settings.vaultName ? ZB.core.obsidianURI(settings.vaultName, relPath) : "",
 		};
+	}
+
+	/**
+	 * Find the item's note. Usually it is <folder>/<basename>.md, or "<basename> (KEY).md" when
+	 * another item has that name. Otherwise (citekey or title changed, or the user moved the note)
+	 * it is looked up by zotero_key in opts.index and, with opts.rename, renamed in its folder.
+	 * Without an existing note, returns where a new one goes.
+	 */
+	async function resolveObsidianPath(settings, folderParts, basename, data, opts = {}) {
+		let zoteroKey = `${data.libraryPath}/${data.key}`;
+		let altName = `${basename} (${data.key})`;
+		let dir = PathUtils.join(settings.vaultPath, ...folderParts);
+		let owner = await noteOwner(PathUtils.join(dir, basename + ".md"));
+		if (owner === zoteroKey) return obsidianTarget(settings, folderParts, basename);
+		if (owner && (await noteOwner(PathUtils.join(dir, altName + ".md"))) === zoteroKey) {
+			return obsidianTarget(settings, folderParts, altName);
+		}
+		if (opts.index) {
+			let notes = (await opts.index.get()).get(zoteroKey) || [];
+			let fileName = n => n.relParts[n.relParts.length - 1].replace(/\.md$/i, "");
+			let found = notes.find(n => fileName(n) === basename || fileName(n) === altName) || notes[0];
+			if (found) {
+				let name = fileName(found);
+				if (opts.rename && name !== basename && name !== altName) {
+					name = (await renameNote(found, basename, altName, zoteroKey)) || name;
+				}
+				return obsidianTarget(settings, found.relParts.slice(0, -1), name);
+			}
+		}
+		// A new note: two items with the same citekey/title must not overwrite each other
+		return obsidianTarget(settings, folderParts, owner ? altName : basename);
+	}
+
+	/** Rename an indexed note to its new basename in the same folder; returns the new name or null. */
+	async function renameNote(entry, basename, altName, zoteroKey) {
+		let dir = PathUtils.parent(entry.path);
+		for (let name of [basename, altName]) {
+			let to = PathUtils.join(dir, name + ".md");
+			let owner = await noteOwner(to);
+			// Taken by another item, or by a note of the user's
+			if (owner !== null && owner !== zoteroKey) continue;
+			if (owner === null) {
+				try {
+					await IOUtils.move(entry.path, to, { noOverwrite: true });
+				}
+				catch (e) {
+					Zotero.logError(e);
+					return null;
+				}
+				Zotero.debug(`Zotero Bridge: renamed ${entry.path} → ${to}`);
+			}
+			entry.path = to;
+			entry.relParts = [...entry.relParts.slice(0, -1), name + ".md"];
+			return name;
+		}
+		return null;
 	}
 
 	async function writeObsidian(obsidian, data, opts) {
@@ -191,6 +418,7 @@
 			aiMarkdown: opts.ai && opts.ai.md,
 			aiModel: opts.ai && opts.ai.model,
 			aiGeneratedAt: opts.ai && opts.ai.at,
+			study: opts.ai && opts.ai.data,
 			fullTextTruncated: data.fullTextTruncated,
 			notesMarkdown: opts.notesMarkdown,
 			notionUrl,
@@ -223,6 +451,12 @@
 			}
 			ctx.schemaCache.set(dsId, schema);
 		}
+		let study = opts.ai && opts.ai.data;
+		if (study && !schema.props["Study Design"] && !ctx.schemaHints.has(dsId)) {
+			// Databases set up before these columns existed: adding them is the user's call
+			ctx.schemaHints.add(dsId);
+			if (opts.messages) opts.messages.push("Notion 資料庫還沒有研讀欄位（Study Design 等）：到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」即可加上");
+		}
 		let zoteroKey = `${data.libraryPath}/${data.key}`;
 		let properties = ZB.notion.buildProperties(schema, {
 			title: data.title,
@@ -247,6 +481,7 @@
 			citationKey: data.citationKey,
 			zoteroKey,
 			summary: opts.ai ? ZB.markdown.plainText(ZB.llm.extractSummary(opts.ai.md)) : "",
+			study,
 			apa: data.apa,
 			lastSynced: nowISO(),
 		});
@@ -287,7 +522,7 @@
 		if (!items.length) return;
 		let settings;
 		try {
-			settings = readSettings();
+			settings = await readSettings();
 		}
 		catch (e) {
 			notify("Zotero Bridge 設定有誤", String(e.message || e));
@@ -317,7 +552,8 @@
 		}
 		if (willGenerate && items.length > 5 && !action.silent) {
 			let ok = Services.prompt.confirm(Zotero.getMainWindow(), "Zotero Bridge",
-				`即將為最多 ${items.length} 筆文獻呼叫 ${settings.llm.provider === "openai" ? "OpenAI" : "Claude"}（${settings.llm.model}）產生 AI 筆記，會產生 API 費用。要繼續嗎？`);
+				`即將為最多 ${items.length} 筆文獻呼叫 ${settings.llm.provider === "openai" ? "OpenAI" : "Claude"}（${settings.llm.model}）產生 AI 筆記，會產生 API 費用。`
+				+ batchEstimate(items, action, settings) + "要繼續嗎？");
 			if (!ok) return;
 		}
 
@@ -329,14 +565,19 @@
 		let clients = new Map();
 		let ctx = {
 			schemaCache: new Map(),
+			schemaHints: new Set(),
+			obsidianIndex: settings.vaultPath ? obsidianIndexCache(settings) : null,
 			notion(token) {
 				if (!clients.has(token)) clients.set(token, new ZB.notion.NotionClient({ token, fetch: (u, i) => fetch(u, i) }));
 				return clients.get(token);
 			},
 			status: () => {},
+			usage: { ledger: {} },
+			retry: runtime.retry,
 		};
 		let ok = 0;
 		let failures = [];
+		let quotes = { total: 0, verified: 0, notFound: 0, unchecked: 0 };
 		for (let item of items) {
 			let title = item.getField("title") || item.key;
 			let line = pw ? new pw.ItemProgress(item.getItemTypeIconName(), title) : null;
@@ -344,10 +585,13 @@
 				if (line) line.setText(`${title} — ${s}`);
 			};
 			try {
-				await syncItem(item, action, settings, ctx);
+				let result = await syncItem(item, action, settings, ctx);
 				ok++;
+				if (result.quoteCheck) {
+					for (let k of Object.keys(quotes)) quotes[k] += result.quoteCheck[k];
+				}
 				if (line) {
-					line.setText(title);
+					line.setText(result.messages.length ? `${title} — ${result.messages.join("；")}` : title);
 					line.setProgress(100);
 				}
 			}
@@ -369,11 +613,32 @@
 			}
 		}
 		if (pw) {
-			pw.addDescription(`完成 ${ok} 筆${failures.length ? `，失敗 ${failures.length} 筆（詳見 說明 → 除錯輸出記錄）` : ""}`);
+			let quoteSummary = items.length > 1 ? ZB.verify.summarize(quotes) : "";
+			pw.addDescription(`完成 ${ok} 筆${failures.length ? `，失敗 ${failures.length} 筆（詳見 說明 → 除錯輸出記錄）` : ""}`
+				+ (quoteSummary ? `；${quoteSummary}` : ""));
+			let usageLine = runUsageLine(ctx.usage);
+			if (usageLine) pw.addDescription(usageLine);
 			pw.startCloseTimer(failures.length ? 15000 : 5000);
 		}
 		else if (failures.length) {
 			notify("Zotero Bridge 自動同步失敗", failures.slice(0, 3).join("\n"));
+		}
+		// 「同步時自動更新參考文獻檔」 (export.js); never throws
+		if (ok) await ZB.bibliography.afterSync(settings);
+	}
+
+	/** Rough cost for the confirm dialog, from the ledger's average tokens per call ("" when unknown). */
+	function batchEstimate(items, action, settings) {
+		try {
+			let n = action.ai === "regenerate" ? items.length : items.filter(i => !ZB.adapter.getAINote(i)).length;
+			let est = ZB.usage.estimateCost(readLedger(), settings.llm.model, readPrices().prices, n);
+			if (!est) return "";
+			return `\n\n預估費用：約 ${ZB.usage.formatUSD(est.total)}（${n} 筆 × 每筆約 ${ZB.usage.formatUSD(est.perCall)}，`
+				+ `依過去 ${est.samples} 次呼叫的平均用量估算；實際費用依全文長度而定）。\n\n`;
+		}
+		catch (e) {
+			Zotero.logError(e);
+			return "";
 		}
 	}
 
@@ -383,6 +648,103 @@
 		pw.addDescription(text);
 		pw.show();
 		pw.startCloseTimer(10000);
+	}
+
+	// ---------- deleted items ----------
+
+	/**
+	 * Items trashed or deleted in Zotero: move their Notion pages to the Notion trash and mark their
+	 * Obsidian notes as deleted (the files are kept). `keys` are zotero keys as written to Notion and
+	 * Obsidian ("library/KEY", "groups/ID/KEY"). Runs after any sync in progress; returns counts.
+	 */
+	function archiveItems(keys) {
+		let p = running.then(() => archiveNow(keys));
+		running = p.catch(() => {});
+		return p;
+	}
+
+	async function archiveNow(keys) {
+		keys = [...new Set((keys || []).filter(k => typeof k === "string" && k))];
+		let counts = { notion: 0, obsidian: 0 };
+		if (!keys.length) return counts;
+		let settings;
+		try {
+			settings = await readSettings();
+		}
+		catch (e) {
+			Zotero.logError(e);
+			return counts;
+		}
+		let errors = [];
+		if (settings.notionToken) {
+			try {
+				counts.notion = await trashNotionPages(settings, keys, errors);
+			}
+			catch (e) {
+				errors.push(`Notion：${e.message || e}`);
+			}
+		}
+		if (settings.vaultPath) {
+			try {
+				counts.obsidian = await markObsidianNotesDeleted(settings, keys);
+			}
+			catch (e) {
+				errors.push(`Obsidian：${e.message || e}`);
+			}
+		}
+		if (errors.length) {
+			errors.forEach(e => Zotero.logError(new Error(e)));
+			notify("Zotero Bridge：刪除的文獻同步失敗", errors.slice(0, 3).join("\n"));
+		}
+		return counts;
+	}
+
+	async function trashNotionPages(settings, keys, errors) {
+		let client = new ZB.notion.NotionClient({ token: settings.notionToken, fetch: (u, i) => fetch(u, i) });
+		// A deleted item's collections (and so its route) are unknown: look in every configured database
+		let databases = new Set([settings.defaults.notionDatabase, ...settings.rules.map(r => r.notionDatabase)].filter(Boolean));
+		let dataSources = new Set();
+		for (let db of databases) {
+			try {
+				dataSources.add(await client.resolveDataSourceId(db));
+			}
+			catch (e) {
+				errors.push(`Notion：${e.message || e}`);
+			}
+		}
+		let count = 0;
+		for (let dsId of dataSources) {
+			try {
+				// A database the plugin never wrote to has no "Zotero Key" column and none of our pages
+				let schema = await client.getSchema(dsId);
+				if (schema.props["Zotero Key"] !== "rich_text") continue;
+				for (let page of await client.findPagesByZoteroKeys(dsId, keys)) {
+					await client.trashPage(page.id);
+					count++;
+				}
+			}
+			catch (e) {
+				errors.push(`Notion：${e.message || e}`);
+			}
+		}
+		return count;
+	}
+
+	async function markObsidianNotesDeleted(settings, keys) {
+		let index = await buildObsidianIndex(settings);
+		let now = nowISO();
+		let count = 0;
+		for (let key of keys) {
+			for (let { path } of index.get(key) || []) {
+				let text = await IOUtils.readUTF8(path);
+				let marked = ZB.core.markObsidianNoteDeleted(text, { now });
+				if (marked !== text) {
+					await IOUtils.writeUTF8(path, marked);
+					count++;
+				}
+			}
+		}
+		return count;
 	}
 
 	// ---------- cross-paper synthesis ----------
@@ -413,7 +775,7 @@
 		}
 		let settings;
 		try {
-			settings = readSettings();
+			settings = await readSettings();
 		}
 		catch (e) {
 			notify("Zotero Bridge 設定有誤", String(e.message || e));
@@ -446,7 +808,10 @@
 				systemPrompt: settings.llm.synthesisPrompt,
 			});
 			line.setText(`AI 分析 ${items.length} 篇文獻中…（可能需要一兩分鐘）`);
-			let result = await ZB.llm.generateText(settings.llm, system, user, (u, i) => fetch(u, i));
+			let runTotals = { ledger: {} };
+			let result = await ZB.llm.generateText(settings.llm, system, user, (u, i) => fetch(u, i),
+				Object.assign({ onRetry: retryStatus(s => line.setText(s)) }, runtime.retry));
+			recordAIUsage(result, runTotals);
 			let md = result.text.trim();
 			let model = result.model || settings.llm.model;
 			let generatedAt = new Date().toISOString();
@@ -474,10 +839,11 @@
 				try {
 					// Link each source to its literature note when that note exists in the vault
 					let linkTargets = {};
+					let index = obsidianIndexCache(settings);
 					for (let [i, src] of sources.entries()) {
 						let route = ZB.core.resolveRoute(src.data, settings.rules, settings.defaults);
 						let target = await resolveObsidianPath(settings, ZB.core.splitFolder(route.obsidianFolder),
-							ZB.core.noteBasename(src.data, settings.filenameFormat), src.data);
+							ZB.core.noteBasename(src.data, settings.filenameFormat), src.data, { index });
 						if (await IOUtils.exists(target.path)) linkTargets[entries[i].id] = target.relPath.replace(/\.md$/i, "");
 					}
 					let dir = PathUtils.join(settings.vaultPath, ...ZB.core.splitFolder(settings.defaults.obsidianFolder), "文獻比較");
@@ -523,6 +889,8 @@
 				line.setProgress(100);
 			}
 			if (withoutAI) pw.addDescription(`其中 ${withoutAI} 篇沒有 AI 筆記，改用摘要與劃線；先產生 AI 筆記可提高比較表品質。`);
+			let usageLine = runUsageLine(runTotals);
+			if (usageLine) pw.addDescription(usageLine);
 			if (settings.notionToken && !settings.notionSynthesisParent) {
 				pw.addDescription("想同步到 Notion：請在設定填入「文獻比較表的 Notion 父頁面」。");
 			}
@@ -544,7 +912,7 @@
 
 	/** Check the token and every configured database; add missing columns. Returns report lines. */
 	async function testNotion() {
-		let settings = readSettings();
+		let settings = await readSettings();
 		if (!settings.notionToken) throw new Error("請先填入 Notion integration token");
 		let client = new ZB.notion.NotionClient({ token: settings.notionToken, fetch: (u, i) => fetch(u, i) });
 		let targets = new Map();
@@ -663,6 +1031,8 @@
 			}],
 		});
 		menuIDs = [itemMenu, collectionMenu, toolsMenu].filter(Boolean);
+		// Bibliography export (export.js): Tools menu + collection context menu
+		menuIDs.push(...ZB.bibliography.registerMenus({ pluginID, icon }));
 	}
 
 	// ---------- item pane: AI note section ----------
@@ -697,10 +1067,21 @@
 			body.append(actions);
 			return;
 		}
-		let { md, model, at } = readAINote(note.getNote());
+		let { md, model, at, data } = readAINote(note.getNote());
 		let summary = ZB.markdown.plainText(ZB.llm.extractSummary(md));
 		setSectionSummary(summary.slice(0, 80));
 		if (model || at) body.append(el("div", [model, at && at.slice(0, 10)].filter(Boolean).join(" · "), "font-size: 0.9em; color: var(--fill-secondary); margin-bottom: 4px;"));
+		if (data) {
+			let facts = [
+				data.study_design,
+				Number.isFinite(data.sample_size) ? `N = ${data.sample_size}` : "",
+				data.evidence_level ? `CEBM ${data.evidence_level}` : "",
+				data.jbi_level ? `JBI ${data.jbi_level}` : "",
+				data.appraisal_overall ? `評讀：${data.appraisal_overall}` : "",
+				data.country,
+			].filter(Boolean);
+			if (facts.length) body.append(el("div", facts.join(" · "), "font-weight: 600; margin-bottom: 4px;"));
+		}
 		for (let block of ZB.markdown.mdToOutline(md)) {
 			if (block.type === "h") {
 				body.append(el("div", block.text, "font-weight: 600; margin: 8px 0 2px;"));
@@ -742,16 +1123,44 @@
 
 	// ---------- auto-sync ----------
 
+	// Our own writes and the AI note backups never trigger a sync
+	function wantsAutoSync(id) {
+		return !selfModified.has(id) && !ZB.adapter.isAIHistoryNote(Zotero.Items.get(id));
+	}
+
 	function registerNotifier() {
 		notifierID = Zotero.Notifier.registerObserver({
-			notify: (event, type, ids) => {
+			notify: (event, type, ids, extraData) => {
 				if (!pref("autoSync")) return;
-				if (!["add", "modify"].includes(event)) return;
-				for (let id of ids) {
-					if (selfModified.has(id)) continue;
-					autoSyncQueue.add(id);
+				if (event === "add" || event === "modify") {
+					for (let id of ids) {
+						if (wantsAutoSync(id)) autoSyncQueue.add(id);
+					}
 				}
-				if (!autoSyncQueue.size) return;
+				else if (event === "trash") {
+					for (let id of ids) {
+						let item = Zotero.Items.get(id);
+						if (!item) continue;
+						if (item.isRegularItem()) {
+							let key = ZB.adapter.zoteroKeyFor(item.libraryID, item.key);
+							if (key) archiveQueue.set(key, id);
+						}
+						// A trashed note or attachment changes what its parent item shows
+						else if (wantsAutoSync(id)) {
+							autoSyncQueue.add(id);
+						}
+					}
+				}
+				else if (event === "delete") {
+					// The items are gone by now; Zotero passes { libraryID, key } per ID. Child items
+					// (notes, annotations) can't be told apart and simply match no page or note.
+					for (let id of ids) {
+						let info = extraData && extraData[id];
+						let key = info && ZB.adapter.zoteroKeyFor(info.libraryID, info.key);
+						if (key) archiveQueue.set(key, null);
+					}
+				}
+				if (!autoSyncQueue.size && !archiveQueue.size) return;
 				if (autoSyncTimer) clearTimeout(autoSyncTimer);
 				autoSyncTimer = setTimeout(flushAutoSync, AUTO_SYNC_DELAY_MS);
 			},
@@ -760,10 +1169,18 @@
 
 	function flushAutoSync() {
 		autoSyncTimer = null;
-		let items = Zotero.Items.get([...autoSyncQueue].filter(id => Zotero.Items.exists(id)));
+		// Skip trashed items that were restored before the timer fired
+		let archive = [...archiveQueue].filter(([, id]) => {
+			let item = id !== null && Zotero.Items.get(id);
+			return !item || item.deleted;
+		}).map(([key]) => key);
+		archiveQueue.clear();
+		// Checked again here: Zotero reports a new note before saveTx() returns its ID to us
+		let items = Zotero.Items.get([...autoSyncQueue].filter(id => Zotero.Items.exists(id) && wantsAutoSync(id)));
 		autoSyncQueue.clear();
+		if (archive.length) archiveItems(archive).catch(e => Zotero.logError(e));
 		// Auto-sync never spends LLM tokens: it reuses the stored AI note
-		run(items, { targets: ["notion", "obsidian"], ai: "reuse", silent: true }).catch(e => Zotero.logError(e));
+		if (items.length) run(items, { targets: ["notion", "obsidian"], ai: "reuse", silent: true }).catch(e => Zotero.logError(e));
 	}
 
 	// ---------- lifecycle ----------
@@ -771,6 +1188,10 @@
 	function init(opts) {
 		pluginID = opts.id;
 		rootURI = opts.rootURI;
+		// Move secrets from plain prefs (earlier versions) into the login manager; readers wait for it
+		ZB.secrets.migrateFromPrefs().then((names) => {
+			if (names.length) Zotero.debug(`Zotero Bridge: moved ${names.join(", ")} from prefs to the login manager`);
+		}).catch(e => Zotero.logError(e));
 		registerMenus();
 		registerItemPane();
 		registerNotifier();
@@ -784,7 +1205,11 @@
 		if (notifierID) Zotero.Notifier.unregisterObserver(notifierID);
 		notifierID = null;
 		if (autoSyncTimer) clearTimeout(autoSyncTimer);
+		autoSyncTimer = null;
+		autoSyncQueue.clear();
+		archiveQueue.clear();
+		ZB.bibliography.shutdown();
 	}
 
-	ZB.main = { init, shutdown, run, runSynthesis, renderPane, testNotion, readSettings, readAINote };
+	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime };
 })(this);

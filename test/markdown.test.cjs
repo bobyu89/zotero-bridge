@@ -105,3 +105,13 @@ test("htmlToMd converts a typical Zotero note", () => {
 test("plainText strips markdown", () => {
 	assert.equal(md.plainText("護理師 **衛教** [[Fall prevention]] [[A|B]]"), "護理師 衛教 Fall prevention B");
 });
+
+test("retitleNoteHTML replaces or inserts the note's first heading", () => {
+	assert.equal(md.retitleNoteHTML("<h1>🤖 AI 文獻筆記</h1>\n<p>x</p>", "Old <v1>"), "<h1>Old &lt;v1&gt;</h1>\n<p>x</p>");
+	assert.equal(md.retitleNoteHTML("<div data-schema-version=\"9\"><h1 id=\"a\">A</h1><p>x</p></div>", "T"),
+		"<div data-schema-version=\"9\"><h1>T</h1><p>x</p></div>");
+	assert.equal(md.retitleNoteHTML("<div data-schema-version=\"9\"><p>x</p></div>", "T"),
+		"<div data-schema-version=\"9\"><h1>T</h1>\n<p>x</p></div>");
+	// Only a leading <h1> is the title
+	assert.equal(md.retitleNoteHTML("<p>x</p><h1>later</h1>", "T"), "<h1>T</h1>\n<p>x</p><h1>later</h1>");
+});

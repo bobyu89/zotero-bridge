@@ -20,3 +20,7 @@ zotero-bridge-pane-header =
     .label = AI Literature Note
 zotero-bridge-pane-sidenav =
     .tooltiptext = AI Literature Note
+zotero-bridge-menu-export-library =
+    .label = Export Bibliography to Obsidian
+zotero-bridge-menu-export-collection =
+    .label = Zotero Bridge: Export Collection Bibliography

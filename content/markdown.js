@@ -299,6 +299,20 @@
 			.replace(/"/g, "&quot;");
 	}
 
+	/**
+	 * Give a Zotero note a new title (its first line): replace the leading <h1>, or insert one
+	 * at the top, inside the note editor's <div data-schema-version> wrapper when present.
+	 */
+	function retitleNoteHTML(html, title) {
+		html = String(html || "");
+		let h1 = `<h1>${escapeHTML(title)}</h1>`;
+		let wrapper = /^\s*<div\b[^>]*data-schema-version[^>]*>/i.exec(html);
+		let at = wrapper ? wrapper[0].length : 0;
+		let first = /^\s*<h1\b[^>]*>[\s\S]*?<\/h1>/i.exec(html.slice(at));
+		if (first) return html.slice(0, at) + h1 + html.slice(at + first[0].length);
+		return html.slice(0, at) + h1 + "\n" + html.slice(at);
+	}
+
 	function inlineToHTML(src) {
 		return parseInline(src).map((t) => {
 			let h = escapeHTML(t.wikilink ? `[[${t.wikilink === t.text ? t.text : t.wikilink + "|" + t.text}]]` : t.text);
@@ -546,5 +560,8 @@
 		return parseInline(String(md || "")).map(t => t.text).join("");
 	}
 
-	return { parseInline, toRichText, mdToNotionBlocks, mdToHtml, htmlToMd, mdToOutline, plainText, chunkString, NOTION_TEXT_LIMIT };
+	return {
+		parseInline, toRichText, mdToNotionBlocks, mdToHtml, htmlToMd, mdToOutline, plainText, chunkString,
+		retitleNoteHTML, NOTION_TEXT_LIMIT,
+	};
 });
