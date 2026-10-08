@@ -183,6 +183,35 @@
 	</groupbox>
 
 	<groupbox>
+		<label><html:h2>PubMed 新文獻追蹤</html:h2></label>
+		<description>儲存 PubMed 檢索式（可用 MeSH、欄位標記等完整語法），定期把新文獻匯入 Zotero 分類，加上標籤「新文獻」「追蹤/名稱」「來源/PubMed」。手動檢查：工具 → 檢查新文獻（PubMed 追蹤）。</description>
+		<html:div id="zb-pubmed-watches"/>
+		<hbox>
+			<button label="新增追蹤" oncommand="ZoteroBridgePrefs.addWatch()"/>
+			<button label="立即檢查全部" oncommand="ZoteroBridgePrefs.checkWatchesNow()"/>
+		</hbox>
+		<hbox align="center">
+			<label value="Email（NCBI 要求附上聯絡信箱）："/>
+			<html:input type="text" preference="extensions.zotero-bridge.pubmedWatch.email" placeholder="you@example.com"/>
+		</hbox>
+		<label value="NCBI API key（選填；ncbi.nlm.nih.gov 帳號設定 → API Key Management，每秒可查詢 10 次而非 3 次）："/>
+		<html:input id="zb-ncbi-key" type="password" autocomplete="off"/>
+		<hbox align="center">
+			<label value="每個追蹤每次最多匯入："/>
+			<html:input type="number" min="1" max="200" preference="extensions.zotero-bridge.pubmedWatch.maxPerWatch" style="min-width: 5em; width: 5em"/>
+			<label value="篇（其餘留待下次檢查）"/>
+		</hbox>
+		<hbox align="center">
+			<checkbox label="自動檢查：Zotero 啟動後與每隔" preference="extensions.zotero-bridge.pubmedWatch.autoCheck"/>
+			<html:input type="number" min="1" preference="extensions.zotero-bridge.pubmedWatch.intervalHours" style="min-width: 4em; width: 4em"/>
+			<label value="小時"/>
+		</hbox>
+		<checkbox label="在 Obsidian 建立每日新文獻清單（預設子資料夾的 新文獻/YYYY-MM-DD.md）" preference="extensions.zotero-bridge.pubmedWatch.digest"/>
+		<checkbox label="手動檢查後為新文獻產生 AI 筆記並同步（會產生 API 費用；自動檢查不會呼叫 AI）" preference="extensions.zotero-bridge.pubmedWatch.runAI"/>
+		<description class="zb-hint">已在文獻庫的文獻（Extra 有相同 PMID 或 DOI 相同）不會重複匯入；匯入後移到垃圾桶的也不會再匯入。每次只查上次檢查之後加入 PubMed 的文獻（Entrez Date）。</description>
+	</groupbox>
+
+	<groupbox>
 		<label><html:h2>自動同步</html:h2></label>
 		<checkbox label="Zotero 條目、註記或筆記變更時自動同步到 Notion 與 Obsidian（不會自動呼叫 AI，沿用既有 AI 筆記）" preference="extensions.zotero-bridge.autoSync"/>
 	</groupbox>

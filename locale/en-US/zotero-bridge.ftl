@@ -64,3 +64,5 @@ zotero-bridge-screen-tools-dedup =
     .label = Find Likely Duplicates in Selected Collection
 zotero-bridge-screen-tools-prisma =
     .label = Create PRISMA Flow Diagram and Evidence Table (Selected Collection)
+zotero-bridge-menu-pubmed-watch =
+    .label = Check for New Papers (PubMed Watch)

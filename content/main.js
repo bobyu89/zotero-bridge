@@ -1243,6 +1243,8 @@
 		menuIDs.push(...ZB.bibliography.registerMenus({ pluginID, icon }));
 		// Systematic/scoping review screening (screening.js): item, collection and Tools menus
 		menuIDs.push(...ZB.screening.registerMenus({ pluginID, icon }));
+		// PubMed new-literature watch (pubmed-watch.js): Tools menu
+		menuIDs.push(...ZB.pubmedWatch.registerMenus({ pluginID, icon }));
 	}
 
 	// ---------- item pane: AI note section ----------
@@ -1408,6 +1410,8 @@
 		registerItemPane();
 		registerNotifier();
 		remindInterruptedBatch();
+		// Automatic PubMed checks (off unless enabled in the settings)
+		ZB.pubmedWatch.init();
 	}
 
 	// A batch still marked running at startup was cut off by Zotero quitting or crashing
@@ -1436,6 +1440,7 @@
 		autoSyncQueue.clear();
 		archiveQueue.clear();
 		ZB.bibliography.shutdown();
+		ZB.pubmedWatch.shutdown();
 	}
 
 	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime,

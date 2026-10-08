@@ -64,3 +64,5 @@ zotero-bridge-screen-tools-dedup =
     .label = 找出目前分類中可能重複的文獻
 zotero-bridge-screen-tools-prisma =
     .label = 產生 PRISMA 流程圖與證據表（目前分類）
+zotero-bridge-menu-pubmed-watch =
+    .label = 檢查新文獻（PubMed 追蹤）

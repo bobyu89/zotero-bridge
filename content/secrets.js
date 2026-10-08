@@ -22,6 +22,8 @@
 		anthropicKey: { pref: "llm.anthropicKey", label: "Claude API key" },
 		openaiKey: { pref: "llm.openaiKey", label: "OpenAI API key" },
 		notionToken: { pref: "notion.token", label: "Notion integration token" },
+		// PubMed new-literature watch (pubmed-watch.js); never stored as a pref, the name only serves migration
+		ncbiKey: { pref: "pubmedWatch.apiKey", label: "NCBI API key" },
 	};
 
 	function checkName(name) {

@@ -48,3 +48,14 @@ pref("extensions.zotero-bridge.screening.reasons", "");
 pref("extensions.zotero-bridge.screening.notionParent", "");
 // Review page per collection ("library/collections/KEY" → Notion page ID), so a rerun updates it
 pref("extensions.zotero-bridge.screening.notionPages", "{}");
+// PubMed new-literature watch (content/pubmed-watch.js): saved searches (JSON array), per-watch
+// state (last check, PMIDs seen, queue), contact email for NCBI, PMIDs imported per watch and check,
+// automatic checks every N hours, AI notes for new papers after a manual check, daily Obsidian list
+pref("extensions.zotero-bridge.pubmedWatch.watches", "[]");
+pref("extensions.zotero-bridge.pubmedWatch.state", "{}");
+pref("extensions.zotero-bridge.pubmedWatch.email", "");
+pref("extensions.zotero-bridge.pubmedWatch.maxPerWatch", "50");
+pref("extensions.zotero-bridge.pubmedWatch.autoCheck", false);
+pref("extensions.zotero-bridge.pubmedWatch.intervalHours", "24");
+pref("extensions.zotero-bridge.pubmedWatch.runAI", false);
+pref("extensions.zotero-bridge.pubmedWatch.digest", true);
