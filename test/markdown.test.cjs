@@ -36,26 +36,33 @@ test("toRichText drops non-web links and chunks long text", () => {
 	assert.deepEqual(long.map(r => r.text.content.length), [2000, 2000, 500]);
 });
 
-test("mdToNotionBlocks converts the managed section to flat blocks", () => {
+test("mdToNotionBlocks converts the managed section and the Notion sections to flat blocks", () => {
+	// Obsidian: callouts become quotes; %% comments %% are dropped; 重點 first
 	let blocks = md.mdToNotionBlocks(core.buildManagedSection(sampleItem(), { aiMarkdown: AI_MD }));
-	let types = blocks.map(b => b.type);
-	assert.ok(!types.includes(undefined));
-	// Obsidian %% comments %% are dropped
 	assert.ok(!blocks.some(b => JSON.stringify(b).includes("zotero-bridge:start")));
-	assert.equal(blocks[0].type, "quote"); // the [!info] callout
-	assert.equal(blocks[0].quote.rich_text[0].text.content, "書目資訊");
-	assert.ok(types.includes("heading_2"));
+	assert.equal(blocks[0].type, "quote"); // the [!abstract] 重點 callout
+	assert.equal(blocks[0].quote.rich_text[0].text.content, "重點");
+	// Notion: 重點 as open blocks, each section as its own flat list of blocks (they go into toggles)
+	let { keyPoints, sections } = core.buildNoteSections(sampleItem(), { aiMarkdown: AI_MD, target: "notion" });
+	let head = md.mdToNotionBlocks(keyPoints);
+	assert.equal(head[0].type, "paragraph");
+	assert.deepEqual(head[0].paragraph.rich_text.map(r => r.text.content).slice(0, 2), ["一句話", "：護理師主導衛教可降低住院病人跌倒率 30%（"]);
+	let ai = md.mdToNotionBlocks(sections.find(sec => sec.id === "ai").md);
+	let types = ai.map(b => b.type);
+	assert.ok(!types.includes(undefined));
+	assert.ok(types.includes("heading_3"));
 	assert.ok(types.includes("bulleted_list_item"));
-	let nested = blocks.find(b => b.type === "bulleted_list_item" && b.bulleted_list_item.rich_text[0].text.content.includes("子項目"));
+	let nested = ai.find(b => b.type === "bulleted_list_item" && b.bulleted_list_item.rich_text[0].text.content.includes("子項目"));
 	assert.match(nested.bulleted_list_item.rich_text[0].text.content, /^\s+◦ 子項目$/);
-	for (let b of blocks) {
+	for (let b of [...blocks, ...head, ...sections.flatMap(sec => md.mdToNotionBlocks(sec.md))]) {
 		assert.equal(b[b.type].children, undefined, "blocks must be flat");
 		for (let r of b[b.type].rich_text || []) {
 			assert.ok(r.text.content.length <= 2000);
 		}
 	}
 	// Wikilinks become plain text in Notion
-	assert.ok(!JSON.stringify(blocks).includes("[["));
+	assert.ok(!JSON.stringify(ai).includes("[["));
+	assert.ok(!JSON.stringify(head).includes("[["));
 });
 
 test("mdToNotionBlocks handles code, dividers, todos and tables", () => {

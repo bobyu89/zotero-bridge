@@ -31,7 +31,8 @@
 	function parseInline(src) {
 		let tokens = [];
 		// Underscore emphasis only at word boundaries, so snake_case stays literal
-		let re = /(<u>[^<]+<\/u>)|(==[^=\n]+?==)|(`[^`]+`)|(\*\*[^*]+?\*\*|(?<![\p{L}\p{N}])__[^_]+?__(?![\p{L}\p{N}]))|(\*[^*\s][^*]*?\*|(?<![\p{L}\p{N}])_[^_\s][^_]*?_(?![\p{L}\p{N}]))|(\[\[[^\]]+\]\])|(\[[^\]]+\]\([^)\s]+\))/gu;
+		// <u> may hold "<" ("p < 0.05" in an AI-marked quote of the full-text note)
+		let re = /(<u>(?:(?!<\/u>)[^\n])+?<\/u>)|(==[^=\n]+?==)|(`[^`]+`)|(\*\*[^*]+?\*\*|(?<![\p{L}\p{N}])__[^_]+?__(?![\p{L}\p{N}]))|(\*[^*\s][^*]*?\*|(?<![\p{L}\p{N}])_[^_\s][^_]*?_(?![\p{L}\p{N}]))|(\[\[[^\]]+\]\])|(\[[^\]]+\]\([^)\s]+\))/gu;
 		let last = 0;
 		let m;
 		let push = (text, style = {}) => {
@@ -197,8 +198,9 @@
 				blocks.push(block("code", rich.length ? rich : [], { language: "plain text" }));
 				continue;
 			}
-			if ((m = /^!\[\[([^\]|]+?)(?:\|[^\]]*)?\]\]\s*$/.exec(line)) && opts.images && opts.images[m[1]]) {
-				// An embedded file uploaded with the File Upload API (annotation images); other embeds stay text
+			if ((m = /^\s*!\[\[([^\]|]+?)(?:\|[^\]]*)?\]\]\s*$/.exec(line)) && opts.images && opts.images[m[1]]) {
+				// An embedded file uploaded with the File Upload API (annotation images, also indented under
+				// their list item); other embeds stay text
 				flushPara();
 				blocks.push({ object: "block", type: "image", image: { type: "file_upload", file_upload: { id: opts.images[m[1]] } } });
 				continue;

@@ -272,6 +272,68 @@
 		}
 	}
 
+	// ---------- 劃線顏色與意義 (core.colorMeanings) ----------
+
+	const COLOR_PREF = "extensions.zotero-bridge.annotations.colorMeanings";
+	// Fallback names until Fluent translates zotero-bridge-color-name
+	const COLOR_NAMES = { yellow: "黃色", red: "紅色", green: "綠色", blue: "藍色", purple: "紫色", magenta: "洋紅", orange: "橘色", gray: "灰色" };
+
+	function readColorMeanings() {
+		let bridge = Zotero.ZoteroBridge;
+		return bridge.core.colorMeanings(Zotero.Prefs.get(COLOR_PREF, true) || "");
+	}
+
+	function writeColorMeanings(list) {
+		Zotero.Prefs.set(COLOR_PREF, JSON.stringify(list.map(m => ({ color: m.color, meaning: m.meaning }))), true);
+	}
+
+	/** One row per Zotero colour: swatch, name, its meaning, and buttons to move it up or down. */
+	function renderColorMeanings(focusID) {
+		let list = document.getElementById("zb-colors");
+		let bridge = Zotero.ZoteroBridge;
+		if (!list || !bridge || !bridge.core) return;
+		list.replaceChildren();
+		let meanings = readColorMeanings();
+		let defaults = new Map(bridge.core.DEFAULT_COLOR_MEANINGS.map(d => [d.color, d.meaning]));
+		let move = (from, to) => {
+			let all = readColorMeanings();
+			let [m] = all.splice(from, 1);
+			all.splice(to, 0, m);
+			writeColorMeanings(all);
+			renderColorMeanings(`zb-color-${to < from ? "up" : "down"}-${to}`);
+		};
+		meanings.forEach((m, i) => {
+			let row = el("li", { class: "zb-color" });
+			let swatch = el("span", { class: "zb-color-swatch", "aria-hidden": "true" });
+			// The annotation colour itself (Zotero's data), not a theme colour
+			swatch.style.backgroundColor = m.color;
+			let nameID = `zb-color-name-${i}`;
+			let name = el("span", { class: "zb-color-name", id: nameID });
+			setL10n(name, "zotero-bridge-color-name", COLOR_NAMES[m.info.name] || m.info.name, { color: m.info.name });
+			let input = el("input", { type: "text", id: `zb-color-${i}`, maxlength: "40", "aria-labelledby": nameID, placeholder: defaults.get(m.color) || "" });
+			input.value = m.meaning;
+			input.addEventListener("input", () => {
+				let all = readColorMeanings();
+				all[i].meaning = input.value.trim();
+				writeColorMeanings(all);
+			});
+			let up = el("button", { type: "button", class: "zb-color-move", id: `zb-color-up-${i}`, "aria-describedby": nameID });
+			setL10n(up, "zotero-bridge-color-up", "上移");
+			up.disabled = i === 0;
+			up.addEventListener("click", () => move(i, i - 1));
+			let down = el("button", { type: "button", class: "zb-color-move", id: `zb-color-down-${i}`, "aria-describedby": nameID });
+			setL10n(down, "zotero-bridge-color-down", "下移");
+			down.disabled = i === meanings.length - 1;
+			down.addEventListener("click", () => move(i, i + 1));
+			row.append(swatch, name, input, up, down);
+			list.append(row);
+		});
+		// Keep keyboard focus on the moved row (a disabled button at the end hands it to the other one)
+		let target = focusID && document.getElementById(focusID);
+		if (target && target.disabled) target = document.getElementById(focusID.replace(/-(up|down)-/, (all, d) => (d === "up" ? "-down-" : "-up-")));
+		if (target) target.focus();
+	}
+
 	// ---------- 功能: presets and feature switches (features.js) ----------
 
 	const ZB_PREF = "extensions.zotero-bridge.";
@@ -473,6 +535,7 @@
 			renderWatches();
 			renderSearchSources();
 			setupClassify();
+			renderColorMeanings();
 			updateProviderBoxes();
 			renderUsage();
 			loadSecrets();
@@ -570,6 +633,35 @@
 			if (!bridge || !ta) return;
 			ta.value = bridge.synthesis.DEFAULT_SYNTHESIS_PROMPT;
 			ta.dispatchEvent(new Event("input"));
+		},
+
+		resetColorMeanings() {
+			Zotero.Prefs.set(COLOR_PREF, "", true);
+			renderColorMeanings();
+		},
+
+		async pickMarkitdown() {
+			const { FilePicker } = ChromeUtils.importESModule("chrome://zotero/content/modules/filePicker.mjs");
+			let fp = new FilePicker();
+			fp.init(window, "選擇 markitdown 執行檔", fp.modeOpen);
+			if (await fp.show() !== fp.returnOK) return;
+			let input = document.getElementById("zb-markitdown-path");
+			input.value = fp.file;
+			input.dispatchEvent(new Event("input"));
+		},
+
+		/** 「把 Notion 欄位改成中文」: main.js lists the renames and asks before changing anything. */
+		async renameNotionColumns() {
+			let status = document.getElementById("zb-notion-status");
+			status.textContent = "讀取 Notion 欄位中…";
+			try {
+				await flushSecrets();
+				let lines = await Zotero.ZoteroBridge.main.renameNotionColumns(window);
+				status.textContent = lines.join("\n");
+			}
+			catch (e) {
+				status.textContent = `❌ ${e.message || e}`;
+			}
 		},
 
 		async testNotion() {

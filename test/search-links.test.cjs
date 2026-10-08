@@ -363,15 +363,16 @@ test("Obsidian callout: find links, similar articles, MeSH, PICO; Notion keeps t
 	assert.doesNotMatch(sl.noteCallout({ title: "中文題名" }, null, cfg), /airiti|ndltd|embase/);
 });
 
-test("the callout sits in the managed region after the info callout, and a heavy one stays within Notion's limits", () => {
+test("the callout sits folded in the managed region after the abstract, before the bibliographic info, and a heavy one stays within Notion's limits", () => {
 	let cfg = sl.normalizeConfig({});
 	let data = Object.assign(sampleItem(), { extra: "PMID: 1", tags: Array.from({ length: 20 }, (_, i) => `Heading Number ${i}`) });
 	let study = { population: "a b, c d, e f, g h", intervention: "i j, k l, m n, o p", comparison: "q r", outcomes: "s t, u v, w x, y z" };
 	let callout = sl.noteCallout(data, study, cfg);
 	let note = core.buildObsidianNote(null, data, { searchCallout: callout, now: "2026-10-08T00:00:00Z" });
 	let region = note.slice(note.indexOf("%% zotero-bridge:start"), note.indexOf("%% zotero-bridge:end %%"));
-	assert.ok(region.includes("> [!info] 書目資訊"));
-	assert.ok(region.indexOf("> [!search]- 🔎 延伸搜尋") > region.indexOf("> [!info] 書目資訊"));
+	assert.ok(region.includes("> [!info]- 書目資訊"));
+	assert.ok(region.indexOf("> [!search]- 🔎 延伸搜尋") > region.indexOf("> [!info]- 摘要（Abstract）"));
+	assert.ok(region.indexOf("> [!search]- 🔎 延伸搜尋") < region.indexOf("> [!info]- 書目資訊"));
 	// Re-syncing replaces it, never duplicates it; without it the region has none
 	let again = core.buildObsidianNote(note, data, { searchCallout: callout, now: "2026-10-09T00:00:00Z" });
 	assert.equal(again.match(/\[!search\]/g).length, 1);

@@ -206,10 +206,21 @@ function notionMock(log, state) {
 			});
 			return ok({ results: [{ id }] });
 		}
-		if ((m = /^blocks\/(container-page-\d+)\/children\?/.exec(p))) return ok({ results: state.containers[m[1]] || [], has_more: false });
-		if ((m = /^blocks\/(container-page-\d+)\/children$/.exec(p))) {
+		if ((m = /^blocks\/((?:container|toggle)-page-[\w-]+)\/children\?/.exec(p))) return ok({ results: state.containers[m[1]] || [], has_more: false });
+		if ((m = /^blocks\/((?:container|toggle)-page-[\w-]+)\/children$/.exec(p))) {
 			state.appended.push({ container: m[1], body });
-			return ok({ results: body.children.map((b, i) => ({ id: `t${i}` })) });
+			// Toggles (the folded sections) keep their children, listed back with ids and plain_text
+			return ok({ results: body.children.map((b, i) => {
+				let id = `toggle-${m[1].replace(/^\w+-/, "")}-${state.appended.length}-${i}`;
+				if (b.type === "toggle") {
+					state.containers[id] = b.toggle.children.map((c, k) => {
+						let copy = JSON.parse(JSON.stringify(c));
+						for (let r of (copy[copy.type] && copy[copy.type].rich_text) || []) r.plain_text = r.text.content;
+						return Object.assign({ id: `${id}-b${k}` }, copy);
+					});
+				}
+				return { id };
+			}) });
 		}
 		return { status: 404, ok: false, headers: { get: () => null }, text: async () => JSON.stringify({ message: p }) };
 	};
@@ -380,7 +391,7 @@ test("文獻評讀表: pane prefilled from the AI note → answers, B reviewer, 
 	assert.match(chenMd, /\nappraisal_tool: "CASP Checklist: For Randomised Controlled Trials \(RCTs\) \(2024\)"\n/);
 	assert.match(chenMd, /\nappraisal_overall: "需更多資訊"\n/);
 	assert.match(chenMd, /\nappraisal_verified: true\n/);
-	assert.match(chenMd, /\n## 文獻評讀表\n\n> \[!success\] 已核對（\d{4}-\d{2}-\d{2}）\n/);
+	assert.match(chenMd, /\n> \[!example\]- 文獻評讀表\n> > \[!success\] 已核對（\d{4}-\d{2}-\d{2}）\n/);
 	assert.match(chenMd, /\| 3\. 所有進入研究的受試者在研究結束時是否都有交代？ \| 否 \| 流失 25%，未做 ITT \|/);
 	assert.match(chenMd, /\*\*整體評價\*\*：需更多資訊 — 研究品質尚可/);
 	assert.match(chenMd, /\*\*雙人評讀\*\*：評讀者 A／B；κ = 0\.50/);
@@ -388,7 +399,7 @@ test("文獻評讀表: pane prefilled from the AI note → answers, B reviewer, 
 	let leeMd = fs.readFileSync(path.join(vault, "Zotero", "lee2021.md"), "utf8");
 	assert.match(leeMd, /\nappraisal_tool: "JBI Checklist for Randomized Controlled Trials"\n/);
 	assert.match(leeMd, /\nappraisal_verified: false\n/);
-	assert.match(leeMd, /## 文獻評讀表\n\n> \[!warning\] AI 初評，尚未核對\n> 評讀工具：\[JBI Critical Appraisal Tool/);
+	assert.match(leeMd, /> \[!example\]- 文獻評讀表\n> > \[!warning\] AI 初評，尚未核對\n> > 評讀工具：\[JBI Critical Appraisal Tool/);
 	assert.match(leeMd, /\| 2\. 分派至各組的過程是否隱匿？ \| 是 \| 中央分派 \|/);
 
 	let chenPage = state.pages.get(`library/${chen.key}`);
@@ -398,16 +409,20 @@ test("文獻評讀表: pane prefilled from the AI note → answers, B reviewer, 
 	let leePage = state.pages.get(`library/${lee.key}`);
 	assert.deepEqual(leePage.properties["Appraisal Verified"], { checkbox: false });
 	assert.deepEqual(leePage.properties["Appraisal Tool"], { select: { name: "JBI Checklist for Randomized Controlled Trials" } });
-	// The table: a real table block right after the status callout under 「文獻評讀表」
-	let blocks = state.containers[`container-${chenPage.id}`];
+	// The table: a real table block right after the status callout under 「文獻評讀表」, inside its folded toggle
+	let sections = state.appended.find(a => a.container === `container-${chenPage.id}`);
+	let at = sections.body.children.findIndex(t => t.type === "toggle" && t.toggle.rich_text[0].text.content === "文獻評讀表");
+	assert.ok(at >= 0, "a 文獻評讀表 toggle in the container");
+	let toggleID = `toggle-${chenPage.id}-${state.appended.indexOf(sections) + 1}-${at}`;
+	let blocks = state.containers[toggleID];
 	let heading = blocks.findIndex(b => b.type === "heading_2" && b.heading_2.rich_text.map(r => r.plain_text).join("") === "文獻評讀表");
-	assert.ok(heading > 0);
+	assert.ok(heading >= 0);
 	assert.doesNotMatch(JSON.stringify(blocks), /評讀項目 ｜/, "no paragraph rows for the table");
-	let append = state.appended.find(a => a.container === `container-${chenPage.id}`);
+	let append = state.appended.find(a => a.container === toggleID);
 	assert.equal(append.body.after, blocks[heading + 1].id);
 	assert.equal(append.body.children[0].type, "table");
 	assert.equal(append.body.children[0].table.children.length, 14);
-	assert.equal(state.appended.length, 2, "one table per page");
+	assert.equal(state.appended.filter(a => a.body.children[0].type === "table").length, 2, "one table per page");
 
 	// ---- Collection summary from the collection menu ----
 	let collection = { id: 7, key: "COLL0001", name: "跌倒實證", libraryID: 1, getChildItems: () => [chen, lee, wu] };

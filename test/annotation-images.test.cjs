@@ -90,25 +90,31 @@ test("Obsidian: the image is embedded under the caption, before the comment", ()
 	data.attachments[0].annotations[2].comment = "Table 2：主要結果";
 	let withEmbed = images.withImages(data, ann => ({ embed: `Zotero/attachments/ABCD1234-${ann.key}.png` }));
 	let md = core.annotationsMarkdown(withEmbed);
-	assert.match(md, /> 🟢 \*\[圖片註記\]\* — \[p\. 7\]\(zotero:\/\/open-pdf\/library\/items\/PDF00001\?page=7&annotation=ANN00003\)\n\n!\[\[Zotero\/attachments\/ABCD1234-ANN00003\.png\]\]\n\n💬 Table 2：主要結果/);
+	assert.match(md, /^- 🟢 \*\[圖片註記\]\* · \[p\. 7\]\(zotero:\/\/open-pdf\/library\/items\/PDF00001\?page=7&annotation=ANN00003\)\n {2}!\[\[Zotero\/attachments\/ABCD1234-ANN00003\.png\]\]\n {2}💬 Table 2：主要結果$/m);
+	// Inside the note's folded callout too
+	let note = core.buildManagedSection(withEmbed, {});
+	assert.match(note, /^> - 🟢 \*\[圖片註記\]\* · \[p\. 7\]\([^)]+\)\n> {3}!\[\[Zotero\/attachments\/ABCD1234-ANN00003\.png\]\]\n> {3}💬 Table 2：主要結果$/m);
 	// Without an image (export off or not renderable) the caption and comment stay as before
 	let plain = core.annotationsMarkdown(data);
 	assert.doesNotMatch(plain, /!\[\[/);
-	assert.match(plain, /> 🟢 \*\[圖片註記\]\* — \[p\. 7\]\([^)]+\)\n\n💬 Table 2：主要結果/);
+	assert.match(plain, /^- 🟢 \*\[圖片註記\]\* · \[p\. 7\]\([^)]+\)\n {2}💬 Table 2：主要結果$/m);
 	// Ink annotations get the same treatment
 	data.attachments[0].annotations[2].type = "ink";
 	let ink = core.annotationsMarkdown(images.withImages(data, () => ({ embed: "a/b.png" })));
-	assert.match(ink, /\*\[手繪註記\]\* — \[p\. 7\]\([^)]+\)\n\n!\[\[a\/b\.png\]\]/);
+	assert.match(ink, /\*\[手繪註記\]\* · \[p\. 7\]\([^)]+\)\n {2}!\[\[a\/b\.png\]\]/);
 });
 
 test("Notion: an uploaded image becomes an image block in place; other embeds stay text", () => {
 	let data = images.withImages(sampleItem(), ann => ({ embed: `ABCD1234-${ann.key}.png` }));
-	let md = core.buildManagedSection(data, {});
-	let blocks = markdown.mdToNotionBlocks(md, { images: { "ABCD1234-ANN00003.png": "fu-1" } });
+	// Notion: the 研究方法 (green) section's blocks go into its toggle
+	let { sections } = core.buildNoteSections(data, { target: "notion" });
+	let green = sections.find(sec => sec.id === "annotations:#5fb236");
+	assert.equal(green.color, "green_background");
+	let blocks = markdown.mdToNotionBlocks(green.md, { images: { "ABCD1234-ANN00003.png": "fu-1" } });
 	let i = blocks.findIndex(b => b.type === "image");
 	assert.deepEqual(blocks[i], { object: "block", type: "image", image: { type: "file_upload", file_upload: { id: "fu-1" } } });
-	assert.equal(blocks[i - 1].type, "quote");
-	assert.match(blocks[i - 1].quote.rich_text.map(r => r.text.content).join(""), /\[圖片註記\]/);
+	assert.equal(blocks[i - 1].type, "bulleted_list_item");
+	assert.match(blocks[i - 1].bulleted_list_item.rich_text.map(r => r.text.content).join(""), /\[圖片註記\]/);
 	assert.equal(blocks.filter(b => b.type === "image").length, 1);
 	// Not uploaded → no image block (and the plugin doesn't write the embed for Notion in that case)
 	let none = markdown.mdToNotionBlocks("![[x.png]]\n\n![[ABCD1234-ANN00003.png|300]]", { images: { "ABCD1234-ANN00003.png": "fu-2" } });

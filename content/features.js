@@ -31,7 +31,7 @@
 	}
 })(this, function (scope) {
 	const PREF = "extensions.zotero-bridge.";
-	// Bumped when a later version needs another one-time migration (2: 文獻自動分類, AI 主題分類 and the toolbar button)
+	// Bumped when a later version needs another one-time migration (see MIGRATIONS)
 	const MIGRATION_PREF = "features.version";
 	const MIGRATION_VERSION = 2;
 
@@ -89,6 +89,10 @@
 		{ id: "concepts", group: "organize", pref: "feature.concepts", presets: { guided: true, advanced: true },
 			label: "概念卡片",
 			desc: "把筆記裡的 [[概念]] 整理成卡片和索引，看得出哪些文獻談同一件事。不呼叫 AI。" },
+		{ id: "fullTextMarkdown", group: "organize", pref: "feature.fullTextMarkdown", presets: { guided: true, advanced: true },
+			requires: ["sync"], since: 2,
+			label: "全文筆記",
+			desc: "把 PDF 全文整理成 Markdown 存成一份筆記，你的劃線依顏色標在原文位置；送給 AI 的全文也改用它，省下參考文獻的 token。不呼叫 AI。" },
 		{ id: "autoClassify", group: "organize", pref: "feature.autoClassify", presets: { guided: true, advanced: true }, since: 2,
 			label: "文獻自動分類",
 			desc: "依研究設計、PICO 和你寫的規則建議 Zotero 子分類，你勾選後才放進去，也能整批復原。" },
@@ -121,6 +125,10 @@
 			usesAI: true, usesNetwork: true, requires: ["aiNotes"],
 			label: "批次 API",
 			desc: "一次產生很多篇 AI 筆記時改用 Claude 批次 API：約半價，但最久要等 24 小時。" },
+		{ id: "aiHighlights", group: "ai", pref: "feature.aiHighlights", presets: { guided: false, advanced: true },
+			usesAI: true, usesNetwork: true, requires: ["aiNotes"], since: 2,
+			label: "AI 標重點",
+			desc: "產生 AI 筆記時順便請 AI 挑出幾句關鍵原句，核對後用跟你的劃線不同的記號標出，僅供參考。不另外呼叫 AI。" },
 		{ id: "synthesis", group: "ai", pref: "feature.synthesis", presets: { guided: false, advanced: true }, usesAI: true, usesNetwork: true,
 			label: "文獻比較表",
 			desc: "選幾篇文獻，讓 AI 做比較表、主題整理和研究缺口。" },
@@ -268,45 +276,66 @@
 	}
 
 	/**
-	 * Once per profile and version, at startup.
-	 * From 0 (before the switches): an install used before gets the new switches on (advanced), so
-	 * nothing it did disappears; prefs that existed before keep their values. A fresh install keeps the
-	 * guided defaults. Returns { preset, evidence }.
-	 * From a later version (the switches existed): the switches added since then follow the profile's
-	 * preset: a profile on 進階 (every earlier switch at its advanced value) gets them at their advanced
-	 * value, any other profile keeps the defaults. Returns { preset, evidence: [], added }.
-	 * Returns null once the profile is up to date.
+	 * Step 1 (the switches arrive): an install used before the switches existed gets everything on
+	 * (advanced), so nothing it did disappears; prefs that existed before keep their values. A fresh
+	 * install keeps the guided defaults. Returns { preset, evidence }.
+	 */
+	function migrateSwitches(s) {
+		let evidence = priorUse(key => s.get(key));
+		if (evidence.length) {
+			// Written even where the default matches, so a later default change can't switch them off
+			for (let f of FEATURES) {
+				if (!f.reused) setEnabled(f.id, f.presets.advanced);
+				// A reused pref that was off by default (the batch API) is turned on too, unless the
+				// user set it themselves, so an upgrade lands on a clean 進階
+				else if (f.presets.advanced !== f.presets.guided && !userSet(s, f.pref)) setEnabled(f.id, f.presets.advanced);
+			}
+		}
+		return { preset: evidence.length ? "advanced" : "guided", evidence };
+	}
+
+	/**
+	 * A later step that adds switches: a profile on 進階 (every switch from earlier versions at its
+	 * advanced value) gets the new switches at their advanced value too, so it stays 進階; any other
+	 * profile keeps the new switches' guided defaults. Switches the user already set are left alone.
+	 * Returns true when it moved the profile along.
+	 */
+	function migrateNewSwitches(s, version) {
+		let older = FEATURES.filter(f => f.since < version);
+		if (!older.every(f => rawValue(f.id) === f.presets.advanced)) return false;
+		for (let f of FEATURES.filter(x => x.since === version)) {
+			// Written even where the default matches, so a later default change can't switch them off
+			if (!userSet(s, f.pref)) setEnabled(f.id, f.presets.advanced);
+		}
+		return true;
+	}
+
+	// One-time steps, in order; MIGRATION_PREF records the last one done. Each step is its own entry,
+	// so steps from different branches merge as separate lines.
+	const MIGRATIONS = [
+		{ version: 1, run: s => migrateSwitches(s) },
+		// v0.10.0: 全文筆記, 文獻自動分類, 工具列按鈕, AI 標重點 and AI 主題分類 (every switch marked since: 2).
+		// added: those switches; newSwitches: whether the profile was on 進階 and got them on
+		{ version: 2, run: s => ({ added: FEATURES.filter(f => f.since === 2).map(f => f.id), newSwitches: migrateNewSwitches(s, 2) }) },
+	];
+
+	/**
+	 * Once per profile and version, at startup: run the one-time steps this profile hasn't had yet.
+	 * Returns null when there was nothing to do, else { preset, evidence, steps, added, newSwitches }
+	 * (preset/evidence from step 1 when it ran, else the current preset after the later steps).
 	 */
 	function migrate() {
 		let s = store();
 		let done = Number(s.get(MIGRATION_PREF)) || 0;
 		if (done >= MIGRATION_VERSION) return null;
-		let result;
-		if (done < 1) {
-			let evidence = priorUse(key => s.get(key));
-			if (evidence.length) {
-				// Written even where the default matches, so a later default change can't switch them off
-				for (let f of FEATURES) {
-					if (!f.reused) setEnabled(f.id, f.presets.advanced);
-					// A reused pref that was off by default (the batch API) is turned on too, unless the
-					// user set it themselves, so an upgrade lands on a clean 進階
-					else if (f.presets.advanced !== f.presets.guided && !userSet(s, f.pref)) setEnabled(f.id, f.presets.advanced);
-				}
-			}
-			result = { preset: evidence.length ? "advanced" : "guided", evidence };
+		let result = { preset: null, evidence: [], steps: [] };
+		for (let step of MIGRATIONS) {
+			if (step.version <= done) continue;
+			Object.assign(result, step.run(s));
+			result.steps.push(step.version);
+			s.set(MIGRATION_PREF, step.version);
 		}
-		else {
-			let earlier = FEATURES.filter(f => f.since <= done);
-			let added = FEATURES.filter(f => f.since > done);
-			let advanced = earlier.every(f => rawValue(f.id) === f.presets.advanced);
-			if (advanced) {
-				for (let f of added) {
-					if (!userSet(s, f.pref)) setEnabled(f.id, f.presets.advanced);
-				}
-			}
-			result = { preset: advanced ? "advanced" : presetOf(snapshot()), evidence: [], added: added.map(f => f.id) };
-		}
-		s.set(MIGRATION_PREF, MIGRATION_VERSION);
+		if (!result.preset) result.preset = currentPreset();
 		return result;
 	}
 
@@ -339,7 +368,7 @@
 	}
 
 	return {
-		PREF, MIGRATION_PREF, MIGRATION_VERSION, GROUPS, PRESETS, FEATURES, PRIOR_USE,
+		PREF, MIGRATION_PREF, MIGRATION_VERSION, MIGRATIONS, GROUPS, PRESETS, FEATURES, PRIOR_USE,
 		setStore, get, rawValue, isEnabled, setEnabled, snapshot, restore, applyPreset, presetOf, currentPreset,
 		priorUse, migrate, gateMenus, prefKeys,
 	};

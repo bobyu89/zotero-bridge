@@ -311,7 +311,8 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
             <tr><th scope="row">概念卡片 AI 綜整<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">AI 為一個概念綜整多篇文獻。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
             <tr><th scope="row">AI 主題分類<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">自動分類時由 AI 判斷文獻屬於你列的哪些主題，結果仍由你勾選。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
             <tr><th scope="row">批次 API<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">一次產生大量 AI 筆記時用批次 API，約半價、最長等 24 小時。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
-            <tr class="rest"><th scope="row">其他功能<span class="what">同步、閱讀狀態、評讀表、PRISMA 篩選、資料庫搜尋連結、文獻自動分類（研究設計、規則、PICO）、工具列按鈕等，兩種組合一樣。</span></th><td class="st"><span class="sw on"><i></i><b>開</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
+            <tr><th scope="row">AI 標重點<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">寫 AI 筆記時順便挑幾句關鍵原句，核對後標在全文筆記裡，僅供參考。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
+            <tr class="rest"><th scope="row">其他功能<span class="what">同步、全文筆記、閱讀狀態、評讀表、PRISMA 篩選、資料庫搜尋連結、文獻自動分類（研究設計、規則、PICO）、工具列按鈕等，兩種組合一樣。</span></th><td class="st"><span class="sw on"><i></i><b>開</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
           </tbody>
         </table>
       </div>
@@ -401,7 +402,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
           <li><span>清單裡出現 <b>Zotero Bridge</b> 就安裝完成。之後有新版本，Zotero 會自動更新。</span></li>
         </ol>
         <div class="note info"><p>Zotero 介面如果是中文，選單位置相同，只是名稱換成中文。</p></div>
-        <div class="note tip"><p><strong>功能組合：</strong>第一次打開設定頁，組合是「研究生引導」：自動找文獻（PubMed 追蹤、引文追蹤）和 AI 寫作（文獻比較表、草稿、進度報告、概念卡片 AI 綜整、批次 API）先關著，其他照常可用。需要時再逐一打開，或直接選「進階」全部打開。</p></div>
+        <div class="note tip"><p><strong>功能組合：</strong>第一次打開設定頁，組合是「研究生引導」：自動找文獻（PubMed 追蹤、引文追蹤）和 AI 寫作（文獻比較表、草稿、進度報告、概念卡片 AI 綜整、AI 主題分類、批次 API、AI 標重點）先關著，其他照常可用。需要時再逐一打開，或直接選「進階」全部打開。</p></div>
         <div class="check">
           <h3>打勾確認</h3>
           <label><input type="checkbox" id="c2a"><span class="box"></span><span>外掛清單裡看得到 <b>Zotero Bridge</b>，而且是啟用狀態。</span></label>
@@ -467,9 +468,9 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
           <li><span>在 Notion 新增一個空白的 <b>Database（Table）</b>，例如命名「Zotero 文獻資料庫」。已經有就直接用。</span></li>
           <li><span>打開資料庫，右上角 <kbd>•••</kbd> › <kbd>Connections</kbd>，加入剛剛建立的 <b>Zotero Bridge</b> integration。<b>少了這一步，外掛會沒有權限寫入。</b></span></li>
           <li><span>右上角 <kbd>•••</kbd> › <kbd>Copy link</kbd>，把資料庫連結貼到「預設資料庫連結」。</span></li>
-          <li><span>按 <kbd>測試連線並補齊資料庫欄位</kbd>。看到 ✅ 就完成了，外掛會自動建立 Authors、Year、Publication、DOI、Abstract 等書目欄位。</span></li>
+          <li><span>按 <kbd>測試連線並補齊資料庫欄位</kbd>。看到 ✅ 就完成了，外掛會自動建立 作者、年份、期刊、DOI、摘要、閱讀狀態、研究設計、證據等級 等中文欄位。</span></li>
         </ol>
-        <div class="note warn"><p><strong>欄位名稱不要改：</strong>外掛是靠名稱寫入的。你可以自由新增自己的欄位（例如「閱讀狀態」「評分」），外掛不會動它們。</p></div>
+        <div class="note warn"><p><strong>欄位可以改名，但不要刪除或改類型：</strong>同步過一次後，外掛會記住每個欄位，改名後照樣寫得進去。你可以自由新增自己的欄位（例如「評分」），外掛不會動它們。以前用英文欄位（Authors、Year…）的資料庫照常可用；想換成中文，在設定按 <kbd>把 Notion 欄位改成中文…</kbd>，確認要改的欄位後才會改名。</p></div>
 
         <details class="more trouble">
           <summary>選用：文獻比較表也要放進 Notion</summary>

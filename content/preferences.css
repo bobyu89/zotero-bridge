@@ -327,3 +327,52 @@
 	flex: 1;
 	min-width: 12em;
 }
+
+/* ---------- 劃線顏色與意義 ---------- */
+
+.zotero-bridge-prefs .zb-colors {
+	max-width: var(--zb-measure);
+	margin: 0 0 var(--zb-space-2);
+	padding: 0;
+	list-style: none;
+}
+.zotero-bridge-prefs .zb-color {
+	display: grid;
+	grid-template-columns: 0.9em 4.5em minmax(8em, 1fr) auto auto;
+	align-items: center;
+	gap: var(--zb-space-2);
+	padding: var(--zb-space-1) 0;
+}
+.zotero-bridge-prefs .zb-color + .zb-color {
+	border-top: 1px solid var(--zb-line);
+}
+/* The annotation colour is data (set inline); the ring keeps light colours visible on any theme */
+.zotero-bridge-prefs .zb-color-swatch {
+	width: 0.9em;
+	height: 0.9em;
+	border-radius: 50%;
+	box-sizing: border-box;
+	border: 1px solid var(--zb-line);
+}
+.zotero-bridge-prefs .zb-color-name {
+	color: var(--zb-text-muted);
+}
+.zotero-bridge-prefs .zb-color html|input[type="text"] {
+	min-width: 0;
+	width: 100%;
+}
+.zotero-bridge-prefs .zb-color-move {
+	font: inherit;
+}
+.zotero-bridge-prefs .zb-color-move:disabled {
+	opacity: 0.4;
+}
+
+/* A label above its input (全文筆記) */
+.zotero-bridge-prefs .zb-field {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--zb-space-1) var(--zb-space-2);
+	margin: var(--zb-space-1) 0 var(--zb-space-2);
+}

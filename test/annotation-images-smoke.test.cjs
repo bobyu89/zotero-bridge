@@ -238,6 +238,9 @@ function notionMock(log, opts = {}) {
 		if (/^pages\/[^/]+$/.test(p)) return ok([...pages.values()].find(pg => p.endsWith(pg.id)));
 		if (/^blocks\/page-\d+\/children\?/.test(p)) return ok({ results: [], has_more: false });
 		if (/^blocks\/page-\d+\/children$/.test(p)) return ok({ results: [{ id: "container-1" }] });
+		// The folded sections: toggles appended to the container
+		if (/^blocks\/[\w-]+\/children$/.test(p) && init.method === "PATCH") return ok({ results: (body.children || []).map((c, i) => ({ id: `toggle-${i + 1}` })) });
+		if (/^blocks\/[\w-]+\/children\?/.test(p)) return ok({ results: [], has_more: false });
 		return { status: 404, ok: false, headers: { get: () => null }, text: async () => JSON.stringify({ message: p }) };
 	};
 	return { fetch, uploads };
@@ -320,11 +323,12 @@ test("image and ink annotations: vault copies, Notion uploads, Claude image bloc
 	assert.ok(fs.readFileSync(path.join(attachments, `${ITEM_KEY}-INK33333.png`)).equals(ink));
 	let note = fs.readFileSync(path.join(env.vault, "Zotero", `paper${ITEM_KEY.toLowerCase()}.md`), "utf8");
 	let at = s => note.indexOf(s);
-	assert.match(note, new RegExp(`> 🟢 \\*\\[圖片註記\\]\\* — \\[p\\. 6\\]\\([^)]+\\)\\n\\n!\\[\\[Zotero/attachments/${ITEM_KEY}-IMG22222\\.png\\]\\]\\n\\n💬 Table 2：主要結果`));
-	assert.match(note, new RegExp(`> 🔵 \\*\\[手繪註記\\]\\* — \\[p\\. 7\\]\\([^)]+\\)\\n\\n!\\[\\[Zotero/attachments/${ITEM_KEY}-INK33333\\.png\\]\\]`));
-	assert.match(note, /> 🟡 \*\[圖片註記\]\* — \[p\. 8\]\([^)]+\)\n\n💬 Figure 3/, "an image that can't be produced keeps its caption and comment");
+	assert.match(note, new RegExp(`^> - 🟢 \\*\\[圖片註記\\]\\* · \\[p\\. 6\\]\\([^)]+\\)\\n> {3}!\\[\\[Zotero/attachments/${ITEM_KEY}-IMG22222\\.png\\]\\]\\n> {3}💬 Table 2：主要結果$`, "m"));
+	assert.match(note, new RegExp(`^> - 🔵 \\*\\[手繪註記\\]\\* · \\[p\\. 7\\]\\([^)]+\\)\\n> {3}!\\[\\[Zotero/attachments/${ITEM_KEY}-INK33333\\.png\\]\\]`, "m"));
+	assert.match(note, /^> - 🟡 \*\[圖片註記\]\* · \[p\. 8\]\([^)]+\)\n> {3}💬 Figure 3$/m, "an image that can't be produced keeps its caption and comment");
 	assert.doesNotMatch(note, /IMG44444\.png/);
-	assert.ok(at("==🟡Falls decreased==") < at("IMG22222.png") && at("IMG22222.png") < at("INK33333.png") && at("INK33333.png") < at("Figure 3"));
+	// Grouped by colour meaning (yellow 重要發現, green 研究方法, blue 可引用句), in reading order within a group
+	assert.ok(at("==🟡Falls decreased== ·") < at("Figure 3") && at("Figure 3") < at("IMG22222.png") && at("IMG22222.png") < at("INK33333.png"));
 
 	// Notion: each PNG uploaded (create + multipart send) and attached as an image block in the container
 	assert.equal(env.uploads.length, 2);
@@ -345,16 +349,18 @@ test("image and ink annotations: vault copies, Notion uploads, Claude image bloc
 		assert.ok(up.sent.body.equals(expected), "multipart body");
 	}
 	let container = env.log.find(l => l.path === "blocks/page-1/children" && l.method === "PATCH");
-	let children = container.body.children[0].callout.children;
+	// The annotations are in their meaning's toggle inside the container
+	let sections = env.log.find(l => l.path === "blocks/container-1/children" && l.method === "PATCH");
+	let children = sections.body.children.flatMap(t => t.toggle.children);
 	let imageBlocks = children.filter(b => b.type === "image");
 	assert.deepEqual(imageBlocks, [
 		{ object: "block", type: "image", image: { type: "file_upload", file_upload: { id: "fu-1" } } },
 		{ object: "block", type: "image", image: { type: "file_upload", file_upload: { id: "fu-2" } } },
 	]);
 	let i1 = children.indexOf(imageBlocks[0]);
-	assert.match(children[i1 - 1].quote.rich_text.map(r => r.text.content).join(""), /\[圖片註記\].*p\. 6/);
+	assert.match(children[i1 - 1].bulleted_list_item.rich_text.map(r => r.text.content).join(""), /\[圖片註記\].*p\. 6/);
 	assert.match(children[i1 + 1].paragraph.rich_text.map(r => r.text.content).join(""), /💬 Table 2：主要結果/);
-	assert.doesNotMatch(JSON.stringify(container.body), /!\s*ITEM2345|attachments\//, "no wikilink text in Notion");
+	assert.doesNotMatch(JSON.stringify([container.body, sections.body]), /!\s*ITEM2345|attachments\//, "no wikilink text in Notion");
 	// The uploads happen before the container is written (they expire if not attached within an hour)
 	let paths = env.log.filter(l => l.api === "notion").map(l => l.path);
 	assert.ok(paths.lastIndexOf("file_uploads") < paths.indexOf("blocks/page-1/children"));
@@ -417,9 +423,9 @@ test("Notion uploads that can't be made never fail the sync", async () => {
 	assert.match(lines[0].text, /⚠️ 這個 Zotero 版本無法上傳檔案到 Notion，圖片劃線只同步評註/);
 	assert.doesNotMatch(lines[1].text, /無法上傳/);
 	assert.equal(env.uploads.length, 0);
-	let container = env.log.find(l => l.path === "blocks/page-1/children" && l.method === "PATCH");
-	assert.ok(!container.body.children[0].callout.children.some(b => b.type === "image"));
-	assert.match(JSON.stringify(container.body), /💬 Table 1/);
+	let sections = env.log.find(l => l.path === "blocks/container-1/children" && l.method === "PATCH");
+	assert.ok(!sections.body.children.flatMap(t => t.toggle.children).some(b => b.type === "image"));
+	assert.match(JSON.stringify(sections.body), /💬 Table 1/);
 	// Obsidian still gets the image
 	assert.ok(fs.existsSync(path.join(env.vault, "Zotero", "attachments", "AAAA2345-IMG55555.png")));
 	await vm.runInContext("shutdown()", env.context);
@@ -437,8 +443,8 @@ test("Notion uploads that can't be made never fail the sync", async () => {
 	assert.equal(line.error, undefined, line.text);
 	assert.match(line.text, /⚠️ 2 張圖片無法上傳到 Notion（保留評註）/);
 	assert.equal(env2.log.filter(l => l.path === "file_uploads").length, 1, "stops after the first refusal");
-	let container2 = env2.log.find(l => l.path === "blocks/page-1/children" && l.method === "PATCH");
-	assert.match(JSON.stringify(container2.body), /💬 Fig 1/);
+	let sections2 = env2.log.find(l => l.path === "blocks/container-1/children" && l.method === "PATCH");
+	assert.match(JSON.stringify(sections2.body), /💬 Fig 1/);
 	assert.equal(env2.errors.length, 1, "the refusal is logged");
 	await vm.runInContext("shutdown()", env2.context);
 });

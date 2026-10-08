@@ -18,12 +18,12 @@
  */
 (function (root, factory) {
 	if (typeof module === "object" && module.exports) {
-		module.exports = factory(require("./core.js"), globalThis);
+		module.exports = factory(require("./core.js"), globalThis, require("./notion.js"));
 	}
 	else {
-		(root.ZB = root.ZB || {}).status = factory(root.ZB.core, root);
+		(root.ZB = root.ZB || {}).status = factory(root.ZB.core, root, root.ZB.notion);
 	}
-})(this, function (core, scope) {
+})(this, function (core, scope, notion) {
 	const PREF = "extensions.zotero-bridge.";
 	const DEFAULT_PREFIX = "狀態/";
 	const DEFAULT_STATUS = core.STATUSES[0];
@@ -140,9 +140,9 @@
 		return fm === frontmatter ? text : `---\n${fm}\n---\n` + body;
 	}
 
-	/** The page's "Status" select value ("" when empty). */
-	function notionStatus(page) {
-		let p = page && page.properties && page.properties.Status;
+	/** The page's "Status" (閱讀狀態) select value ("" when empty), whatever the column is called. */
+	function notionStatus(page, schema) {
+		let p = notion.pageProperty(page, "Status", schema);
 		return (p && p.select && p.select.name) || "";
 	}
 
@@ -298,7 +298,7 @@
 				return;
 			}
 			plan.notionPage = await client.findPageByZoteroKey(dsId, plan.key);
-			plan.values.notion = notionStatus(plan.notionPage);
+			plan.values.notion = notionStatus(plan.notionPage, schema);
 		}
 		catch (e) {
 			// syncNotion runs into the same error and reports it
@@ -418,7 +418,7 @@
 			line.setText("讀取 Obsidian 筆記…");
 			let index = settings.vaultPath ? await ZB.main.buildObsidianIndex(settings) : null;
 			let client = settings.notionToken
-				? new ZB.notion.NotionClient({ token: settings.notionToken, fetch: (u, i) => fetch(u, i) })
+				? ZB.main.notionClient(settings.notionToken)
 				: null;
 			let prefBases = {};
 			let storedBases = index ? {} : readPrefBases();
@@ -471,6 +471,7 @@
 		try {
 			let dsId = await client.resolveDataSourceId(input);
 			let schema = await client.getSchema(dsId);
+			db.schema = schema;
 			if (schema.props["Zotero Key"] !== "rich_text") return db;
 			if (schema.props.Status !== "select") {
 				db.hint = schema.props.Status
@@ -482,11 +483,12 @@
 			let cursor = null;
 			do {
 				let res = await client.request("POST", `data_sources/${dsId}/query`, Object.assign({
-					filter: { property: "Zotero Key", rich_text: { is_not_empty: true } },
+					filter: { property: notion.propertyName(schema, "Zotero Key"), rich_text: { is_not_empty: true } },
 					page_size: 100,
 				}, cursor ? { start_cursor: cursor } : {}));
 				for (let page of res.results || []) {
-					let key = ((page.properties && page.properties["Zotero Key"] && page.properties["Zotero Key"].rich_text) || [])
+					let prop = notion.pageProperty(page, "Zotero Key", schema);
+					let key = ((prop && prop.rich_text) || [])
 						.map(r => r.plain_text !== undefined ? r.plain_text : (r.text && r.text.content) || "").join("");
 					if (key && !db.pages.has(key)) db.pages.set(key, page);
 				}
@@ -529,6 +531,7 @@
 		}
 		// Notion: the page in the item's route database
 		let page = null;
+		let pageSchema = null;
 		if (client) {
 			let data = {
 				libraryRouteID: lib.routeID,
@@ -545,7 +548,8 @@
 					}
 				}
 				page = db.usable ? db.pages.get(key) || null : null;
-				if (page) values.notion = notionStatus(page);
+				pageSchema = db.schema || null;
+				if (page) values.notion = notionStatus(page, db.schema);
 			}
 		}
 		// Only items synced before (a note or a Notion page) take part
@@ -562,7 +566,7 @@
 		if (page && result.writes.includes("notion")) {
 			try {
 				await client.request("PATCH", `pages/${page.id}`, {
-					properties: ZB.notion.buildProperties({ props: { Status: "select" } }, { status: result.value }),
+					properties: ZB.notion.buildProperties({ props: { Status: "select" }, names: { Status: notion.propertyName(pageSchema, "Status") } }, { status: result.value }),
 				});
 				wrote.notion = true;
 			}
