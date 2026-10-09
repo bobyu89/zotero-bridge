@@ -90,7 +90,7 @@ function makeMainWindow(selection, opened) {
 	// The palette window: the real palette.xhtml in jsdom
 	win.openDialog = (url, name, features) => {
 		assert.equal(url, "chrome://zotero-bridge/content/palette.xhtml");
-		assert.equal(name, "zotero-bridge-palette");
+		assert.match(name, /^zotero-bridge-palette-\d+$/, "a fresh window name for each opening");
 		assert.match(features, /chrome/);
 		let d = new JSDOM(fs.readFileSync(path.join(ROOT, "content", "palette.xhtml"), "utf8"), { contentType: "application/xml" });
 		let closed = false;
