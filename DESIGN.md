@@ -62,6 +62,17 @@ components:
     padding: "0 0.45em"
   more-summary:
     textColor: "{colors.text-muted}"
+  settings-tab:
+    textColor: "{colors.text-muted}"
+    rounded: "4px 4px 0 0"
+    padding: "0.5em 0.75em"
+  settings-tab-selected:
+    textColor: "{colors.text}"
+    # plus a 2px {colors.accent} rule under the label
+  search-match:
+    # the system find colours, the one exception to the borrowed palette (no hex, theme-aware)
+    backgroundColor: "Mark"
+    textColor: "MarkText"
   toolbar-button:
     # Zotero's own `.zotero-tb-button` rules in #zotero-items-toolbar (a menu button); the plugin sets only the 20px icon
     textColor: "{colors.text-muted}"
@@ -99,6 +110,7 @@ The surface is **Operate** mode. A nursing graduate student opens settings to ge
 **Key Characteristics:**
 - Zotero's own CSS variables for every color, so light and dark themes and high contrast follow automatically.
 - Sizes in `em`, so Zotero's font-size setting scales the whole pane.
+- Settings by workflow: a search box, then six tabs in research order (功能 · 同步 · 整理 · 找文獻 · 篩選與評讀 · AI); every section has a stable ID other code can open.
 - Progressive disclosure twice over: sections of a switched-off feature disappear, and expert options sit behind a closed `<details>`.
 - Standard controls only: native checkboxes, radios, buttons, XUL menulists. No custom switches, no modals; the plugin's own windows are the 文獻自動分類 review and 快速指令, both opened on request.
 - One command catalog: the toolbar menu, the right-click menus and 快速指令 show the same commands, in the same groups, with the same words.
@@ -122,6 +134,9 @@ A restrained, borrowed palette: neutral fills from Zotero, its accent for select
 - **Cost Orange** (`--accent-orange`): the dot on 「AI・要付費」.
 - **Network Blue** (`--accent-blue`): the dot on 「連網」.
 
+### Search match
+- **Find Mark** (system `Mark` / `MarkText`): matches of the settings search, the same colours Gecko uses for find-in-page. System colours, not hex, so they follow forced-colours modes; the only colour the plugin doesn't take from Zotero.
+
 ### Named Rules
 **The Words-First Rule.** A marker's meaning is in its words; the colored dot only helps scanning. Never color text with the marker hues (they fail contrast), and never rely on the dot alone.
 
@@ -135,7 +150,8 @@ A restrained, borrowed palette: neutral fills from Zotero, its accent for select
 
 ### Hierarchy
 - **Section title** (Zotero's `h2`, inside `<label>`): one per settings section, as in Zotero's own panes.
-- **Group title** (600, 1em, hairline below): 整理與同步／找文獻／篩選與評讀／AI 輔助與寫作, and subsections inside 「AI 服務」.
+- **Group title** (600, 1em, hairline below): 整理與同步／找文獻／篩選與評讀／AI 輔助與寫作, and subsections inside 「AI 服務」. The tab names shown as dividers during a search use the same style in Pencil.
+- **Tab** (400, 1em): Pencil; the selected tab Ink with a 2px Accent rule. Weight never changes with selection, so the row doesn't shift.
 - **Label** (600, 1em): feature names, preset names.
 - **Body** (400, 1em): control labels and Zotero's own `description`.
 - **Hint** (400, 0.92em, line-height 1.4, Pencil): feature descriptions, preset descriptions, requirement notes. Measure capped at 46em.
@@ -146,11 +162,36 @@ A restrained, borrowed palette: neutral fills from Zotero, its accent for select
 
 ## Layout
 
-Single column, the width of Zotero's settings content area. The 功能 block caps its text and rows at 46em so lines stay readable on wide windows. Spacing runs on a 0.25em step scale (0.25, 0.5, 0.75, 1, 1.5em): tight inside a row (0.25–0.5em), 0.5em between rows with a hairline, 1.5em above each feature group. Preset options sit side by side on wide panes and stack when narrower than about 32em (CSS grid `auto-fit, minmax(16em, 1fr)`).
-
-Section order follows the feature groups: 功能 → Obsidian → Notion → 分流規則 → 自動同步 → 劃線顏色與意義 → 全文筆記 → 閱讀狀態 → 中文 APA → 參考文獻檔 → 概念卡片 → 文獻自動分類 → 醫學文獻快速搜尋 → NCBI → PubMed 追蹤 → 引文追蹤 → 篩選 → AI 服務 → 本月 AI 用量.
+Single column, the width of Zotero's settings content area. The 功能 block, the search box and its status lines cap their text and rows at 46em so lines stay readable on wide windows. Spacing runs on a 0.25em step scale (0.25, 0.5, 0.75, 1, 1.5em): tight inside a row (0.25–0.5em), 0.5em between rows with a hairline, 1.5em above each feature group. Preset options sit side by side on wide panes and stack when narrower than about 32em (CSS grid `auto-fit, minmax(16em, 1fr)`).
 
 In the item pane (no stylesheet available), the same rhythm is applied inline: the per-item tool rows (each with its own 2px/6px margins) sit in one block with a hairline below, then the AI note; actions sit in a wrapping row with a 6px gap.
+
+### Settings pane structure
+
+Zotero's settings window already has a left sidebar of panes, so the plugin's own navigation runs horizontally inside its pane instead of adding a second sidebar: a search box, a row of tabs, then one panel at a time. Tabs follow the research workflow and the toolbar menu's groups; 功能 is always first.
+
+| Tab (`data-zb-tab`) | Sections, in order (`data-zb-section`) |
+|---|---|
+| 功能 `features` | 功能 `features` |
+| 同步 `sync` | Obsidian `obsidian` · Notion `notion` · 分流規則 `routing` · 自動同步 `autosync` · 閱讀狀態 `status` · 中文 APA `apaZh` · 參考文獻檔 `bibliography` |
+| 整理 `organize` | 全文筆記 `fulltext` · 劃線顏色與意義 `colors` · 概念卡片 `concepts` · 文獻自動分類 `classify` |
+| 找文獻 `search` | 醫學文獻快速搜尋 `searchLinks` · NCBI `ncbi` · PubMed 追蹤 `pubmedWatch` · 引文追蹤 `citationChase` |
+| 篩選與評讀 `appraise` | 篩選 `screening` |
+| AI `ai` | AI 服務 `ai` · 本月 AI 用量 `usage` |
+
+- **Section IDs are an API.** Other code (the toolbar's command palette) links to them; `sync` names the 同步 tab itself (no single section is "sync"). Rename one only together with every caller.
+- **Opening a section:** `ZoteroBridgePrefs.showSection(id)` selects the tab, scrolls the section to the top, gives it a 2-second Accent outline on a Wash background and moves focus to its heading. A section hidden because its feature is off opens 功能 instead, at the switch to turn on (or the switch it needs first), with one line under it: where the settings will appear, and 「前往設定」 once the switch is on. A tab ID opens that tab.
+- **From outside the pane:** set the pref `extensions.zotero-bridge.prefs.pendingSection` to a section ID, then `Zotero.Utilities.Internal.openPreferences("zotero-bridge-prefs")`. The pane opens the section once it is on screen (also when it is already open) and clears the pref.
+- **Remembered tab:** `extensions.zotero-bridge.prefs.lastTab`; a fresh profile opens on 功能.
+- **Keyboard:** the tabs are an ARIA tablist with one tab in the Tab order; ← → move and select (wrapping), Home and End jump to the ends. Focus rings are 2px Accent (inset on tabs).
+- **An empty tab** (every section switched off) keeps its place in the row and says which features would fill it, with 「前往「功能」」. Tabs never disappear, so positions stay stable.
+
+### Search
+- 「找設定」 (a visible label, a language-neutral placeholder of examples) filters all tabs at once: section titles, labels, descriptions, the labels XUL keeps in attributes (checkboxes, menus) and per-section keywords in English and Chinese (`data-search-strings-raw` on the heading). Matching ignores case, full/half width and accents; several words must all match.
+- While searching the tabs step aside; matching sections show in pane order under their tab's name as a divider, matches are highlighted with Gecko's CSS highlights (labels kept in attributes: the whole control), folded `<details>` holding a match open for the search. One `role="status"` line counts the sections or says nothing matched and suggests other words.
+- Sections of switched-off features that match are named in one line, each a button that goes to its switch.
+- Esc (or clearing the box) brings the tabs back exactly as they were, folding again what the search opened.
+- **Zotero's own settings search** (top of the window) walks every pane's text but skips `[hidden]` and `[no-highlight]`. So inactive panels are hidden with a class, never the `hidden` attribute; the search box, tabs and tab dividers carry `no-highlight`; and while Zotero's search has text the pane shows every tab's sections (our search and tabs step aside), returning to tabs when it is cleared or another pane is chosen. The keywords on each heading also work in Zotero's search.
 
 ## Elevation & Depth
 
@@ -197,6 +238,7 @@ Gently rounded: 6px on preset options, 4px on markers, the PubMed watch boxes an
 
 ### Section disclosure
 - Every settings section (and sub-block) carries `data-zb-feature="<feature IDs>"`; it shows while any of those features is on and comes back the moment one is turned on. Sections that serve several features list them all (the NCBI block serves PubMed watch and search links).
+- Every top-level section also carries `data-zb-section="<id>"` and sits in exactly one tab panel (see Settings pane structure).
 
 ### Live validation (`.zb-validate`)
 - Under a textarea the plugin parses (文獻自動分類's rules and topics): what the parser makes of it, in Pencil at 0.92em, announced with `role="status"` and wired to the textarea with `aria-describedby`.

@@ -12,6 +12,15 @@
 
 const PLUGIN_ID = "zotero-bridge@bobyu89.github.io";
 const PANE_ID = "zotero-bridge-prefs";
+// The settings pane's workflow tabs and the sections (data-zb-section) in each, in order
+const PANE_TABS = {
+	features: ["features"],
+	sync: ["obsidian", "notion", "routing", "autosync", "status", "apaZh", "bibliography"],
+	organize: ["fulltext", "colors", "concepts", "classify"],
+	search: ["searchLinks", "ncbi", "pubmedWatch", "citationChase"],
+	appraise: ["screening"],
+	ai: ["ai", "usage"],
+};
 const E2E_PREF = "extensions.zb-e2e.";
 const ZB_PREF = "extensions.zotero-bridge.";
 const TEST_TIMEOUT_MS = 120000;
@@ -1273,7 +1282,9 @@ const TESTS = [
 					if (!c.querySelector(`#${id}`)) problems.push(`#${id} missing`);
 				}
 				check(!problems.length, `pane markup: ${problems.join(", ")}`);
-				check(d.headings.length >= 5, `only ${d.headings.length} section headings rendered`);
+				// One h2 per section; the sections now sit in workflow tabs (all of them in the DOM)
+				let sectionCount = Object.values(PANE_TABS).flat().length;
+				eq(d.headings.length, sectionCount, "section headings rendered");
 				check(win.ZoteroBridgePrefs && typeof win.ZoteroBridgePrefs.init === "function",
 					"window.ZoteroBridgePrefs missing: content/preferences.js did not run in the pane scope");
 				// onload="ZoteroBridgePrefs.init()" ran: rules list, usage text and the stored secret
@@ -1311,6 +1322,97 @@ const TESTS = [
 				await waitFor(() => F.rawValue("citationChase") === false && chaseBox.hasAttribute("hidden"),
 					"turning 引文追蹤 off again to hide its section", 5000);
 				d.featureHeading = (c.querySelector("[data-l10n-id=zotero-bridge-features-heading]") || {}).textContent;
+
+				// Workflow tabs: the tablist renders, every section is in exactly one tab, and only the selected panel shows
+				let root = c.querySelector("#zotero-bridge-prefs");
+				let api = win.ZoteroBridgePrefs;
+				let display = node => win.getComputedStyle(node).display;
+				let shown = node => !!node && node.getBoundingClientRect().height > 0;
+				let selectedTab = () => (c.querySelector("[role=tablist] [role=tab][aria-selected=true]") || { getAttribute: () => null }).getAttribute("data-zb-tab");
+				let tabs = [...c.querySelectorAll("[role=tablist] [role=tab]")];
+				d.tabs = tabs.map(t => t.textContent);
+				eq(JSON.stringify(tabs.map(t => t.getAttribute("data-zb-tab"))), JSON.stringify(Object.keys(PANE_TABS)), "tabs in the tablist");
+				check(tabs.every(t => t.textContent.trim()), `a tab without a label: ${JSON.stringify(d.tabs)}`);
+				check(shown(c.querySelector("[role=tablist]")), "the tablist is not rendered");
+				let tabProblems = [];
+				for (let [tab, ids] of Object.entries(PANE_TABS)) {
+					let panel = c.querySelector(`#zb-panel-${tab}`);
+					if (!panel || panel.getAttribute("role") !== "tabpanel") {
+						tabProblems.push(`#zb-panel-${tab} missing`);
+						continue;
+					}
+					let got = [...panel.querySelectorAll("[data-zb-section]")].map(n => n.getAttribute("data-zb-section"));
+					if (JSON.stringify(got) !== JSON.stringify(ids)) tabProblems.push(`${tab} holds ${JSON.stringify(got)}`);
+				}
+				for (let g of c.querySelectorAll("groupbox")) {
+					if (!g.closest("[role=tabpanel]") || !g.getAttribute("data-zb-section")) tabProblems.push(`a groupbox outside the tabs: ${g.textContent.trim().slice(0, 30)}`);
+				}
+				check(!tabProblems.length, `tabs: ${tabProblems.join("; ")}`);
+				eq(selectedTab(), "features", "tab selected in a fresh profile");
+				check(display(c.querySelector("#zb-panel-features")) !== "none", "the 功能 panel should show");
+				eq(display(c.querySelector("#zb-panel-sync")), "none", "display of a panel that isn't selected (is preferences.css loaded?)");
+				check(typeof api.showSection === "function", "ZoteroBridgePrefs.showSection missing");
+
+				// showSection: every section that is on can be reached, in its tab, on screen
+				check(api.showSection("notion"), "showSection(\"notion\") returned false");
+				eq(selectedTab(), "sync", "tab after showSection(\"notion\")");
+				let notionBox = c.querySelector('[data-zb-section="notion"]');
+				check(shown(notionBox), "the Notion section should be rendered after showSection");
+				check(notionBox.classList.contains("zb-flash"), "the Notion section should be highlighted after showSection");
+				eq(display(c.querySelector("#zb-panel-features")), "none", "display of the 功能 panel after showSection(\"notion\")");
+				let unreachable = [];
+				d.reachable = [];
+				for (let s of api.sections()) {
+					if (!s.visible) continue;
+					api.showSection(s.id);
+					let node = c.querySelector(`[data-zb-section="${s.id}"]`);
+					if (selectedTab() !== s.tab || !shown(node)) unreachable.push(`${s.id} (tab ${selectedTab()})`);
+					else d.reachable.push(s.id);
+				}
+				check(!unreachable.length, `sections showSection() did not bring on screen: ${unreachable.join(", ")}`);
+				check(d.reachable.length >= 12, `only ${d.reachable.length} sections are on in 研究生引導`);
+				// A section of a switched-off feature leads to its switch in 功能
+				check(api.showSection("citationChase"), "showSection(\"citationChase\") returned false");
+				eq(selectedTab(), "features", "tab after showSection on a switched-off section");
+				let notice = c.querySelector("#zb-section-notice");
+				check(notice && c.querySelector('.zb-feature[data-feature="citationChase"]').contains(notice), "no note under the 引文追蹤 switch");
+				d.notice = notice.textContent;
+				d.focusAfterOff = win.document.activeElement && win.document.activeElement.id;
+				// prefs.pendingSection, set while the pane is open
+				setPref("prefs.pendingSection", "screening");
+				await waitFor(() => selectedTab() === "appraise", "prefs.pendingSection \"screening\" to open the 篩選與評讀 tab", 5000);
+				eq(Zotero.Prefs.get(ZB_PREF + "prefs.pendingSection", true), "", "prefs.pendingSection after the pane opened it");
+
+				// Search: matches from every tab, highlighted; Esc brings the tabs back
+				api.selectTab("features");
+				let box = c.querySelector("#zb-search");
+				let found = () => api.sections().filter(s => s.visible
+					&& !c.querySelector(`[data-zb-section="${s.id}"]`).classList.contains("zb-search-miss")).map(s => s.id);
+				box.focus();
+				box.value = "Notion";
+				box.dispatchEvent(new win.Event("input"));
+				check(root.classList.contains("zb-searching"), "typing in the search box should start a search");
+				d.searchNotion = found();
+				check(d.searchNotion.includes("notion"), `search 「Notion」 found ${JSON.stringify(d.searchNotion)}`);
+				check(shown(notionBox), "the Notion section (another tab) should be rendered while searching");
+				check(!shown(c.querySelector("[role=tablist]")), "the tabs step aside while searching");
+				d.searchStatus = c.querySelector("#zb-search-status").textContent;
+				check(d.searchStatus.trim(), "#zb-search-status is empty during a search");
+				let registry = win.CSS && win.CSS.highlights;
+				d.cssHighlights = !!registry;
+				d.highlightRanges = registry && registry.get("zb-search") ? registry.get("zb-search").size : c.querySelectorAll(".zb-hit").length;
+				check(d.highlightRanges > 0, "no highlighted matches for 「Notion」");
+				box.value = "分類";
+				box.dispatchEvent(new win.Event("input"));
+				d.searchClassify = found();
+				check(d.searchClassify.includes("classify"), `search 「分類」 found ${JSON.stringify(d.searchClassify)}`);
+				check(shown(c.querySelector('[data-zb-section="classify"]')), "the 文獻自動分類 section should be rendered while searching");
+				check(!shown(c.querySelector('[data-zb-section="autosync"]')), "自動同步 doesn't match 「分類」 and should be hidden");
+				box.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+				eq(box.value, "", "search box after Esc");
+				check(!root.classList.contains("zb-searching"), "Esc should end the search");
+				eq(selectedTab(), "features", "tab after Esc");
+				eq(display(c.querySelector("#zb-panel-sync")), "none", "display of the 同步 panel after Esc");
 				// A key typed just before closing (the pane saves 600 ms after the last keystroke)
 				let key = c.querySelector("#zb-openai-key");
 				key.value = "sk-e2e-typed-then-closed";
@@ -1334,9 +1436,12 @@ const TESTS = [
 			setPref("llm.provider", "anthropic");
 			setPref("usage.prices", "{}");
 			Zotero.Prefs.clear(ZB_PREF + "usage.prices", true);
-			// …and the observers on the feature switches
+			// …and the observers on the feature switches and the pending section
 			setPref("feature.synthesis", true);
 			Zotero.Prefs.clear(ZB_PREF + "feature.synthesis", true);
+			setPref("prefs.pendingSection", "notion");
+			Zotero.Prefs.clear(ZB_PREF + "prefs.pendingSection", true);
+			Zotero.Prefs.clear(ZB_PREF + "prefs.lastTab", true);
 			await delay(500);
 			let dead = messages.slice(from).filter(m => m.kind === "error");
 			check(!dead.length, `changing prefs after the settings window closed logged: ${dead.map(m => m.text).join(" | ")} (pref observers of the closed pane are still registered)`);
@@ -1347,6 +1452,58 @@ const TESTS = [
 		// Errors Zotero's own preferences window logs as well (control test above)
 		get allowUnattributed() {
 			return ctx.prefsControlErrors || [];
+		},
+	},
+	{
+		name: "Zotero's own settings search finds sections in every tab of the pane",
+		needs: ["preferences pane opens and renders"],
+		timeout: 90000,
+		async fn(d) {
+			let win = Zotero.Utilities.Internal.openPreferences(PANE_ID);
+			try {
+				let pane = await waitFor(() => win.Zotero_Preferences && win.Zotero_Preferences.panes
+					&& win.Zotero_Preferences.panes.get(PANE_ID), `the preferences window to know pane ${PANE_ID}`, 30000);
+				await waitFor(() => pane.loaded && win.ZoteroBridgePrefs, `pane ${PANE_ID} to load`, 30000);
+				let c = pane.container;
+				let root = c.querySelector("#zotero-bridge-prefs");
+				let field = win.document.getElementById("prefs-search");
+				check(field, "Zotero's settings search field #prefs-search not found");
+				let shown = node => !!node && node.getBoundingClientRect().height > 0;
+				let search = (text) => {
+					field.value = text;
+					field.dispatchEvent(new win.Event("command"));
+				};
+				// Control: a term no pane has. Zotero loads every pane for it; what that logs is Zotero's
+				let from = messages.length;
+				search("zqzqxx");
+				await waitFor(() => c.classList.contains("hidden-by-search"), "Zotero's search to hide our pane for a term it lacks", 30000);
+				check(root.classList.contains("zb-global-search"), "the pane should know Zotero's search is active");
+				await delay(500);
+				ctx.globalSearchControlErrors = messages.slice(from).filter(m => m.kind === "error" && !m.source && !m.stack).map(m => m.text);
+				// 「Notion」: our pane shows, with the 同步 tab's Notion section on screen although 功能 is the selected tab
+				win.ZoteroBridgePrefs.selectTab("features");
+				search("Notion");
+				await waitFor(() => !c.classList.contains("hidden-by-search") && !c.hidden, "Zotero's search to show our pane for 「Notion」", 30000);
+				check(root.classList.contains("zb-global-search"), "zb-global-search missing while Zotero's search has text");
+				let notion = c.querySelector('[data-zb-section="notion"]');
+				d.notionShown = shown(notion);
+				check(d.notionShown, "the Notion section (同步 tab) is not on screen during Zotero's search");
+				check(!shown(c.querySelector(".zb-nav")), "our search box and tabs should step aside during Zotero's search");
+				eq(win.getComputedStyle(c.querySelector("#zb-panel-ai")).display !== "none", true, "an unselected panel's display during Zotero's search");
+				// Clearing Zotero's search brings our tabs back
+				search("");
+				await waitFor(() => !root.classList.contains("zb-global-search"), "the tabs to come back after Zotero's search is cleared", 10000);
+				eq(win.getComputedStyle(c.querySelector("#zb-panel-ai")).display, "none", "an unselected panel's display after Zotero's search");
+			}
+			finally {
+				d.innerWindowID = win.windowGlobalChild && win.windowGlobalChild.innerWindowId;
+				win.close();
+			}
+			await delay(500);
+		},
+		// Errors Zotero's own panes log when its search loads them all (the control step above), and Zotero's own window
+		get allowUnattributed() {
+			return [...(ctx.globalSearchControlErrors || []), ...(ctx.prefsControlErrors || [])];
 		},
 	},
 	{

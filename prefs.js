@@ -133,6 +133,10 @@ pref("extensions.zotero-bridge.feature.aiHighlights", false);
 pref("extensions.zotero-bridge.feature.autoClassify", true);
 pref("extensions.zotero-bridge.feature.classifyAI", false);
 pref("extensions.zotero-bridge.feature.toolbarButton", true);
+// Settings pane (content/preferences.js): the tab chosen last, and a section (data-zb-section ID, e.g.
+// "notion") to open the next time the pane is on screen; the pane clears it once it has opened it
+pref("extensions.zotero-bridge.prefs.lastTab", "features");
+pref("extensions.zotero-bridge.prefs.pendingSection", "");
 // 文獻自動分類 (content/classify.js): where the sub-collections go (a collection path like 碩論/文獻回顧;
 // empty = the library's top level) and the parent's name; the four dimensions; topics (one per line,
 // `名稱: 說明`) and rules (one per line, `子分類名稱 = 條件`); the last applied run, for 復原上次分類
@@ -145,5 +149,3 @@ pref("extensions.zotero-bridge.classify.pico", true);
 pref("extensions.zotero-bridge.classify.topicList", "");
 pref("extensions.zotero-bridge.classify.ruleList", "");
 pref("extensions.zotero-bridge.classify.lastRun", "");
-// Settings section to open next (content/preferences.js)
-pref("extensions.zotero-bridge.prefs.pendingSection", "");

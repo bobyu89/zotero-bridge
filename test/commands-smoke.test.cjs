@@ -851,7 +851,7 @@ test("palette: settings destinations open the Zotero Bridge pane at their sectio
 	assert.equal(dialog.closed, true);
 	// The pref is declared with the other defaults (prefs.js), as on the settings-pane side
 	assert.match(fs.readFileSync(path.join(ROOT, "prefs.js"), "utf8"),
-		/^\/\/ Settings section to open next \(content\/preferences\.js\)\npref\("extensions\.zotero-bridge\.prefs\.pendingSection", ""\);$/m);
+		/^pref\("extensions\.zotero-bridge\.prefs\.pendingSection", ""\);$/m);
 	same(env.errors, []);
 });
 
