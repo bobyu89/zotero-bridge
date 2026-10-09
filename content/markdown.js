@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — Markdown conversions:
+ * ZotMax — Markdown conversions:
  *   Markdown → Notion blocks (for Notion pages)
  *   Markdown → HTML          (for the AI note stored in Zotero)
  *   HTML → Markdown          (for Zotero notes going to Obsidian/Notion)

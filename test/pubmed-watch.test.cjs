@@ -157,6 +157,16 @@ test("buildDigestNote creates the day's note, then merges new papers and keeps c
 	assert.ok(merged.includes("## 壓傷\n\n- [ ] **Paper 4**"));
 	assert.ok(merged.endsWith("Paper 1 看起來適合文獻探討。\n"));
 	assert.equal(pw.buildDigestNote(merged, "2026-10-08", [{ name: "壓傷", entries: [entry("4")] }]), merged);
+	// A digest made as Zotero Bridge (≤ 0.10): merged in place, ticks kept, the marker renamed
+	const asOld = text => text.split("ZotMax").join("Zotero Bridge");
+	assert.match(asOld(edited), /此區塊由 Zotero Bridge 自動產生/);
+	let fromOld = pw.buildDigestNote(asOld(edited), "2026-10-08", [{ name: "跌倒預防", entries: [entry("3")] }]);
+	assert.equal(fromOld.match(/zotero-bridge:start/g).length, 1);
+	assert.ok(fromOld.includes("- [x] **Paper 1**"));
+	assert.ok(fromOld.includes("- [ ] **Paper 3**"));
+	assert.ok(fromOld.endsWith("Paper 1 看起來適合文獻探討。\n"));
+	assert.match(fromOld, /^%% zotero-bridge:start — 此區塊由 ZotMax 自動產生/m);
+	assert.doesNotMatch(fromOld, /Zotero Bridge/);
 
 	// Markers deleted by the user: a fresh block at the end, their text untouched
 	let bare = pw.buildDigestNote("# 我的清單\n\n手寫內容", "2026-10-08", [{ name: "壓傷", entries: [entry("5")] }]);

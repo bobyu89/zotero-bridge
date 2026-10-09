@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — LLM step: turns a Zotero item into a structured literature note.
+ * ZotMax — LLM step: turns a Zotero item into a structured literature note.
  * Providers: Anthropic (Claude Messages API) and OpenAI (Responses API).
  * Raw HTTP is used because the plugin runs in Zotero's privileged sandbox without a module bundler.
  */
@@ -32,7 +32,7 @@
 		"measures", "evidence_level", "jbi_level", "appraisal_tool", "appraisal_overall", "country",
 	];
 	// Heading above the JSON kept in the Zotero AI note; removed again when the note is read back
-	const STUDY_DATA_HEADING = "📋 結構化資料（Zotero Bridge）";
+	const STUDY_DATA_HEADING = "📋 結構化資料（ZotMax）";
 
 	// Plugin-owned: always appended to the user message (also with a custom template), because
 	// the Notion columns and Obsidian properties are filled from this block.

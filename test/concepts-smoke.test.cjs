@@ -1,5 +1,5 @@
 // Concept hub notes (概念卡片) through the real plugin in a mocked Zotero: built after a manual sync and
-// from the Tools menu, user content kept, cards never deleted, never failing a sync, the dashboard's
+// from the toolbar button or 快速指令, user content kept, cards never deleted, never failing a sync, the dashboard's
 // 熱門概念 section, and the per-concept AI synthesis (request shape, [S#] citations, ledger).
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -253,7 +253,7 @@ function addAINote(env, item, concepts, study, extra = "") {
 	let note = new env.MockItem("note", { tags: ["zotero-bridge-ai"] });
 	note.parentID = item.id;
 	item.children.push(note.id);
-	note.setNote(`<h1>🤖 AI 文獻筆記</h1>\n<p><em>由 test-model 於 2026-10-01T00:00:00Z 產生（Zotero Bridge）</em></p>\n`
+	note.setNote(`<h1>🤖 AI 文獻筆記</h1>\n<p><em>由 test-model 於 2026-10-01T00:00:00Z 產生（ZotMax）</em></p>\n`
 		+ ZB.markdown.mdToHtml(`## 一句話摘要\n\n${item.fields.title} 的摘要。\n\n## 主要結果\n\n${extra || "沒有差異。"}\n\n## 關鍵概念\n\n`
 			+ concepts.map(c => `- [[${c}]]：說明`).join("\n")
 			+ `\n\n${ZB.llm.studyDataBlock(ZB.llm.normalizeStudyData(study))}`));
@@ -279,11 +279,15 @@ function read(env, name) {
 	return fs.readFileSync(path.join(conceptDir(env), name), "utf8");
 }
 
+/** 更新概念卡片 and 為概念卡片產生 AI 綜整… as the toolbar button and 快速指令 run them (commands.js). */
 function tools(env) {
-	let menu = env.menus.find(m => m.menuID === "zotero-bridge-concepts-tools");
-	assert.equal(menu.target, "main/menubar/tools");
-	assert.deepEqual([...menu.menus.map(m => m.l10nID)], ["zotero-bridge-menu-concepts-update", "zotero-bridge-menu-concepts-ai"]);
-	return { update: menu.menus[0], ai: menu.menus[1] };
+	let C = env.context.ZB.commands;
+	assert.deepEqual([C.get("concepts").l10n, C.get("concepts-ai").l10n], ["zotero-bridge-menu-concepts-update", "zotero-bridge-menu-concepts-ai"]);
+	assert.deepEqual([C.get("concepts").group, C.get("concepts-ai").group], ["organize", "ai"]);
+	return {
+		update: { onCommand: () => C.execute("concepts") },
+		ai: { onCommand: () => C.execute("concepts-ai") },
+	};
 }
 
 async function settle(check) {
@@ -291,7 +295,7 @@ async function settle(check) {
 	assert.ok(check(), "timed out");
 }
 
-test("a manual sync writes the cards and the index; the dashboard links them; the Tools menu rebuilds keeping the user's text", async () => {
+test("a manual sync writes the cards and the index; the dashboard links them; 快速指令 or the toolbar rebuilds keeping the user's text", async () => {
 	let env = await setup();
 	let ZB = env.context.ZB;
 	let items = library(env);
@@ -392,14 +396,14 @@ test("only manual runs with the setting on build cards, and a failing concept up
 	assert.deepEqual(env.requests, []);
 });
 
-test("no concepts yet: nothing is written; Tools menu says so; without a vault it asks for one", async () => {
+test("no concepts yet: nothing is written; the command says so; without a vault it asks for one", async () => {
 	let env = await setup({ prefs: { "extensions.zotero-bridge.concepts.measures": false } });
 	let ZB = env.context.ZB;
 	let d = paper(env, 4);
 	await ZB.main.run([d], { targets: ["obsidian"], ai: "reuse" });
 	assert.ok(!fs.existsSync(conceptDir(env)));
 	let dashboard = fs.readFileSync(path.join(env.vault, "Zotero", "研究儀表板.md"), "utf8");
-	assert.match(dashboard, /## 🧠 熱門概念\n\n還沒有概念卡片：Zotero 工具 → 更新概念卡片/);
+	assert.match(dashboard, /## 🧠 熱門概念\n\n還沒有概念卡片：ZotMax 按鈕或快速指令 → 更新概念卡片/);
 	let before = env.descriptions.length;
 	tools(env).update.onCommand();
 	await settle(() => env.descriptions.length > before);
@@ -410,7 +414,7 @@ test("no concepts yet: nothing is written; Tools menu says so; without a vault i
 	before = none.descriptions.length;
 	tools(none).update.onCommand();
 	await settle(() => none.descriptions.length > before);
-	assert.match(none.descriptions.at(-1), /請先到 設定 → Zotero Bridge 填入 Obsidian vault 路徑/);
+	assert.match(none.descriptions.at(-1), /請先到 設定 → ZotMax 填入 Obsidian vault 路徑/);
 	assert.deepEqual(env.errors, []);
 	assert.deepEqual(none.errors, []);
 });

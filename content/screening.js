@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — screening for systematic and scoping reviews (PRISMA 2020).
+ * ZotMax — screening for systematic and scoping reviews (PRISMA 2020).
  *
  * Decisions are Zotero tags, so they show in the tag selector, can be filtered and colored,
  * and travel with Zotero sync (prefixes and reasons are settings):
@@ -55,7 +55,9 @@
 	// Shorter normalized titles ("Editorial", "Letter") match too easily
 	const MIN_TITLE_CHARS = 10;
 	const REVIEW_FOLDER = "Reviews";
-	const NOTION_ANCHOR = "🔄 Zotero Bridge 自動產生：重新產生 PRISMA 時，這段到「✍️ 我的筆記」之間的內容會被覆寫。";
+	const NOTION_ANCHOR = "🔄 ZotMax 自動產生：重新產生 PRISMA 時，這段到「✍️ 我的筆記」之間的內容會被覆寫。";
+	// How the anchor paragraph starts, now and before the rename (pages made as Zotero Bridge ≤ 0.10)
+	const NOTION_ANCHOR_PREFIXES = ["🔄 ZotMax 自動產生", "🔄 Zotero Bridge 自動產生"];
 	const USER_HEADING = "✍️ 我的筆記";
 	const MARK_START_RE = /^%% zotero-bridge:start.*%%[ \t]*$/m;
 	const MARK_END_RE = /^%% zotero-bridge:end %%[ \t]*$/m;
@@ -711,7 +713,7 @@
 	 */
 	function buildReviewSection(result, rows, meta) {
 		let info = [
-			`> [!info] 由 Zotero Bridge 依分類「${meta.name}」的 ${result.counts.identified} 筆文獻於 ${String(meta.generatedAt || "").slice(0, 10)} 產生；重新產生只會覆寫這個區塊。`,
+			`> [!info] 由 ZotMax 依分類「${meta.name}」的 ${result.counts.identified} 筆文獻於 ${String(meta.generatedAt || "").slice(0, 10)} 產生；重新產生只會覆寫這個區塊。`,
 			meta.uri ? `> Zotero：[開啟分類](${meta.uri})` + (meta.csvPath ? ` · 證據表 CSV：\`${meta.csvPath}\`` : "") : "",
 		].filter(Boolean).join("\n");
 		return [
@@ -884,7 +886,7 @@
 			}
 		}
 		if (!opts.silent && (items.length > 1 || errors.length)) {
-			ZB.main.notify("Zotero Bridge：篩選", `${describeChange(change)}：已更新 ${changed} 篇`
+			ZB.main.notify("ZotMax：篩選", `${describeChange(change)}：已更新 ${changed} 篇`
 				+ (items.length - changed - errors.length ? `（${items.length - changed - errors.length} 篇原本就是）` : "")
 				+ (errors.length ? `\n失敗 ${errors.length} 篇：${errors.slice(0, 3).join("；")}` : ""));
 		}
@@ -944,7 +946,7 @@
 		let records = items.map(itemRecord);
 		let byID = new Map(items.map(i => [i.id, i]));
 		let groups = findDuplicates(records, cfg);
-		let headline = "Zotero Bridge：找重複";
+		let headline = "ZotMax：找重複";
 		if (!groups.length) {
 			ZB.main.notify(headline, `「${collection.name}」的 ${records.length} 筆文獻中沒有找到可能重複的文獻（比對 DOI，以及標題＋年份）。`);
 			return { groups: 0, tagged: 0 };
@@ -988,6 +990,15 @@
 		return String(Zotero.Prefs.get(PREF + "screening.notionParent", true) || "").trim() || settings.notionSynthesisParent;
 	}
 
+	/** Whether a paragraph's text is the anchor of a PRISMA page, under the current or the old name. */
+	function isNotionAnchor(text) {
+		return NOTION_ANCHOR_PREFIXES.some(p => String(text || "").startsWith(p));
+	}
+
+	function anchorText() {
+		return [{ type: "text", text: { content: NOTION_ANCHOR }, annotations: { italic: true, color: "gray" } }];
+	}
+
 	function plainText(block) {
 		let rich = (block[block.type] && block[block.type].rich_text) || [];
 		return rich.map(r => (r.plain_text !== undefined ? r.plain_text : (r.text && r.text.content) || "")).join("");
@@ -1010,9 +1021,13 @@
 		}
 		if (page.in_trash || page.archived) return null;
 		let children = await client.listChildren(pageId);
-		let anchor = children.findIndex(b => b.type === "paragraph" && plainText(b).startsWith(NOTION_ANCHOR.slice(0, 16)));
+		let anchor = children.findIndex(b => b.type === "paragraph" && isNotionAnchor(plainText(b)));
 		let end = children.findIndex((b, i) => anchor >= 0 && i > anchor && /^heading_/.test(b.type) && plainText(b).trim() === USER_HEADING);
 		if (anchor < 0 || end < 0) return null;
+		// A page made before the rename: the anchor now carries the current name
+		if (plainText(children[anchor]) !== NOTION_ANCHOR) {
+			await client.request("PATCH", `blocks/${children[anchor].id}`, { paragraph: { rich_text: anchorText() } });
+		}
 		for (let b of children.slice(anchor + 1, end)) {
 			await client.request("DELETE", `blocks/${b.id}`);
 		}
@@ -1038,9 +1053,8 @@
 			let url = await updateNotionPage(client, pageId, title, blocks);
 			if (url) return url;
 		}
-		let paragraph = text => ({ object: "block", type: "paragraph", paragraph: { rich_text: [{ type: "text", text: { content: text }, annotations: { italic: true, color: "gray" } }] } });
 		let page = await client.createChildPage(notionParent(settings), title, [
-			paragraph(NOTION_ANCHOR),
+			{ object: "block", type: "paragraph", paragraph: { rich_text: anchorText() } },
 			...blocks,
 			{ object: "block", type: "heading_2", heading_2: { rich_text: [{ type: "text", text: { content: USER_HEADING } }] } },
 		], "🧾");
@@ -1072,18 +1086,18 @@
 
 	async function generateReportNow(collection) {
 		let ZB = scope.ZB;
-		let headline = "Zotero Bridge：PRISMA 與證據表";
+		let headline = "ZotMax：PRISMA 與證據表";
 		let settings;
 		try {
 			settings = await ZB.main.readSettings();
 		}
 		catch (e) {
-			ZB.main.notify("Zotero Bridge 設定有誤", String(e.message || e));
+			ZB.main.notify("ZotMax 設定有誤", String(e.message || e));
 			return null;
 		}
 		let useNotion = !!(settings.notionToken && notionParent(settings));
 		if (!settings.vaultPath && !useNotion) {
-			ZB.main.notify(headline, "請先到 設定 → Zotero Bridge 填入 Obsidian vault 路徑（或 Notion token 與「PRISMA 頁面的 Notion 父頁面」）。");
+			ZB.main.notify(headline, "請先到 設定 → ZotMax 填入 Obsidian vault 路徑（或 Notion token 與「PRISMA 頁面的 Notion 父頁面」）。");
 			return null;
 		}
 		let cfg = config();
@@ -1198,134 +1212,14 @@
 		return result ? { result, outputs, errors } : null;
 	}
 
-	// ---------- menus ----------
-
-	function selectedCollections(context) {
-		return (context.collectionTreeRows || []).filter(r => r.isCollection && r.isCollection()).map(r => r.ref);
-	}
-
-	// The collection selected in the main window (Tools menu)
-	function activeCollection() {
-		try {
-			let pane = Zotero.getActiveZoteroPane();
-			return (pane && pane.getSelectedCollections()[0]) || null;
-		}
-		catch (e) {
-			return null;
-		}
-	}
-
-	function forCollections(fn) {
-		return async (collections) => {
-			if (!collections.length) {
-				scope.ZB.main.notify("Zotero Bridge", "請先在左側選取系統性回顧的分類（回顧專案）。");
-				return;
-			}
-			for (let c of collections) await fn(c);
-		};
-	}
-
-	/** Menu entries that hide while the feature is off (features.js gateMenus; as is without it: Node tests). */
-	function gated(id, menus) {
-		let f = scope.ZB && scope.ZB.features;
-		return f ? f.gateMenus(id, menus) : menus;
-	}
-
-	/** Item, collection and Tools menu entries; returns the menu IDs to unregister. */
-	function registerMenus({ pluginID, icon }) {
-		let decide = change => (ev, context) => {
-			setDecision(context.items || [], change).catch(e => Zotero.logError(e));
-		};
-		let item = (l10nID, change) => ({ menuType: "menuitem", l10nID, onCommand: decide(change) });
-		let reasons = Array.from({ length: MAX_MENU_REASONS }, (_, i) => ({
-			menuType: "menuitem",
-			l10nID: "zotero-bridge-screen-reason",
-			onShowing: (ev, context) => {
-				let reason = config().reasons[i];
-				context.setVisible(!!reason);
-				if (reason) context.setL10nArgs(JSON.stringify({ reason }));
-			},
-			onCommand: (ev, context) => {
-				let reason = config().reasons[i];
-				if (reason) decide({ stage: "ft", decision: "exclude", reason })(ev, context);
-			},
-		}));
-		let dedup = forCollections(dedupCollection);
-		let report = forCollections(generateReport);
-		let ids = [];
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-screening-item",
-			pluginID,
-			target: "main/library/item",
-			menus: gated("screening", [{
-				menuType: "submenu",
-				l10nID: "zotero-bridge-screen-menu",
-				icon,
-				menus: [
-					item("zotero-bridge-screen-ta-include", { stage: "ta", decision: "include" }),
-					item("zotero-bridge-screen-ta-exclude", { stage: "ta", decision: "exclude" }),
-					item("zotero-bridge-screen-ta-maybe", { stage: "ta", decision: "maybe" }),
-					{ menuType: "separator" },
-					item("zotero-bridge-screen-ft-include", { stage: "ft", decision: "include" }),
-					{ menuType: "submenu", l10nID: "zotero-bridge-screen-ft-exclude", menus: reasons },
-					item("zotero-bridge-screen-ft-not-retrieved", { stage: "ft", decision: "notRetrieved" }),
-					{ menuType: "separator" },
-					item("zotero-bridge-screen-duplicate", { duplicate: true }),
-					item("zotero-bridge-screen-clear", { clear: true }),
-				],
-			}]),
-		}));
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-screening-collection",
-			pluginID,
-			target: "main/library/collection",
-			menus: gated("screening", [{
-				menuType: "submenu",
-				l10nID: "zotero-bridge-screen-collection-menu",
-				icon,
-				onShowing: (ev, context) => context.setVisible(selectedCollections(context).length > 0),
-				menus: [
-					{
-						menuType: "menuitem",
-						l10nID: "zotero-bridge-screen-dedup",
-						onCommand: (ev, context) => dedup(selectedCollections(context)).catch(e => Zotero.logError(e)),
-					},
-					{
-						menuType: "menuitem",
-						l10nID: "zotero-bridge-screen-prisma",
-						onCommand: (ev, context) => report(selectedCollections(context)).catch(e => Zotero.logError(e)),
-					},
-				],
-			}]),
-		}));
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-screening-tools",
-			pluginID,
-			target: "main/menubar/tools",
-			menus: gated("screening", [
-				{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-screen-tools-dedup",
-					onCommand: () => dedup([activeCollection()].filter(Boolean)).catch(e => Zotero.logError(e)),
-				},
-				{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-screen-tools-prisma",
-					onCommand: () => report([activeCollection()].filter(Boolean)).catch(e => Zotero.logError(e)),
-				},
-			]),
-		}));
-		return ids.filter(Boolean);
-	}
-
 	return {
 		DEFAULT_PREFIX, DEFAULT_REASON_PREFIX, DEFAULT_SOURCE_PREFIX, DEFAULT_REASONS, MAX_MENU_REASONS, NO_REASON, NO_SOURCE,
-		NOTION_ANCHOR, REVIEW_FOLDER, DEFAULT_OTHER_SOURCES,
+		NOTION_ANCHOR, NOTION_ANCHOR_PREFIXES, isNotionAnchor, REVIEW_FOLDER, DEFAULT_OTHER_SOURCES,
 		parseReasons, parseSourceList, isOtherMethod, normalizeConfig, stageTag, duplicateTag, reasonTag, decisionTags, readState, isScreeningTag, hasDecision,
 		planChange, describeState, describeChange,
 		normalizeDOI, normalizeTitle, yearOf, findDuplicates,
 		computePrisma, checkCounts, buildMermaid, countsTable, issuesMarkdown, evidenceRow, sortRows, evidenceTable,
 		csvCell, buildCSV, buildReviewSection, frontmatterFor, buildReviewNote, notionBlocks,
-		config, itemRecord, setDecision, renderPaneRow, dedupCollection, generateReport, registerMenus,
+		config, itemRecord, setDecision, renderPaneRow, dedupCollection, generateReport,
 	};
 });

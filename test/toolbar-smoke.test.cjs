@@ -1,4 +1,4 @@
-// The Zotero Bridge toolbar button (content/toolbar.js) through the real plugin in a mocked Zotero and a
+// The ZotMax toolbar button (content/toolbar.js) through the real plugin in a mocked Zotero and a
 // jsdom main window: added on load and for windows open at startup, removed on unload and shutdown
 // (no element, stylesheet, key handler or pref observer left), the menu's groups and entries for each
 // preset with live hiding, the commands calling the existing functions on the current selection, the
@@ -223,8 +223,8 @@ function key(env, target, keyName, opts = {}) {
 
 const GUIDED = {
 	sync: ["sync", "sync-no-ai", "sync-obsidian", "sync-notion", "status"],
-	organize: ["classify", "dashboard", "concepts", "bibliography"],
-	search: ["quick-search"],
+	organize: ["classify", "dashboard", "concepts", "bibliography", "export-collection"],
+	search: ["quick-search", "search-item"],
 	appraise: ["screen", "dedup", "prisma", "appraisal-summary"],
 	ai: ["regenerate"],
 };
@@ -240,8 +240,8 @@ test("the button is added to the items toolbar at startup, removed on unload and
 	assert.equal(button.getAttribute("type"), "menu");
 	assert.equal(button.getAttribute("wantdropmarker"), "true");
 	assert.equal(button.getAttribute("tabindex"), "-1", "in Zotero's arrow-key row like its neighbours");
-	assert.equal(button.getAttribute("tooltiptext"), "Zotero Bridge");
-	assert.equal(button.getAttribute("aria-label"), "Zotero Bridge");
+	assert.equal(button.getAttribute("tooltiptext"), "ZotMax");
+	assert.equal(button.getAttribute("aria-label"), "ZotMax");
 	assert.equal(button.hidden, false);
 	let css = doc.getElementById("zotero-bridge-toolbar-css");
 	assert.equal(css.getAttribute("rel"), "stylesheet");
@@ -300,14 +300,21 @@ test("a window without Zotero's items toolbar gets no button and no error", asyn
 	assert.deepEqual(env.errors, []);
 });
 
-test("menu: groups in workflow order with labels, settings last; guided and advanced show what is on", async () => {
+test("menu: 快速指令… first, groups in workflow order with labels, settings last; guided and advanced show what is on", async () => {
 	let env = await setup();
 	let F = env.ZB.features;
 	assert.equal(F.currentPreset(), "guided");
 	let { popup, groups, entries, separators } = openMenu(env);
 	assert.deepEqual(groups, ["sync", "organize", "search", "appraise", "ai"]);
 	assert.deepEqual(entries, GUIDED);
-	assert.deepEqual(separators, ["organize", "search", "appraise", "ai", "settings"], "no separator above the first group");
+	assert.deepEqual(separators, ["organize", "search", "appraise", "ai", "settings"], "no group separator above the first group");
+	// 快速指令… first, with its shortcut, then its own separator
+	let first = popup.firstElementChild;
+	assert.equal(first.getAttribute("data-zb-entry"), "palette");
+	assert.equal(first.getAttribute("data-l10n-id"), "zotero-bridge-cmd-palette");
+	assert.equal(first.getAttribute("acceltext"), "Ctrl+Shift+P");
+	assert.equal(first.nextElementSibling.localName, "menuseparator");
+	assert.equal(first.nextElementSibling.hidden, false);
 	// Group labels come from Fluent (both locales)
 	let captions = [...popup.querySelectorAll(".zotero-bridge-tb-caption")];
 	assert.deepEqual(captions.map(c => c.getAttribute("data-l10n-id")), [
@@ -333,9 +340,9 @@ test("menu: groups in workflow order with labels, settings last; guided and adva
 	F.applyPreset("advanced");
 	({ groups, entries } = openMenu(env));
 	assert.deepEqual(groups, ["sync", "organize", "search", "appraise", "ai"]);
-	assert.deepEqual(entries.search, ["quick-search", "pubmed-watch", "chase-items", "chase-included", "chase-import"]);
+	assert.deepEqual(entries.search, ["quick-search", "search-item", "pubmed-watch", "chase-items", "chase-included", "chase-import"]);
 	assert.deepEqual(entries.ai, ["regenerate", "synthesis", "review-draft", "ebhc-report", "progress-report", "concepts-ai"]);
-	assert.deepEqual(entries.sync, GUIDED.sync, "resume and stop only with a batch");
+	assert.deepEqual(entries.sync, GUIDED.sync, "resume, stop and discard only with a batch");
 	assert.deepEqual(entries.organize, GUIDED.organize, "undo only after a run");
 
 	// A group whose entries are all off hides with its label and separator
@@ -358,28 +365,38 @@ test("conditional entries follow the state: resume or stop a batch, undo a class
 	let { ZB, Zotero } = env;
 	let { entries } = openMenu(env);
 	assert.ok(!entries.sync.includes("resume") && !entries.sync.includes("stop"));
-	// A stopped batch with items left: resume, with the count
+	// A stopped batch with items left: resume, with the count, and discard
 	Zotero.Prefs.set(P + "batch.pending", JSON.stringify({ action: { targets: ["obsidian"], ai: "reuse" }, remaining: ["1/A", "1/B"], failed: ["1/C"], total: 3, running: false }));
 	({ entries } = openMenu(env));
-	assert.deepEqual(entries.sync.slice(-1), ["resume"]);
+	assert.deepEqual(entries.sync.slice(-2), ["resume", "discard"]);
 	let resume = env.doc.querySelector('[data-zb-entry="resume"]');
 	assert.deepEqual(JSON.parse(resume.getAttribute("data-l10n-args")), { count: 3 });
-	// Resuming syncs: hidden with the sync switched off, as in the Tools menu
+	// Resuming syncs: hidden with the sync switched off, as in the Tools menu (discarding stays possible)
 	ZB.features.setEnabled("sync", false);
 	({ entries } = openMenu(env));
-	assert.equal(entries.sync.includes("resume"), false);
+	assert.deepEqual(entries.sync, ["status", "discard"]);
 	ZB.features.setEnabled("sync", true);
-	// A running batch: stop
-	Zotero.Prefs.set(P + "batch.pending", JSON.stringify({ action: { targets: ["obsidian"], ai: "reuse" }, remaining: ["1/A"], failed: [], total: 1, running: true }));
+	// A batch that is running in this session: stop, and neither resume nor discard (like the Tools menu)
+	let realStatus = ZB.main.batchStatus;
+	ZB.main.batchStatus = () => ({ running: true, active: true, pending: { remaining: ["1/A"], failed: [] }, count: 1 });
 	({ entries } = openMenu(env));
 	assert.deepEqual(entries.sync.slice(-1), ["stop"]);
+	assert.ok(!entries.sync.includes("resume") && !entries.sync.includes("discard"));
+	ZB.main.batchStatus = realStatus;
+	// A batch record still marked running, but nothing runs (Zotero quit mid-batch): resume it
+	Zotero.Prefs.set(P + "batch.pending", JSON.stringify({ action: { targets: ["obsidian"], ai: "reuse" }, remaining: ["1/A"], failed: [], total: 1, running: true }));
+	({ entries } = openMenu(env));
+	assert.deepEqual(entries.sync.slice(-2), ["resume", "discard"]);
 	// A classification to undo: shown even with 文獻自動分類 off (as in the Tools menu)
 	Zotero.Prefs.set(P + "classify.lastRun", JSON.stringify({ at: "2026-10-01", libraries: [] }));
 	ZB.features.setEnabled("autoClassify", false);
 	({ entries } = openMenu(env));
-	assert.deepEqual(entries.organize, ["classify-undo", "dashboard", "concepts", "bibliography"]);
-	// AI batches pending: 檢查 AI 批次進度
+	assert.deepEqual(entries.organize, ["classify-undo", "dashboard", "concepts", "bibliography", "export-collection"]);
+	// AI batches pending: 檢查 AI 批次進度, and 取消 AI 批次 while one has not ended
 	ZB.aiBatch.readState = () => ({ batches: [{ id: "b1", status: "in_progress" }] });
+	({ entries } = openMenu(env));
+	assert.deepEqual(entries.ai, ["regenerate", "ai-batch-check", "ai-batch-cancel"]);
+	ZB.aiBatch.readState = () => ({ batches: [{ id: "b1", status: "ended" }] });
 	({ entries } = openMenu(env));
 	assert.deepEqual(entries.ai, ["regenerate", "ai-batch-check"]);
 	assert.deepEqual(env.errors, []);
@@ -449,15 +466,18 @@ test("commands call the existing functions with the main window's selection", as
 	await command(env, "screen-ta-include");
 	same(calls.pop(), ["setDecision", [a, b], { stage: "ta", decision: "include" }]);
 
-	// 全文：排除 › the reasons from the screening settings
-	let reasons = env.doc.querySelector('[data-zb-entry="screen-ft-exclude"] > menupopup');
-	reasons.dispatchEvent(new env.win.Event("popupshowing"));
-	let first = reasons.firstElementChild;
-	assert.ok(first, "exclusion reasons listed");
-	let reason = first.getAttribute("data-zb-reason");
-	assert.equal(first.getAttribute("data-l10n-id"), "zotero-bridge-screen-reason");
+	// 篩選所選文獻 › 全文：排除（原因）: one entry per reason from the screening settings, in the same
+	// submenu (two levels below the button), filled each time it opens
+	let screenPopup = env.doc.querySelector('[data-zb-entry="screen"] > menupopup');
+	screenPopup.dispatchEvent(new env.win.Event("popupshowing"));
+	let reasons = [...screenPopup.querySelectorAll('[data-zb-variant="screen-ft-exclude"]')];
+	assert.equal(reasons.length, Math.min(ZB.screening.config().reasons.length, ZB.screening.MAX_MENU_REASONS));
+	assert.equal(screenPopup.querySelectorAll("menupopup").length, 0, "no third level");
+	let first = reasons[0];
+	let reason = ZB.screening.config().reasons[0];
+	assert.equal(first.getAttribute("data-zb-entry"), `screen-ft-exclude:${reason}`);
+	assert.equal(first.getAttribute("data-l10n-id"), "zotero-bridge-cmd-screen-ft-exclude-reason");
 	assert.deepEqual(JSON.parse(first.getAttribute("data-l10n-args")), { reason });
-	assert.equal(reasons.children.length, Math.min(ZB.screening.config().reasons.length, ZB.screening.MAX_MENU_REASONS));
 	first.dispatchEvent(new env.win.Event("command"));
 	await new Promise(resolve => setTimeout(resolve, 10));
 	same(calls.pop(), ["setDecision", [a, b], { stage: "ft", decision: "exclude", reason }]);

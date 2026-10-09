@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — advisor progress report (指導教授會議進度報告).
+ * ZotMax — advisor progress report (指導教授會議進度報告).
  *
  * Tools menu → a dialog (period, sections, questions to discuss, next goals) → an Obsidian note
  * `<folder>/進度報告/<YYYY-MM-DD>.md` built from data only, no AI needed:
@@ -40,7 +40,7 @@
 	const DRAFTS_FOLDER = "Drafts";
 	const DIGEST_FOLDER = "新文獻";
 	const FILTER_FILE = "zotero-bridge-report.lua";
-	const DIALOG_TITLE = "Zotero Bridge：進度報告";
+	const DIALOG_TITLE = "ZotMax：進度報告";
 	const DEFAULT_DAYS = 14;
 	const READ_STATUSES = ["已讀", "已引用"];
 	const LOG_LIMITS = { maxPerItem: 20, maxEntries: 3000, maxAgeDays: 730 };
@@ -57,7 +57,7 @@
 	const PANDOC_HEADING = "Pandoc 指令";
 	const USER_SECTION = "## ✍️ 我的筆記\n\n";
 	const NOTION_CONTAINER_TITLE = "進度報告（重新產生會覆寫，修改請寫在此區塊外）";
-	const MARK_START = "%% zotero-bridge:start — 此區塊由 Zotero Bridge 自動產生；同一天重新產生報告時會覆寫（「上次目標回顧」的勾選會保留，問題與目標會帶回對話框）%%";
+	const MARK_START = "%% zotero-bridge:start — 此區塊由 ZotMax 自動產生；同一天重新產生報告時會覆寫（「上次目標回顧」的勾選會保留，問題與目標會帶回對話框）%%";
 	const MARK_START_RE = /^%% zotero-bridge:start.*%%[ \t]*$/m;
 	const MARK_END_RE = /^%% zotero-bridge:end %%[ \t]*$/m;
 	const SECTIONS = [
@@ -480,7 +480,7 @@
 	function reviewsSection(rows, hasSnapshot) {
 		let parts = ["## 系統性回顧進度"];
 		if (!rows.length) {
-			parts.push("還沒有回顧專案（Zotero 分類右鍵 → Zotero Bridge：系統性回顧篩選 → 產生 PRISMA 流程圖與證據表）。");
+			parts.push("還沒有回顧專案（Zotero 分類右鍵 → ZotMax → 產生 PRISMA 流程圖與證據表（目前分類））。");
 			return parts.join("\n\n");
 		}
 		parts.push(rows.map(r => prismaLine(r, hasSnapshot)).join("\n"));
@@ -675,7 +675,7 @@
 		return docx.find(n => /^reference\.docx$/i.test(n)) || docx.find(n => /reference|範本|樣板|template/i.test(n)) || "";
 	}
 
-	const PANDOC_FILTER = `-- Zotero Bridge：把進度報告轉成 Word 時，略過 Obsidian 註解（%% … %%）、提示框（> [!info] …）、
+	const PANDOC_FILTER = `-- ZotMax：把進度報告轉成 Word 時，略過 Obsidian 註解（%% … %%）、提示框（> [!info] …）、
 -- 「${PANDOC_HEADING}」「我的筆記」兩節，並把連到 vault 筆記的連結換成文字。這個檔案由插件產生，重新產生報告時會覆寫。
 local SKIP = { "${PANDOC_HEADING}", "我的筆記" }
 
@@ -734,7 +734,7 @@ end
 		let p = meta.period;
 		let info = [`> [!info] 報告期間 ${p.start} 至 ${p.end}`
 			+ (meta.previous ? `（上次報告：${link(meta.previous.link, meta.previous.date)}）` : "（第一份報告）")
-			+ `。由 Zotero Bridge 於 ${String(meta.generatedAt || "").slice(0, 10)} 依 Zotero 與 vault 的資料產生${summary ? "，「本期摘要」由 AI 依這些資料整理" : "，沒有使用 AI"}。`,
+			+ `。由 ZotMax 於 ${String(meta.generatedAt || "").slice(0, 10)} 依 Zotero 與 vault 的資料產生${summary ? "，「本期摘要」由 AI 依這些資料整理" : "，沒有使用 AI"}。`,
 		"> 要修改內容請寫在「✍️ 我的筆記」或另存；同一天重新產生時，這個區塊會被覆寫。"];
 		return [
 			MARK_START,
@@ -799,7 +799,7 @@ end
 
 	/** Markdown for the Notion page (wikilinks as text, no Obsidian markers). */
 	function buildNotionMarkdown(sectionsMd, summary, meta) {
-		let parts = [`> 報告期間 ${meta.period.start} 至 ${meta.period.end}${meta.previous ? `（上次報告 ${meta.previous.date}）` : ""}。由 Zotero Bridge 依 Zotero 與 Obsidian 的資料產生。`];
+		let parts = [`> 報告期間 ${meta.period.start} 至 ${meta.period.end}${meta.previous ? `（上次報告 ${meta.previous.date}）` : ""}。由 ZotMax 依 Zotero 與 Obsidian 的資料產生。`];
 		if (summary) parts.push(`## ${SUMMARY_HEADING}\n\n${summary.text}`);
 		parts.push(stripWikilinks(sectionsMd));
 		return parts.join("\n\n");
@@ -952,7 +952,7 @@ end
 				});
 			}
 			catch (e) {
-				Zotero.debug(`Zotero Bridge: progress report skipped ${entry.path}: ${e}`);
+				Zotero.debug(`ZotMax: progress report skipped ${entry.path}: ${e}`);
 			}
 		}
 		return out;
@@ -1008,7 +1008,7 @@ end
 				if (PRISMA_FIELDS.some(([k]) => r[k] !== null)) out.push(r);
 			}
 			catch (e) {
-				Zotero.debug(`Zotero Bridge: progress report skipped ${f.path}: ${e}`);
+				Zotero.debug(`ZotMax: progress report skipped ${f.path}: ${e}`);
 			}
 		}
 		return out.sort((a, b) => a.title.localeCompare(b.title, "zh-Hant"));
@@ -1026,7 +1026,7 @@ end
 				drafts.push(draftRecord(await IOUtils.readUTF8(f.path), f.relPath, stat && stat.lastModified));
 			}
 			catch (e) {
-				Zotero.debug(`Zotero Bridge: progress report skipped ${f.path}: ${e}`);
+				Zotero.debug(`ZotMax: progress report skipped ${f.path}: ${e}`);
 			}
 		}
 		drafts.sort((a, b) => (b.modified || "").localeCompare(a.modified || "") || a.name.localeCompare(b.name, "zh-Hant"));
@@ -1044,7 +1044,7 @@ end
 				if (groups.length) out.push({ date: m[1], link: [...dirParts, m[1]].join("/"), groups });
 			}
 			catch (e) {
-				Zotero.debug(`Zotero Bridge: progress report skipped ${child}: ${e}`);
+				Zotero.debug(`ZotMax: progress report skipped ${child}: ${e}`);
 			}
 		}
 		return out.sort((a, b) => a.date.localeCompare(b.date));
@@ -1255,7 +1255,7 @@ end
 			return null;
 		}
 		if (!settings.vaultPath) {
-			notify("進度報告寫在 Obsidian：請先到 設定 → Zotero Bridge 填入 Obsidian vault 路徑。");
+			notify("進度報告寫在 Obsidian：請先到 設定 → ZotMax 填入 Obsidian vault 路徑。");
 			return null;
 		}
 		let at = now();
@@ -1321,7 +1321,7 @@ end
 			return null;
 		}
 		let prompt = buildSummaryPrompt(factsText, period);
-		if (!Services.prompt.confirm(Zotero.getMainWindow(), "Zotero Bridge", confirmText(settings, prompt))) {
+		if (!Services.prompt.confirm(Zotero.getMainWindow(), "ZotMax", confirmText(settings, prompt))) {
 			notes.push("已取消 AI 摘要，報告不含「本期摘要」。");
 			return null;
 		}
@@ -1479,29 +1479,6 @@ end
 		return !f || f.isEnabled(id);
 	}
 
-	/** Menu entries that hide while the feature is off (features.js gateMenus). */
-	function gated(id, menus) {
-		let f = scope.ZB && scope.ZB.features;
-		return f ? f.gateMenus(id, menus) : menus;
-	}
-
-	/** Tools menu entry; returns the menu IDs to unregister. */
-	function registerMenus({ pluginID }) {
-		return [Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-progress-report-tools",
-			pluginID,
-			target: "main/menubar/tools",
-			menus: gated("progressReport", [{
-				menuType: "menuitem",
-				l10nID: "zotero-bridge-menu-progress-report",
-				onCommand: () => {
-					// Through the exported object, so tests can wait for the run
-					api.run().catch(e => Zotero.logError(e));
-				},
-			}]),
-		})].filter(Boolean);
-	}
-
 	const api = {
 		STATUS_LOG_PREF, HISTORY_PREF, OPTIONS_PREF, REPORT_FOLDER, FILTER_FILE, PANDOC_FILTER, SECTIONS, LOG_LIMITS, SUMMARY_PROMPT,
 		// pure
@@ -1513,7 +1490,7 @@ end
 		buildSections, toPlainText, stripWikilinks, buildSummaryPrompt, estimateSummaryCost, processSummary,
 		reportPaths, pickReferenceDoc, buildRegion, buildReportNote, buildPlainReport, buildNotionMarkdown,
 		// Zotero
-		runtime, logStatusChange, latestReport, collectFacts, askOptions, askWithPrompts, run, registerMenus,
+		runtime, logStatusChange, latestReport, collectFacts, askOptions, askWithPrompts, run,
 	};
 	return api;
 });

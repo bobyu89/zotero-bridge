@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge end-to-end test harness: a second bootstrap plugin installed next to Zotero Bridge
+ * ZotMax end-to-end test harness: a second bootstrap plugin installed next to ZotMax
  * in a throwaway profile (test/e2e/run.sh). It waits for Zotero and the plugin, runs the checks below
  * against the real Zotero (items, PDF worker, login manager, MenuManager, Fluent, preferences window),
  * writes <workDir>/results.json and quits Zotero.
@@ -12,6 +12,15 @@
 
 const PLUGIN_ID = "zotero-bridge@bobyu89.github.io";
 const PANE_ID = "zotero-bridge-prefs";
+// The settings pane's workflow tabs and the sections (data-zb-section) in each, in order
+const PANE_TABS = {
+	features: ["features"],
+	sync: ["obsidian", "notion", "routing", "autosync", "status", "apaZh", "bibliography"],
+	organize: ["fulltext", "colors", "concepts", "classify"],
+	search: ["searchLinks", "ncbi", "pubmedWatch", "citationChase"],
+	appraise: ["screening"],
+	ai: ["ai", "usage"],
+};
 const E2E_PREF = "extensions.zb-e2e.";
 const ZB_PREF = "extensions.zotero-bridge.";
 const TEST_TIMEOUT_MS = 120000;
@@ -70,6 +79,59 @@ function errText(e) {
 	let s = e.message ? e.message : String(e);
 	if (e.stack) s += `\n${String(e.stack).split("\n").slice(0, 6).join("\n")}`;
 	return s;
+}
+
+/**
+ * A plain copy of a value for results.json: arrays and objects become harness-owned copies, so
+ * nothing refers to a window (or the plugin's sandbox) that may be gone by the end of the run
+ * ("can't access dead object"). Whatever can't be read is replaced by a note, not lost with the rest.
+ */
+function plain(value, depth = 0) {
+	try {
+		return JSON.parse(JSON.stringify(value === undefined ? null : value));
+	}
+	catch (e) {
+		// Fall through: copy what can still be read, one value at a time
+	}
+	try {
+		if (value === null || typeof value !== "object") return typeof value === "function" ? undefined : value;
+		if (depth > 20) return "[too deep]";
+		if (Array.isArray(value)) return Array.from(value, v => plain(v, depth + 1));
+		let out = {};
+		for (let k of Object.keys(value)) {
+			try {
+				out[k] = plain(value[k], depth + 1);
+			}
+			catch (e) {
+				out[k] = `[unreadable: ${e}]`;
+			}
+		}
+		return out;
+	}
+	catch (e) {
+		return `[unreadable: ${e}]`;
+	}
+}
+
+/** results as JSON; a test whose record can't be written is reduced to { name, ok, error }. */
+function resultsJSON() {
+	let out = {};
+	for (let [k, v] of Object.entries(results)) {
+		if (k === "tests") {
+			out.tests = v.map((t) => {
+				try {
+					return JSON.parse(JSON.stringify(t));
+				}
+				catch (e) {
+					return { name: t.name, ok: t.ok, error: t.error, unserializable: String(e) };
+				}
+			});
+		}
+		else {
+			out[k] = plain(v);
+		}
+	}
+	return JSON.stringify(out, null, 2);
 }
 
 // ---------- console capture ----------
@@ -210,7 +272,7 @@ function fmValue(fm, key) {
 }
 
 /**
- * Open the Zotero Bridge toolbar menu as a click does, read what it shows (visible group IDs, entry
+ * Open the ZotMax toolbar menu as a click does, read what it shows (visible group IDs, entry
  * IDs and translated labels), close it again.
  */
 async function openToolbarMenu(button) {
@@ -219,7 +281,7 @@ async function openToolbarMenu(button) {
 	check(popup, "the toolbar button has no menupopup");
 	popup.openPopup(button, "after_start", 0, 0, false, false);
 	try {
-		await waitFor(() => popup.state === "open", "the Zotero Bridge toolbar menu to open", 10000);
+		await waitFor(() => popup.state === "open", "the ZotMax toolbar menu to open", 10000);
 		// Fluent translates the entries asynchronously
 		await win.document.l10n.translateFragment(popup);
 		let shown = el => !el.hidden;
@@ -234,7 +296,7 @@ async function openToolbarMenu(button) {
 	}
 	finally {
 		popup.hidePopup();
-		await waitFor(() => popup.state === "closed", "the Zotero Bridge toolbar menu to close", 10000);
+		await waitFor(() => popup.state === "closed", "the ZotMax toolbar menu to close", 10000);
 	}
 }
 
@@ -244,19 +306,23 @@ const ctx = { l10nSourceErrors: [] };
 
 const TESTS = [
 	{
-		name: "Zotero Bridge is installed and enabled (AddonManager)",
+		name: "ZotMax is installed and enabled (AddonManager)",
 		async fn(d) {
 			const { AddonManager } = ChromeUtils.importESModule("resource://gre/modules/AddonManager.sys.mjs");
 			let addon = await AddonManager.getAddonByID(PLUGIN_ID);
 			check(addon, `AddonManager does not know ${PLUGIN_ID}: the .xpi in <profile>/extensions was not picked up at startup`);
 			Object.assign(d, {
-				version: addon.version, isActive: addon.isActive, userDisabled: addon.userDisabled,
+				id: addon.id, name: addon.name, version: addon.version, isActive: addon.isActive, userDisabled: addon.userDisabled,
 				appDisabled: addon.appDisabled, scope: addon.scope, type: addon.type,
 			});
 			check(addon.type === "extension", `add-on type is ${addon.type}, not "extension"`);
 			check(addon.isActive, `the plugin is installed but not active (userDisabled=${addon.userDisabled}, appDisabled=${addon.appDisabled}, `
 				+ `softDisabled=${addon.softDisabled}); appDisabled usually means Zotero rejected manifest.json (strict_min_version/strict_max_version)`);
 			eq(addon.version, ctx.expectedVersion, "installed plugin version differs from manifest.json");
+			// The display name is ZotMax; the ID stays the one earlier versions (Zotero Bridge) installed
+			// under, so they update in place and keep their settings and keys
+			eq(addon.name, "ZotMax", "add-on name (manifest.json name)");
+			eq(addon.id, "zotero-bridge@bobyu89.github.io", "add-on ID");
 		},
 		// Startup errors are judged by "no plugin errors in the console during startup" (against the baseline)
 		allowUnattributed: ["uncaught exception: undefined", "uncaught exception: undefined"],
@@ -287,20 +353,23 @@ const TESTS = [
 				images: ["collect"],
 				status: ["runPass", "prepare", "setItemStatus"],
 				reviewDraft: ["run"],
-				screening: ["setDecision", "generateReport", "registerMenus"],
-				pubmedWatch: ["init", "shutdown", "runAll", "registerMenus"],
-				dashboard: ["update", "afterSync", "registerMenus"],
-				concepts: ["update", "afterSync", "dashboardSection", "synthesizeFromMenu", "registerMenus"],
-				classify: ["parseRules", "evaluate", "parseTopics", "suggest", "defaultPicks", "planApply", "apply", "undoLast", "readLastRun", "review", "renderReview", "run", "registerMenus"],
-				citationChase: ["chaseCollection", "chaseItems", "importChecked", "registerMenus"],
-				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "registerMenus"],
-				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "registerMenus", "batchParams", "parseResults"],
+				screening: ["setDecision", "generateReport", "dedupCollection"],
+				pubmedWatch: ["init", "shutdown", "runAll"],
+				dashboard: ["update", "afterSync", "runFromMenu"],
+				concepts: ["update", "afterSync", "dashboardSection", "runFromMenu", "synthesizeFromMenu"],
+				classify: ["parseRules", "evaluate", "parseTopics", "suggest", "defaultPicks", "planApply", "apply", "undoLast", "readLastRun", "review", "renderReview", "run"],
+				citationChase: ["chaseCollection", "chaseItems", "importChecked"],
+				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "menuTargets", "relatedFor", "showMore", "openTarget"],
+				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "batchParams", "parseResults"],
 				ebhcReport: ["run", "askOptions", "processReport", "buildReportNote"],
-				appraisalForm: ["renderPaneRow", "syncInfo", "saveRecord", "exportSummary", "registerMenus"],
-				progressReport: ["run", "askOptions", "logStatusChange", "latestReport", "registerMenus"],
+				appraisalForm: ["renderPaneRow", "syncInfo", "saveRecord", "exportSummary", "exportCollections"],
+				progressReport: ["run", "askOptions", "logStatusChange", "latestReport"],
 				features: ["isEnabled", "rawValue", "applyPreset", "currentPreset", "snapshot", "restore", "migrate", "gateMenus"],
+				commands: ["get", "execute", "fromWindow", "fromContext", "isVisible", "availability", "paletteEntries", "search", "normalize", "openSettings"],
+				menus: ["register", "buildEntries", "toolsEntries"],
+				palette: ["open", "close", "render", "localize", "attach", "detach", "shutdown", "shortcutLabel"],
 				toolbar: ["init", "add", "remove", "shutdown", "update"],
-				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly", "renameNotionColumns", "notionClient", "prepareFullText"],
+				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly", "renameNotionColumns", "notionClient", "prepareFullText", "batchStatus"],
 			};
 			let missing = [];
 			for (let [mod, fns] of Object.entries(MODULES)) {
@@ -371,30 +440,11 @@ const TESTS = [
 			let manager = Zotero.MenuManager && Zotero.MenuManager._menuManager;
 			check(manager && Array.isArray(manager.options), "cannot read Zotero.MenuManager registrations (_menuManager.options) — MenuManager API changed?");
 			let mine = manager.options.filter(o => o.pluginID === PLUGIN_ID);
+			// One registration per menu, generated from the command catalog (content/commands.js, menus.js)
 			const EXPECTED = {
 				"zotero-bridge-item": "main/library/item",
 				"zotero-bridge-collection": "main/library/collection",
 				"zotero-bridge-tools": "main/menubar/tools",
-				"zotero-bridge-export-tools": "main/menubar/tools",
-				"zotero-bridge-export-collection": "main/library/collection",
-				"zotero-bridge-screening-item": "main/library/item",
-				"zotero-bridge-screening-collection": "main/library/collection",
-				"zotero-bridge-screening-tools": "main/menubar/tools",
-				"zotero-bridge-pubmed-watch-tools": "main/menubar/tools",
-				"zotero-bridge-dashboard-tools": "main/menubar/tools",
-				"zotero-bridge-concepts-tools": "main/menubar/tools",
-				"zotero-bridge-chase-item": "main/library/item",
-				"zotero-bridge-chase-collection": "main/library/collection",
-				"zotero-bridge-chase-tools": "main/menubar/tools",
-				"zotero-bridge-search-item": "main/library/item",
-				"zotero-bridge-search-tools": "main/menubar/tools",
-				"zotero-bridge-ai-batch-tools": "main/menubar/tools",
-				"zotero-bridge-appraisal-collection": "main/library/collection",
-				"zotero-bridge-appraisal-tools": "main/menubar/tools",
-				"zotero-bridge-progress-report-tools": "main/menubar/tools",
-				"zotero-bridge-classify-item": "main/library/item",
-				"zotero-bridge-classify-collection": "main/library/collection",
-				"zotero-bridge-classify-tools": "main/menubar/tools",
 			};
 			d.registered = mine.map(o => `${o.menuID} → ${o.target}`);
 			let problems = [];
@@ -404,6 +454,26 @@ const TESTS = [
 				if (!opt) problems.push(`${id} not registered (registerMenu() returned false — see "MenuAPI:" warnings in zotero.log)`);
 				else if (opt.target !== target) problems.push(`${id} has target ${opt.target}, expected ${target}`);
 			}
+			let unexpected = mine.filter(o => !Object.keys(EXPECTED).some(id => o.menuID === id || o.menuID === CSS.escape(`${PLUGIN_ID}-${id}`)));
+			if (unexpected.length) problems.push(`registrations besides the three menus: ${unexpected.map(o => o.menuID).join(", ")}`);
+			// The right-click menus: one 「ZotMax ▸」 submenu each; at most two levels below it
+			for (let id of ["zotero-bridge-item", "zotero-bridge-collection"]) {
+				let opt = mine.find(o => o.menuID === id || o.menuID === CSS.escape(`${PLUGIN_ID}-${id}`));
+				if (!opt) continue;
+				if (opt.menus.length !== 1 || opt.menus[0].menuType !== "submenu" || opt.menus[0].l10nID !== "zotero-bridge-menu") {
+					problems.push(`${id}: not one ZotMax submenu (${opt.menus.map(m => m.l10nID || m.menuType).join(", ")})`);
+					continue;
+				}
+				for (let child of opt.menus[0].menus) {
+					if ((child.menus || []).some(m => m.menuType === "submenu")) problems.push(`${id}: ${child.l10nID} has a third level`);
+				}
+			}
+			// The Tools menu: settings, 快速指令, and the batch entries (shown only while they apply)
+			let tools = mine.find(o => o.target === "main/menubar/tools");
+			d.tools = tools ? tools.menus.map(m => m.l10nID) : [];
+			let toolsWant = ["zotero-bridge-menu-settings", "zotero-bridge-menu-palette", "zotero-bridge-menu-resume", "zotero-bridge-menu-stop",
+				"zotero-bridge-menu-discard", "zotero-bridge-menu-ai-batch-check", "zotero-bridge-menu-ai-batch-cancel"];
+			if (JSON.stringify(d.tools) !== JSON.stringify(toolsWant)) problems.push(`Tools menu entries ${JSON.stringify(d.tools)}, expected ${JSON.stringify(toolsWant)}`);
 			check(!problems.length, problems.join("; "));
 			// Every l10n ID used by the menus, for the Fluent check
 			ctx.l10n = ctx.l10n || new Map();
@@ -423,8 +493,13 @@ const TESTS = [
 		async fn(d) {
 			let pane = (Zotero.PreferencePanes.pluginPanes || []).find(p => p.id === PANE_ID);
 			check(pane, `Zotero.PreferencePanes has no pane "${PANE_ID}" (register() in bootstrap startup failed)`);
-			Object.assign(d, { pluginID: pane.pluginID, src: pane.src, scripts: pane.scripts, label: pane.label });
+			// Zotero keeps a plain-text label as rawLabel (label is for Fluent IDs); accept either
+			// (older/newer Zotero versions differ in the property name, so fall back to any field holding it)
+			let label = pane.rawLabel || pane.label || Object.values(pane).find(v => typeof v == "string" && v == "ZotMax");
+			d.paneKeys = Object.keys(pane).map(String);
+			Object.assign(d, { pluginID: pane.pluginID, src: pane.src, scripts: Array.from(pane.scripts || [], String), label: String(label), rawLabel: String(pane.rawLabel), l10nLabel: String(pane.label) });
 			eq(pane.pluginID, PLUGIN_ID, "pane pluginID");
+			eq(label, "ZotMax", "pane label (the settings sidebar entry)");
 			check(/content\/preferences\.xhtml$/.test(pane.src), `pane src is ${pane.src}`);
 			check((pane.scripts || []).some(s => /content\/preferences\.js$/.test(s)), "pane scripts do not include content/preferences.js");
 		},
@@ -434,8 +509,8 @@ const TESTS = [
 		needs: ["Zotero.ZoteroBridge is set and has every module"],
 		async fn(d) {
 			let data = Zotero.ItemPaneManager.customSectionData;
-			let mine = (data.options || []).filter(o => o.pluginID === PLUGIN_ID);
-			d.sections = mine.map(o => o.paneID);
+			let mine = Array.from(data.options || []).filter(o => o.pluginID === PLUGIN_ID);
+			d.sections = mine.map(o => String(o.paneID));
 			eq(mine.length, 1, "number of item pane sections registered by the plugin");
 			let section = mine[0];
 			check(/zotero-bridge-ai-note$/.test(section.paneID), `unexpected paneID ${section.paneID}`);
@@ -459,7 +534,7 @@ const TESTS = [
 				if (!ctx.l10n.has(m[1])) ctx.l10n.set(m[1], null);
 			}
 			let ids = [...ctx.l10n.keys()];
-			let args = { count: 3, reason: "E2E", name: "E2E", preset: "guided", req: "sync", color: "yellow" };
+			let args = { count: 3, reason: "E2E", name: "E2E", preset: "guided", req: "sync", color: "yellow", feature: "E2E", query: "E2E", shortcut: "E2E", error: "E2E" };
 			let report = {};
 			let problems = [];
 			for (let locale of ["en-US", "zh-TW"]) {
@@ -473,17 +548,19 @@ const TESTS = [
 				}
 				let msgs = await l10n.formatMessages(ids.map(id => ({ id, args })));
 				let missing = [];
+				let oldName = [];
 				ids.forEach((id, i) => {
 					let m = msgs[i];
 					let text = m && (m.value || (m.attributes || []).map(a => a.value).join(""));
 					if (!text || !text.trim()) missing.push(id);
+					else if (/Zotero Bridge/.test(text)) oldName.push(id);
 				});
-				report[locale] = { checked: ids.length, missing };
+				report[locale] = { checked: ids.length, missing, oldName };
 				if (missing.length) problems.push(`${locale}: no text for ${missing.join(", ")}`);
-				if (locale === "zh-TW") {
-					let [label] = await l10n.formatMessages([{ id: "zotero-bridge-menu-settings" }]);
-					report[locale].sample = label && label.attributes && label.attributes[0] && label.attributes[0].value;
-				}
+				if (oldName.length) problems.push(`${locale}: the old name Zotero Bridge shows in ${oldName.join(", ")}`);
+				let [label] = await l10n.formatMessages([{ id: "zotero-bridge-menu-settings" }]);
+				report[locale].sample = label && label.attributes && label.attributes[0] && String(label.attributes[0].value);
+				if (!/^ZotMax /.test(report[locale].sample || "")) problems.push(`${locale}: Tools menu settings entry is ${JSON.stringify(report[locale].sample)}, expected it to start with ZotMax`);
 			}
 			// The main window must have the FTL linked (bootstrap onMainWindowLoad)
 			let doc = mainWindow().document;
@@ -513,6 +590,17 @@ const TESTS = [
 						tabType: "library",
 						skipGrouping: true,
 					});
+					// Open the submenus as Gecko does (popupshowing builds their entries): the 「ZotMax ▸」
+					// submenu, then the variant submenus inside it (篩選, 在醫學資料庫搜尋)
+					let opened = new Set();
+					for (let round = 0; round < 3; round++) {
+						for (let sub of popup.querySelectorAll("menupopup")) {
+							if (opened.has(sub)) continue;
+							opened.add(sub);
+							sub.dispatchEvent(new win.Event("popupshowing"));
+						}
+					}
+					d.submenusOpened = (d.submenusOpened || 0) + opened.size;
 					let ours = [...popup.querySelectorAll("[data-l10n-id]")].filter(e => e.dataset.l10nId.startsWith("zotero-bridge-"));
 					// Labels with variables get their args in onShowing; give them some here
 					for (let el of ours) {
@@ -520,7 +608,11 @@ const TESTS = [
 					}
 					await doc.l10n.translateFragment(popup);
 					rendered[target] = ours.map(e => `${e.dataset.l10nId}: ${e.getAttribute("label")}`);
-					if (!ours.length) problems.push(`${target}: no Zotero Bridge menu elements were created`);
+					if (!ours.length) problems.push(`${target}: no ZotMax menu elements were created`);
+					// The submenus' entries were built too: group captions and commands from the catalog
+					if (target !== "main/menubar/tools" && !ours.some(e => e.dataset.l10nId === "zotero-bridge-toolbar-group-sync")) {
+						problems.push(`${target}: the ZotMax submenu built no entries when it opened`);
+					}
 					for (let el of ours) {
 						if (!(el.getAttribute("label") || "").trim()) problems.push(`${target}: ${el.dataset.l10nId} has no label after translation`);
 					}
@@ -541,13 +633,13 @@ const TESTS = [
 			let doc = win.document;
 			let T = zb().toolbar;
 			let button = await waitFor(() => doc.getElementById(T.BUTTON_ID),
-				"the Zotero Bridge toolbar button (bootstrap onMainWindowLoad → ZB.toolbar.add)", 10000);
+				"the ZotMax toolbar button (bootstrap onMainWindowLoad → ZB.toolbar.add)", 10000);
 			eq(doc.querySelectorAll("#" + T.BUTTON_ID).length, 1, "toolbar buttons in the main window");
 			d.parent = button.parentNode && button.parentNode.id;
 			eq(d.parent, "zotero-items-toolbar", "the toolbar holding the button");
 			eq(button.previousElementSibling && button.previousElementSibling.id, "zotero-tb-note-add", "the button's neighbour on the left");
-			eq(button.getAttribute("aria-label"), "Zotero Bridge", "aria-label");
-			eq(button.getAttribute("tooltiptext"), "Zotero Bridge", "tooltiptext");
+			eq(button.getAttribute("aria-label"), "ZotMax", "aria-label");
+			eq(button.getAttribute("tooltiptext"), "ZotMax", "tooltiptext");
 			eq(button.getAttribute("type"), "menu", "button type");
 			check(button.classList.contains("zotero-tb-button"), "the button lacks Zotero's zotero-tb-button class");
 			check(!button.hidden, "the button is hidden although 工具列按鈕 is on");
@@ -574,6 +666,7 @@ const TESTS = [
 			check(menu.groups.length > 0, "no group shows in the toolbar menu");
 			check(!menu.untranslated.length, `toolbar menu entries without a label: ${menu.untranslated.join(", ")}`);
 			eq(menu.entries[menu.entries.length - 1], "settings", "last entry of the toolbar menu");
+			eq(menu.entries[0], "palette", "first entry of the toolbar menu (快速指令…)");
 			// Keyboard: Zotero's arrow-key row continues from 新增筆記 to the button and back
 			note.focus();
 			note.dispatchEvent(new win.KeyboardEvent("keydown", { key: Zotero.arrowNextKey, bubbles: true, cancelable: true }));
@@ -590,6 +683,66 @@ const TESTS = [
 				Zotero.Prefs.clear(ZB_PREF + "feature.toolbarButton", true);
 			}
 			await waitFor(() => !button.hidden, "the button to come back with 工具列按鈕 on", 5000);
+		},
+	},
+	{
+		name: "快速指令 opens from chrome://zotero-bridge/, finds 分類 first, closes with Esc; Ctrl/Cmd+Shift+P opens it",
+		needs: ["Zotero.ZoteroBridge is set and has every module"],
+		timeout: 60000,
+		async fn(d) {
+			let P = zb().palette;
+			let win = mainWindow();
+			let dialog = null;
+			try {
+				let view = null;
+				dialog = await P.open(win, { onOpen: (w, v) => {
+					view = v;
+				} });
+				check(dialog && view, "ZB.palette.open() did not show the palette (see the plugin errors)");
+				let doc = dialog.document;
+				d.url = doc.documentURI;
+				eq(doc.documentURI, P.DIALOG_URL, "palette window URL");
+				await waitFor(() => /ZotMax/.test(doc.title), "the palette window title to name ZotMax", 10000);
+				d.title = String(doc.title);
+				let root = doc.getElementById(P.DIALOG_ROOT);
+				// palette.css is applied (registered chrome package)
+				d.rootDisplay = dialog.getComputedStyle(root).display;
+				eq(d.rootDisplay, "flex", "display of #zb-palette (is palette.css loaded?)");
+				let input = doc.getElementById("zb-pal-input");
+				eq(input.getAttribute("role"), "combobox", "role of the search field");
+				check(doc.querySelector('label[for="zb-pal-input"]'), "the search field has no label");
+				d.groups = [...root.querySelectorAll(".zb-pal-group-title")].map(t => t.textContent);
+				check(d.groups.length >= 5, `group titles: ${JSON.stringify(d.groups)}`);
+				// Type 分類 as a user does
+				input.focus();
+				input.value = "分類";
+				input.dispatchEvent(new dialog.Event("input", { bubbles: true }));
+				let options = [...root.querySelectorAll('[role="option"]')];
+				d.results = options.slice(0, 5).map(o => `${o.getAttribute("data-zb-entry")}: ${o.querySelector(".zb-pal-name").textContent}`);
+				check(options.length > 0, "no results for 分類");
+				eq(options[0].getAttribute("data-zb-entry"), "classify", "first result for 分類");
+				eq(options[0].getAttribute("aria-selected"), "true", "the first result is the active one");
+				eq(input.getAttribute("aria-activedescendant"), options[0].id, "aria-activedescendant");
+				check(!/\{ ?\$/.test(root.textContent), "a Fluent placeholder shows in the palette");
+				// Esc closes it, running nothing
+				input.dispatchEvent(new dialog.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+				await waitFor(() => dialog.closed, "the palette to close on Esc", 10000);
+				check(!P.isOpen, "ZB.palette.isOpen after Esc");
+				// The shortcut is registered in the main window, and opens the palette
+				d.shortcut = P.shortcutLabel();
+				eq(d.shortcut, Zotero.isMac ? "⇧⌘P" : "Ctrl+Shift+P", "shortcut");
+				check(P.windowCount >= 1, "no main window listens for the shortcut");
+				win.focus();
+				win.document.documentElement.dispatchEvent(new win.KeyboardEvent("keydown", {
+					key: "P", code: "KeyP", shiftKey: true, ctrlKey: !Zotero.isMac, metaKey: !!Zotero.isMac, bubbles: true, cancelable: true,
+				}));
+				await waitFor(() => P.isOpen, "the shortcut to open the palette", 10000);
+				P.close();
+			}
+			finally {
+				P.close();
+				if (dialog && !dialog.closed) dialog.close();
+			}
 		},
 	},
 	{
@@ -1031,7 +1184,7 @@ const TESTS = [
 				let items = [ctx.english, ctx.chinese, ctx.book, ctx.extra1, ctx.extra2];
 				let plan = await C.suggest(items, { ui: { confirmAI: () => "skip", status: () => {} } });
 				check(plan && Array.isArray(plan.items), `suggest() returned ${JSON.stringify(plan)}`);
-				d.notes = plan.notes;
+				d.notes = plain(plan.notes);
 				let picks = C.defaultPicks(plan);
 				d.picks = picks.map(p => `${p.itemKey} → ${p.dimension}/${p.value}`);
 				let want = [
@@ -1195,7 +1348,9 @@ const TESTS = [
 					if (!c.querySelector(`#${id}`)) problems.push(`#${id} missing`);
 				}
 				check(!problems.length, `pane markup: ${problems.join(", ")}`);
-				check(d.headings.length >= 5, `only ${d.headings.length} section headings rendered`);
+				// One h2 per section; the sections now sit in workflow tabs (all of them in the DOM)
+				let sectionCount = Object.values(PANE_TABS).flat().length;
+				eq(d.headings.length, sectionCount, "section headings rendered");
 				check(win.ZoteroBridgePrefs && typeof win.ZoteroBridgePrefs.init === "function",
 					"window.ZoteroBridgePrefs missing: content/preferences.js did not run in the pane scope");
 				// onload="ZoteroBridgePrefs.init()" ran: rules list, usage text and the stored secret
@@ -1233,6 +1388,97 @@ const TESTS = [
 				await waitFor(() => F.rawValue("citationChase") === false && chaseBox.hasAttribute("hidden"),
 					"turning 引文追蹤 off again to hide its section", 5000);
 				d.featureHeading = (c.querySelector("[data-l10n-id=zotero-bridge-features-heading]") || {}).textContent;
+
+				// Workflow tabs: the tablist renders, every section is in exactly one tab, and only the selected panel shows
+				let root = c.querySelector("#zotero-bridge-prefs");
+				let api = win.ZoteroBridgePrefs;
+				let display = node => win.getComputedStyle(node).display;
+				let shown = node => !!node && node.getBoundingClientRect().height > 0;
+				let selectedTab = () => (c.querySelector("[role=tablist] [role=tab][aria-selected=true]") || { getAttribute: () => null }).getAttribute("data-zb-tab");
+				let tabs = [...c.querySelectorAll("[role=tablist] [role=tab]")];
+				d.tabs = tabs.map(t => t.textContent);
+				eq(JSON.stringify(tabs.map(t => t.getAttribute("data-zb-tab"))), JSON.stringify(Object.keys(PANE_TABS)), "tabs in the tablist");
+				check(tabs.every(t => t.textContent.trim()), `a tab without a label: ${JSON.stringify(d.tabs)}`);
+				check(shown(c.querySelector("[role=tablist]")), "the tablist is not rendered");
+				let tabProblems = [];
+				for (let [tab, ids] of Object.entries(PANE_TABS)) {
+					let panel = c.querySelector(`#zb-panel-${tab}`);
+					if (!panel || panel.getAttribute("role") !== "tabpanel") {
+						tabProblems.push(`#zb-panel-${tab} missing`);
+						continue;
+					}
+					let got = [...panel.querySelectorAll("[data-zb-section]")].map(n => n.getAttribute("data-zb-section"));
+					if (JSON.stringify(got) !== JSON.stringify(ids)) tabProblems.push(`${tab} holds ${JSON.stringify(got)}`);
+				}
+				for (let g of c.querySelectorAll("groupbox")) {
+					if (!g.closest("[role=tabpanel]") || !g.getAttribute("data-zb-section")) tabProblems.push(`a groupbox outside the tabs: ${g.textContent.trim().slice(0, 30)}`);
+				}
+				check(!tabProblems.length, `tabs: ${tabProblems.join("; ")}`);
+				eq(selectedTab(), "features", "tab selected in a fresh profile");
+				check(display(c.querySelector("#zb-panel-features")) !== "none", "the 功能 panel should show");
+				eq(display(c.querySelector("#zb-panel-sync")), "none", "display of a panel that isn't selected (is preferences.css loaded?)");
+				check(typeof api.showSection === "function", "ZoteroBridgePrefs.showSection missing");
+
+				// showSection: every section that is on can be reached, in its tab, on screen
+				check(api.showSection("notion"), "showSection(\"notion\") returned false");
+				eq(selectedTab(), "sync", "tab after showSection(\"notion\")");
+				let notionBox = c.querySelector('[data-zb-section="notion"]');
+				check(shown(notionBox), "the Notion section should be rendered after showSection");
+				check(notionBox.classList.contains("zb-flash"), "the Notion section should be highlighted after showSection");
+				eq(display(c.querySelector("#zb-panel-features")), "none", "display of the 功能 panel after showSection(\"notion\")");
+				let unreachable = [];
+				d.reachable = [];
+				for (let s of api.sections()) {
+					if (!s.visible) continue;
+					api.showSection(s.id);
+					let node = c.querySelector(`[data-zb-section="${s.id}"]`);
+					if (selectedTab() !== s.tab || !shown(node)) unreachable.push(`${s.id} (tab ${selectedTab()})`);
+					else d.reachable.push(s.id);
+				}
+				check(!unreachable.length, `sections showSection() did not bring on screen: ${unreachable.join(", ")}`);
+				check(d.reachable.length >= 12, `only ${d.reachable.length} sections are on in 研究生引導`);
+				// A section of a switched-off feature leads to its switch in 功能
+				check(api.showSection("citationChase"), "showSection(\"citationChase\") returned false");
+				eq(selectedTab(), "features", "tab after showSection on a switched-off section");
+				let notice = c.querySelector("#zb-section-notice");
+				check(notice && c.querySelector('.zb-feature[data-feature="citationChase"]').contains(notice), "no note under the 引文追蹤 switch");
+				d.notice = notice.textContent;
+				d.focusAfterOff = win.document.activeElement && win.document.activeElement.id;
+				// prefs.pendingSection, set while the pane is open
+				setPref("prefs.pendingSection", "screening");
+				await waitFor(() => selectedTab() === "appraise", "prefs.pendingSection \"screening\" to open the 篩選與評讀 tab", 5000);
+				eq(Zotero.Prefs.get(ZB_PREF + "prefs.pendingSection", true), "", "prefs.pendingSection after the pane opened it");
+
+				// Search: matches from every tab, highlighted; Esc brings the tabs back
+				api.selectTab("features");
+				let box = c.querySelector("#zb-search");
+				let found = () => Array.from(api.sections()).filter(s => s.visible
+					&& !c.querySelector(`[data-zb-section="${s.id}"]`).classList.contains("zb-search-miss")).map(s => s.id);
+				box.focus();
+				box.value = "Notion";
+				box.dispatchEvent(new win.Event("input"));
+				check(root.classList.contains("zb-searching"), "typing in the search box should start a search");
+				d.searchNotion = found();
+				check(d.searchNotion.includes("notion"), `search 「Notion」 found ${JSON.stringify(d.searchNotion)}`);
+				check(shown(notionBox), "the Notion section (another tab) should be rendered while searching");
+				check(!shown(c.querySelector("[role=tablist]")), "the tabs step aside while searching");
+				d.searchStatus = c.querySelector("#zb-search-status").textContent;
+				check(d.searchStatus.trim(), "#zb-search-status is empty during a search");
+				let registry = win.CSS && win.CSS.highlights;
+				d.cssHighlights = !!registry;
+				d.highlightRanges = registry && registry.get("zb-search") ? registry.get("zb-search").size : c.querySelectorAll(".zb-hit").length;
+				check(d.highlightRanges > 0, "no highlighted matches for 「Notion」");
+				box.value = "分類";
+				box.dispatchEvent(new win.Event("input"));
+				d.searchClassify = found();
+				check(d.searchClassify.includes("classify"), `search 「分類」 found ${JSON.stringify(d.searchClassify)}`);
+				check(shown(c.querySelector('[data-zb-section="classify"]')), "the 文獻自動分類 section should be rendered while searching");
+				check(!shown(c.querySelector('[data-zb-section="autosync"]')), "自動同步 doesn't match 「分類」 and should be hidden");
+				box.dispatchEvent(new win.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+				eq(box.value, "", "search box after Esc");
+				check(!root.classList.contains("zb-searching"), "Esc should end the search");
+				eq(selectedTab(), "features", "tab after Esc");
+				eq(display(c.querySelector("#zb-panel-sync")), "none", "display of the 同步 panel after Esc");
 				// A key typed just before closing (the pane saves 600 ms after the last keystroke)
 				let key = c.querySelector("#zb-openai-key");
 				key.value = "sk-e2e-typed-then-closed";
@@ -1256,9 +1502,12 @@ const TESTS = [
 			setPref("llm.provider", "anthropic");
 			setPref("usage.prices", "{}");
 			Zotero.Prefs.clear(ZB_PREF + "usage.prices", true);
-			// …and the observers on the feature switches
+			// …and the observers on the feature switches and the pending section
 			setPref("feature.synthesis", true);
 			Zotero.Prefs.clear(ZB_PREF + "feature.synthesis", true);
+			setPref("prefs.pendingSection", "notion");
+			Zotero.Prefs.clear(ZB_PREF + "prefs.pendingSection", true);
+			Zotero.Prefs.clear(ZB_PREF + "prefs.lastTab", true);
 			await delay(500);
 			let dead = messages.slice(from).filter(m => m.kind === "error");
 			check(!dead.length, `changing prefs after the settings window closed logged: ${dead.map(m => m.text).join(" | ")} (pref observers of the closed pane are still registered)`);
@@ -1269,6 +1518,58 @@ const TESTS = [
 		// Errors Zotero's own preferences window logs as well (control test above)
 		get allowUnattributed() {
 			return ctx.prefsControlErrors || [];
+		},
+	},
+	{
+		name: "Zotero's own settings search finds sections in every tab of the pane",
+		needs: ["preferences pane opens and renders"],
+		timeout: 90000,
+		async fn(d) {
+			let win = Zotero.Utilities.Internal.openPreferences(PANE_ID);
+			try {
+				let pane = await waitFor(() => win.Zotero_Preferences && win.Zotero_Preferences.panes
+					&& win.Zotero_Preferences.panes.get(PANE_ID), `the preferences window to know pane ${PANE_ID}`, 30000);
+				await waitFor(() => pane.loaded && win.ZoteroBridgePrefs, `pane ${PANE_ID} to load`, 30000);
+				let c = pane.container;
+				let root = c.querySelector("#zotero-bridge-prefs");
+				let field = win.document.getElementById("prefs-search");
+				check(field, "Zotero's settings search field #prefs-search not found");
+				let shown = node => !!node && node.getBoundingClientRect().height > 0;
+				let search = (text) => {
+					field.value = text;
+					field.dispatchEvent(new win.Event("command"));
+				};
+				// Control: a term no pane has. Zotero loads every pane for it; what that logs is Zotero's
+				let from = messages.length;
+				search("zqzqxx");
+				await waitFor(() => c.classList.contains("hidden-by-search"), "Zotero's search to hide our pane for a term it lacks", 30000);
+				check(root.classList.contains("zb-global-search"), "the pane should know Zotero's search is active");
+				await delay(500);
+				ctx.globalSearchControlErrors = messages.slice(from).filter(m => m.kind === "error" && !m.source && !m.stack).map(m => m.text);
+				// 「Notion」: our pane shows, with the 同步 tab's Notion section on screen although 功能 is the selected tab
+				win.ZoteroBridgePrefs.selectTab("features");
+				search("Notion");
+				await waitFor(() => !c.classList.contains("hidden-by-search") && !c.hidden, "Zotero's search to show our pane for 「Notion」", 30000);
+				check(root.classList.contains("zb-global-search"), "zb-global-search missing while Zotero's search has text");
+				let notion = c.querySelector('[data-zb-section="notion"]');
+				d.notionShown = shown(notion);
+				check(d.notionShown, "the Notion section (同步 tab) is not on screen during Zotero's search");
+				check(!shown(c.querySelector(".zb-nav")), "our search box and tabs should step aside during Zotero's search");
+				eq(win.getComputedStyle(c.querySelector("#zb-panel-ai")).display !== "none", true, "an unselected panel's display during Zotero's search");
+				// Clearing Zotero's search brings our tabs back
+				search("");
+				await waitFor(() => !root.classList.contains("zb-global-search"), "the tabs to come back after Zotero's search is cleared", 10000);
+				eq(win.getComputedStyle(c.querySelector("#zb-panel-ai")).display, "none", "an unselected panel's display after Zotero's search");
+			}
+			finally {
+				d.innerWindowID = win.windowGlobalChild && win.windowGlobalChild.innerWindowId;
+				win.close();
+			}
+			await delay(500);
+		},
+		// Errors Zotero's own panes log when its search loads them all (the control step above), and Zotero's own window
+		get allowUnattributed() {
+			return [...(ctx.globalSearchControlErrors || []), ...(ctx.prefsControlErrors || [])];
 		},
 	},
 	{
@@ -1296,14 +1597,14 @@ const TESTS = [
 				return found;
 			};
 			// Off in 研究生引導, on in 進階 (features.js); none of these has its own onShowing condition
+			// (entries of the item and collection menus' 「ZotMax ▸」 submenus, from content/commands.js)
 			const GATED = [
 				"zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-menu-ebhc-report",
-				"zotero-bridge-menu-pubmed-watch", "zotero-bridge-chase-items", "zotero-bridge-chase-tools-included",
-				"zotero-bridge-menu-progress-report", "zotero-bridge-menu-concepts-ai",
+				"zotero-bridge-toolbar-chase-items", "zotero-bridge-chase-tools-included", "zotero-bridge-chase-tools-import",
 			];
 			// On in both presets
-			const ALWAYS = ["zotero-bridge-menu-sync", "zotero-bridge-search-tools", "zotero-bridge-screen-tools-dedup",
-				"zotero-bridge-menu-dashboard", "zotero-bridge-menu-concepts-update", "zotero-bridge-classify-items", "zotero-bridge-classify-tools"];
+			const ALWAYS = ["zotero-bridge-menu-sync", "zotero-bridge-menu-regenerate", "zotero-bridge-classify-tools", "zotero-bridge-toolbar-screen",
+				"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary", "zotero-bridge-cmd-export-collection"];
 			// What a menu's onShowing decides, with the context MenuManager would pass
 			let visibility = (menu) => {
 				let visible = null;
@@ -1319,12 +1620,12 @@ const TESTS = [
 			// The toolbar menu's entries (content/toolbar.js), off in 研究生引導 / on in both
 			const TOOLBAR_GATED = ["pubmed-watch", "chase-items", "chase-included", "chase-import", "synthesis", "review-draft",
 				"ebhc-report", "progress-report", "concepts-ai"];
-			const TOOLBAR_ALWAYS = ["sync", "sync-no-ai", "sync-obsidian", "sync-notion", "status", "classify", "dashboard", "concepts",
-				"bibliography", "quick-search", "screen", "dedup", "prisma", "appraisal-summary", "regenerate", "settings"];
+			const TOOLBAR_ALWAYS = ["palette", "sync", "sync-no-ai", "sync-obsidian", "sync-notion", "status", "classify", "dashboard", "concepts",
+				"bibliography", "export-collection", "quick-search", "search-item", "screen", "dedup", "prisma", "appraisal-summary", "regenerate", "settings"];
 			let button = mainWindow().document.getElementById(ZB.toolbar.BUTTON_ID);
 			let before = F.snapshot();
 			let problems = [];
-			if (!button) problems.push("no Zotero Bridge toolbar button in the main window");
+			if (!button) problems.push("no ZotMax toolbar button in the main window");
 			d.visible = {};
 			d.toolbar = {};
 			try {
@@ -1410,6 +1711,10 @@ const TESTS = [
 			let before = zb();
 			let count = () => Zotero.MenuManager._menuManager.options.filter(o => o.pluginID === PLUGIN_ID).length;
 			let menus = count();
+			eq(menus, 3, "menu registrations before the cycle (item, collection, Tools)");
+			// An open 快速指令 window goes with the plugin
+			let palette = await before.palette.open(mainWindow());
+			check(palette, "the palette did not open before the cycle");
 			await addon.disable();
 			await waitFor(() => !Zotero.ZoteroBridge, "Zotero.ZoteroBridge to be deleted by shutdown()", 20000);
 			await waitFor(() => count() === 0, "the plugin's menus to be unregistered", 10000);
@@ -1418,6 +1723,23 @@ const TESTS = [
 			check(!mainWindow().document.getElementById("zotero-bridge-tb-button"), "toolbar button still in the main window after shutdown");
 			check(!mainWindow().document.getElementById("zotero-bridge-tb-popup"), "toolbar menu still in the main window after shutdown");
 			check(!mainWindow().document.getElementById("zotero-bridge-toolbar-css"), "toolbar stylesheet still in the main window after shutdown");
+			await waitFor(() => palette.closed, "the 快速指令 window to close at shutdown", 10000);
+			// The shortcut went with it: Ctrl/Cmd+Shift+P opens nothing
+			let win = mainWindow();
+			win.document.documentElement.dispatchEvent(new win.KeyboardEvent("keydown", {
+				key: "P", code: "KeyP", shiftKey: true, ctrlKey: !Zotero.isMac, metaKey: !!Zotero.isMac, bubbles: true, cancelable: true,
+			}));
+			await delay(1000);
+			let paletteWindows = [];
+			let all = Services.wm.getEnumerator(null);
+			while (all.hasMoreElements()) {
+				let w = all.getNext();
+				try {
+					if (w.document.documentURI === "chrome://zotero-bridge/content/palette.xhtml") paletteWindows.push(w);
+				}
+				catch (e) {}
+			}
+			eq(paletteWindows.length, 0, "palette windows after shutdown and the shortcut");
 			await addon.enable();
 			await waitFor(() => Zotero.ZoteroBridge && Zotero.ZoteroBridge !== before, "a new Zotero.ZoteroBridge after enable()", 20000);
 			await waitFor(() => count() === menus, `${menus} menus registered again`, 10000);
@@ -1501,6 +1823,18 @@ async function runTest(t, passed) {
 			+ unattributed.slice(0, 3).map(m => m.text).join(" | ");
 	}
 	rec.ms = Date.now() - start;
+	// Copy the details while their windows are still open: a value from a window closed later would
+	// make results.json unwritable ("can't access dead object")
+	for (let k of ["details", "pluginErrors", "allowedErrors", "otherConsoleErrors"]) {
+		if (rec[k] === undefined) continue;
+		try {
+			rec[k] = JSON.parse(JSON.stringify(rec[k]));
+		}
+		catch (e) {
+			let copy = plain(rec[k]);
+			rec[k] = copy && typeof copy === "object" ? copy : { unserializable: String(e) };
+		}
+	}
 	if (rec.ok) passed.add(t.name);
 	log(`${rec.ok ? "PASS" : "FAIL"} ${t.name} (${rec.ms} ms)${rec.ok ? "" : `\n       ${rec.error.split("\n")[0]}`}`);
 }
@@ -1511,9 +1845,9 @@ async function finish(reason) {
 	results.finishedAt = new Date().toISOString();
 	results.reason = reason;
 	results.ok = reason === "done" && results.tests.length > 0 && results.tests.every(t => t.ok);
-	results.allPluginMessages = messages.filter(isPluginMessage).slice(-100);
+	results.allPluginMessages = plain(messages.filter(isPluginMessage).slice(-100));
 	try {
-		await IOUtils.writeUTF8(PathUtils.join(workDir, "results.json"), JSON.stringify(results, null, 2));
+		await IOUtils.writeUTF8(PathUtils.join(workDir, "results.json"), resultsJSON());
 		log(`results written (${results.ok ? "all passed" : "FAILED"}: ${reason})`);
 	}
 	catch (e) {

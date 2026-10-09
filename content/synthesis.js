@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — cross-paper synthesis: a comparison table, themes and research gaps
+ * ZotMax — cross-paper synthesis: a comparison table, themes and research gaps
  * built from several items' AI notes. Sources are referred to as [S1], [S2]… in the
  * prompt and turned into Obsidian links / APA-style citations afterwards, so the model
  * never has to (and cannot) invent references.

@@ -216,6 +216,13 @@ function notionMock(log) {
 			page.children.splice(at, 0, ...added);
 			return ok({ results: added });
 		}
+		if ((m = /^blocks\/([^/]+)$/.exec(p)) && init.method === "PATCH") {
+			for (let page of pages.values()) {
+				let block = page.children.find(b => b.id === m[1]);
+				if (block) Object.assign(block, withText(Object.assign({ type: block.type }, body)));
+			}
+			return ok({ id: m[1] });
+		}
 		if ((m = /^blocks\/([^/]+)$/.exec(p)) && init.method === "DELETE") {
 			for (let page of pages.values()) page.children = page.children.filter(b => b.id !== m[1]);
 			return ok({ id: m[1], in_trash: true });
@@ -259,13 +266,19 @@ function addAINote(env, item, study) {
 	let note = new env.MockItem("note", { tags: ["zotero-bridge-ai"] });
 	note.parentID = item.id;
 	item.children.push(note.id);
-	note.setNote(`<h1>🤖 AI 文獻筆記</h1>\n<p><em>由 test-model 於 2026-10-01T00:00:00Z 產生（Zotero Bridge）</em></p>\n`
+	note.setNote(`<h1>🤖 AI 文獻筆記</h1>\n<p><em>由 test-model 於 2026-10-01T00:00:00Z 產生（ZotMax）</em></p>\n`
 		+ ZB.markdown.mdToHtml(`## 一句話摘要\n\nA summary.\n\n${ZB.llm.studyDataBlock(ZB.llm.normalizeStudyData(study))}`));
 	return note;
 }
 
+/** The 「ZotMax ▸」 submenu of the item or collection menu (commands.js, menus.js). */
+function zbMenu(env, menuID) {
+	return env.menus.find(m => m.menuID === menuID).menus[0];
+}
+
+/** Item menu → ZotMax ▸ 篩選所選文獻 ▸ */
 function itemMenu(env) {
-	return env.menus.find(m => m.menuID === "zotero-bridge-screening-item").menus[0];
+	return entry(zbMenu(env, "zotero-bridge-item"), "zotero-bridge-toolbar-screen");
 }
 
 function entry(menu, l10nID) {
@@ -283,8 +296,8 @@ test("item menu and item pane set screening decisions as tags; batch selections 
 	let [a, b, c] = [1, 2, 3].map(n => paper(env, n));
 	let menu = itemMenu(env);
 	assert.equal(menu.menuType, "submenu");
-	assert.equal(menu.l10nID, "zotero-bridge-screen-menu");
-	assert.ok(menu.icon.endsWith("content/icons/bridge.svg"));
+	assert.equal(menu.l10nID, "zotero-bridge-toolbar-screen");
+	assert.ok(zbMenu(env, "zotero-bridge-item").icon.endsWith("content/icons/bridge.svg"));
 
 	// Batch: three items → title/abstract include
 	entry(menu, "zotero-bridge-screen-ta-include").onCommand({}, { items: [a, b, c] });
@@ -292,9 +305,11 @@ test("item menu and item pane set screening decisions as tags; batch selections 
 	assert.deepEqual([a, b, c].map(i => i.tags), [["篩選/標題摘要/納入"], ["篩選/標題摘要/納入"], ["篩選/標題摘要/納入"]]);
 	assert.match(env.descriptions.at(-1), /標題摘要：納入：已更新 3 篇/);
 
-	// Full-text exclusion: the reason slots follow the settings
+	// Full-text exclusion: one slot per reason in the same submenu (two levels below the right-click
+	// entry); the slots follow the settings
 	env.prefStore["extensions.zotero-bridge.screening.reasons"] = "族群不符\n研究設計不符";
-	let reasons = entry(menu, "zotero-bridge-screen-ft-exclude").menus;
+	let reasons = menu.menus.filter(m => m.l10nID === "zotero-bridge-cmd-screen-ft-exclude-reason");
+	assert.ok(menu.menus.every(m => m.menuType !== "submenu"), "no third level");
 	assert.equal(reasons.length, env.context.ZB.screening.MAX_MENU_REASONS);
 	let shown = Array.from(reasons, (r) => {
 		let state = {};
@@ -400,12 +415,12 @@ test("PRISMA note, CSV and Notion page for a collection; a rerun keeps the user'
 	fs.writeFileSync(path.join(litDir, "author12024.md"), `---\ntitle: "x"\nzotero_key: "library/${inc1.key}"\n---\n# x\n`);
 	let collection = env.addCollection(1, "跌倒預防 SR", [inc1, inc2, exc, taEx, dup, pending, noReason]);
 
-	// Collection menu → 產生 PRISMA 流程圖與證據表
-	let collMenu = env.menus.find(m => m.menuID === "zotero-bridge-screening-collection").menus[0];
+	// Collection menu → ZotMax ▸ 產生 PRISMA 流程圖與證據表（目前分類）
+	let collMenu = zbMenu(env, "zotero-bridge-collection");
 	let visible;
 	collMenu.onShowing({}, { collectionTreeRows: [], setVisible: v => (visible = v) });
 	assert.equal(visible, false);
-	entry(collMenu, "zotero-bridge-screen-prisma").onCommand({}, { collectionTreeRows: [{ isCollection: () => true, ref: collection }] });
+	entry(collMenu, "zotero-bridge-screen-tools-prisma").onCommand({}, { collectionTreeRows: [{ isCollection: () => true, ref: collection }] });
 	await ZB.main.enqueue(() => {});
 	assert.deepEqual(env.errors, []);
 	let line = env.progressLines.at(-1);
@@ -448,11 +463,17 @@ test("PRISMA note, CSV and Notion page for a collection; a rerun keeps the user'
 	fs.writeFileSync(notePath, note.replace("type: \"review-screening\"", "type: \"review-screening\"\nreviewer2: \"Lin\"")
 		.replace("## ✍️ 我的筆記\n\n", "## ✍️ 我的筆記\n\n與第二位審查者討論\n"));
 	page.children.push({ id: "user-1", type: "paragraph", paragraph: { rich_text: [{ plain_text: "我的 Notion 筆記", text: { content: "我的 Notion 筆記" } }] } });
+	// As if the page was made by Zotero Bridge (≤ 0.10): its anchor carries the old name
+	let oldAnchor = ZB.screening.NOTION_ANCHOR.replace("ZotMax", "Zotero Bridge");
+	assert.notEqual(oldAnchor, ZB.screening.NOTION_ANCHOR);
+	assert.ok(ZB.screening.isNotionAnchor(oldAnchor));
+	assert.ok(!ZB.screening.isNotionAnchor("我的 Notion 筆記"));
+	page.children[0].paragraph.rich_text = [{ plain_text: oldAnchor, text: { content: oldAnchor } }];
 	pending.tags.push("篩選/標題摘要/排除");
 	noReason.tags.push("篩選/標題摘要/納入", "排除原因/語言不符（language）");
 	env.setActiveCollection(collection);
-	let tools = env.menus.find(m => m.menuID === "zotero-bridge-screening-tools").menus;
-	tools.find(m => m.l10nID === "zotero-bridge-screen-tools-prisma").onCommand({}, {});
+	// Again from the toolbar button or 快速指令: the selected collection
+	ZB.commands.execute("prisma");
 	await ZB.main.enqueue(() => {});
 	assert.deepEqual(env.errors, []);
 	let note2 = fs.readFileSync(notePath, "utf8");
@@ -462,7 +483,8 @@ test("PRISMA note, CSV and Notion page for a collection; a rerun keeps the user'
 	assert.match(note2, /- ✅ 計數一致，沒有發現問題。|ℹ️/);
 	assert.doesNotMatch(note2, /⚠️/);
 	assert.equal(note2.match(/zotero-bridge:start/g).length, 1);
-	assert.equal(env.notion.pages.size, 1, "the same Notion page is updated");
+	assert.equal(env.notion.pages.size, 1, "the same Notion page is updated (an old-name anchor is recognised)");
+	assert.equal(page.children.filter(b => b.type === "paragraph" && ZB.screening.isNotionAnchor(b.paragraph.rich_text[0].text.content)).length, 1, "one anchor");
 	assert.equal(page.children[0].paragraph.rich_text[0].text.content, ZB.screening.NOTION_ANCHOR);
 	assert.deepEqual(page.children.slice(-2).map(b => b.id === "user-1" ? "user" : b.type), ["heading_2", "user"]);
 	assert.equal(page.children.filter(b => b.type === "code").length, 1, "old blocks were replaced");
@@ -489,10 +511,9 @@ test("PRISMA note, CSV and Notion page for a collection; a rerun keeps the user'
 
 test("PRISMA without a selected collection or settings explains what is missing", async () => {
 	let env = await setup({ prefs: { "extensions.zotero-bridge.obsidian.vaultPath": "", "extensions.zotero-bridge.screening.notionParent": "" } });
-	let tools = env.menus.find(m => m.menuID === "zotero-bridge-screening-tools").menus;
-	await tools.find(m => m.l10nID === "zotero-bridge-screen-tools-prisma").onCommand({}, {});
+	await env.context.ZB.commands.execute("prisma");
 	assert.match(env.descriptions.at(-1), /請先在左側選取系統性回顧的分類/);
 	let collection = env.addCollection(1, "R", [paper(env, 1)]);
 	assert.equal(await env.context.ZB.screening.generateReport(collection), null);
-	assert.match(env.descriptions.at(-1), /請先到 設定 → Zotero Bridge 填入 Obsidian vault 路徑/);
+	assert.match(env.descriptions.at(-1), /請先到 設定 → ZotMax 填入 Obsidian vault 路徑/);
 });

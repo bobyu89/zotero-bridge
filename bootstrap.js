@@ -1,9 +1,10 @@
 /* global Zotero, Services */
 var ZB;
-// chrome://zotero-bridge/content/ (the review dialog of 文獻自動分類, content/classify-review.xhtml)
+// chrome://zotero-bridge/content/ (the review dialog of 文獻自動分類, content/classify-review.xhtml, and
+// the 快速指令 window, content/palette.xhtml)
 var chromeHandle = null;
 
-const SCRIPTS = ["apa-zh.js", "appraisal-tools.js", "core.js", "markdown.js", "notion.js", "llm.js", "synthesis.js", "verify.js", "fulltext-md.js", "scanned.js", "usage.js", "secrets.js", "zotero-adapter.js", "fulltext.js", "export.js", "annotation-images.js", "status.js", "review-draft.js", "screening.js", "pubmed-watch.js", "dashboard.js", "citation-chase.js", "search-links.js", "ebhc-report.js", "ai-batch.js", "appraisal-form.js", "progress-report.js", "concepts.js", "classify.js", "features.js", "toolbar.js", "main.js"];
+const SCRIPTS = ["apa-zh.js", "appraisal-tools.js", "core.js", "markdown.js", "notion.js", "llm.js", "synthesis.js", "verify.js", "fulltext-md.js", "scanned.js", "usage.js", "secrets.js", "zotero-adapter.js", "fulltext.js", "export.js", "annotation-images.js", "status.js", "review-draft.js", "screening.js", "pubmed-watch.js", "dashboard.js", "citation-chase.js", "search-links.js", "ebhc-report.js", "ai-batch.js", "appraisal-form.js", "progress-report.js", "concepts.js", "classify.js", "features.js", "commands.js", "menus.js", "palette.js", "toolbar.js", "main.js"];
 
 function install() {}
 
@@ -15,9 +16,9 @@ function registerChrome(rootURI) {
 		chromeHandle = aomStartup.registerChrome(manifestURI, [["content", "zotero-bridge", "content/"]]);
 	}
 	catch (e) {
-		// Only the review dialog needs it; everything else keeps working
+		// Only the review dialog and 快速指令 need it; everything else keeps working
 		chromeHandle = null;
-		if (typeof Zotero !== "undefined" && Zotero.debug) Zotero.debug(`Zotero Bridge: could not register chrome://zotero-bridge/: ${e}`);
+		if (typeof Zotero !== "undefined" && Zotero.debug) Zotero.debug(`ZotMax: could not register chrome://zotero-bridge/: ${e}`);
 	}
 }
 
@@ -35,7 +36,7 @@ async function startup({ id, version, rootURI }) {
 	await Zotero.PreferencePanes.register({
 		pluginID: id,
 		id: "zotero-bridge-prefs",
-		label: "Zotero Bridge",
+		label: "ZotMax",
 		image: rootURI + "content/icons/bridge.svg",
 		src: rootURI + "content/preferences.xhtml",
 		scripts: [rootURI + "content/preferences.js"],
@@ -48,12 +49,15 @@ async function startup({ id, version, rootURI }) {
 
 function onMainWindowLoad({ window }) {
 	window.MozXULElement.insertFTLIfNeeded("zotero-bridge.ftl");
-	// The Zotero Bridge button in the items toolbar
+	// The ZotMax button in the items toolbar
 	if (ZB && ZB.toolbar) ZB.toolbar.add(window);
+	// Ctrl+Shift+P (⇧⌘P) opens 快速指令
+	if (ZB && ZB.palette) ZB.palette.attach(window);
 }
 
 function onMainWindowUnload({ window }) {
 	if (ZB && ZB.toolbar) ZB.toolbar.remove(window);
+	if (ZB && ZB.palette) ZB.palette.detach(window);
 	window.document.querySelector('[href="zotero-bridge.ftl"]')?.remove();
 }
 
@@ -62,8 +66,10 @@ function shutdown() {
 	for (let win of Zotero.getMainWindows()) {
 		onMainWindowUnload({ window: win });
 	}
-	// Windows that are no longer listed as main windows but still hold the button
+	// Windows that are no longer listed as main windows but still hold the button or the shortcut;
+	// the 快速指令 window closes
 	if (ZB && ZB.toolbar) ZB.toolbar.shutdown();
+	if (ZB && ZB.palette) ZB.palette.shutdown();
 	delete Zotero.ZoteroBridge;
 	ZB = undefined;
 	if (chromeHandle) {

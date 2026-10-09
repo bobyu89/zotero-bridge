@@ -192,76 +192,93 @@ async function setup(prefs = {}) {
 }
 
 /** The registered menu entry with this l10n ID (first match, any depth). */
-function menuEntry(env, l10nID) {
-	let found = null;
-	let walk = (list) => {
-		for (let m of list || []) {
-			if (found) return;
-			if (m.l10nID === l10nID) found = m;
-			else walk(m.menus);
-		}
-	};
-	for (let o of env.menus) walk(o.menus);
-	assert.ok(found, `no menu entry ${l10nID}`);
-	return found;
-}
-
 function visible(menu, context = {}) {
 	let v = null;
-	menu.onShowing({}, Object.assign({ items: [], collectionTreeRows: [], setVisible: (x) => { v = x; }, setL10nArgs() {} }, context));
+	menu.onShowing({}, Object.assign({ items: [], collectionTreeRows: [], setVisible: (x) => { v = x; }, setL10nArgs() {}, setEnabled() {} }, context));
 	return v;
 }
 
+/** The 「ZotMax ▸」 submenu of the item or collection menu (commands.js, menus.js). */
+function zbMenu(env, menuID) {
+	return env.menus.find(o => o.menuID === menuID).menus[0];
+}
+
+/**
+ * Where a catalog command shows right now: the toolbar button and 快速指令 (the catalog), and the
+ * item and collection submenus it belongs to. Returns one boolean per surface.
+ */
+function shownOn(env, id, context) {
+	let C = env.ZB.commands;
+	let cmd = C.get(id);
+	let out = { toolbar: C.isVisible(cmd) };
+	for (let [surface, menuID] of [["item", "zotero-bridge-item"], ["collection", "zotero-bridge-collection"]]) {
+		if (!cmd.menus.includes(surface)) continue;
+		let entry = zbMenu(env, menuID).menus.find(m => m.l10nID === cmd.l10n);
+		assert.ok(entry, `${id} in ${menuID}`);
+		out[surface] = visible(entry, context);
+	}
+	return out;
+}
+
+function allShown(env, id, context) {
+	return Object.values(shownOn(env, id, context)).every(Boolean);
+}
+
+function noneShown(env, id, context) {
+	return Object.values(shownOn(env, id, context)).every(v => !v);
+}
+
+// Off in 研究生引導, on in 進階: command → its switch
 const GATED_IN_GUIDED = {
-	"zotero-bridge-menu-synthesis": "synthesis",
-	"zotero-bridge-menu-review-draft": "reviewDraft",
-	"zotero-bridge-menu-ebhc-report": "ebhcReport",
-	"zotero-bridge-menu-pubmed-watch": "pubmedWatch",
-	"zotero-bridge-chase-items": "citationChase",
-	"zotero-bridge-chase-tools-included": "citationChase",
-	"zotero-bridge-menu-progress-report": "progressReport",
-	"zotero-bridge-menu-concepts-ai": "conceptsAI",
+	"synthesis": "synthesis",
+	"review-draft": "reviewDraft",
+	"ebhc-report": "ebhcReport",
+	"pubmed-watch": "pubmedWatch",
+	"chase-items": "citationChase",
+	"chase-included": "citationChase",
+	"chase-import": "citationChase",
+	"progress-report": "progressReport",
+	"concepts-ai": "conceptsAI",
 };
 
-test("a fresh profile starts in 研究生引導: the gated menus hide, and come back with 進階 without a restart", async () => {
+// On in both
+const ON_IN_GUIDED = ["sync", "sync-no-ai", "regenerate", "quick-search", "search-item", "dedup", "prisma", "dashboard", "concepts", "bibliography",
+	"export-collection", "appraisal-summary", "status", "classify", "screen"];
+
+test("a fresh profile starts in 研究生引導: the gated commands hide everywhere, and come back with 進階 without a restart", async () => {
 	let env = await setup();
 	let F = env.ZB.features;
 	assert.equal(env.prefStore[P + "features.version"], F.MIGRATION_VERSION, "the migrations ran once at startup");
 	assert.equal(F.currentPreset(), "guided");
 	let registered = env.menus.map(o => o.menuID);
-	for (let [id, feature] of Object.entries(GATED_IN_GUIDED)) {
-		assert.equal(visible(menuEntry(env, id)), false, `${id} (${feature}) in guided`);
-	}
-	for (let id of ["zotero-bridge-menu-sync", "zotero-bridge-menu-regenerate", "zotero-bridge-search-tools", "zotero-bridge-screen-tools-dedup",
-		"zotero-bridge-menu-dashboard", "zotero-bridge-menu-concepts-update", "zotero-bridge-menu-export-library", "zotero-bridge-appraisal-tools-summary",
-		"zotero-bridge-menu-status", "zotero-bridge-classify-items", "zotero-bridge-classify-tools"]) {
-		assert.equal(visible(menuEntry(env, id)), true, `${id} in guided`);
-	}
-	// The item submenu shows (sync is on); the separator before the AI writing entries does not
-	let itemMenu = env.menus.find(o => o.menuID === "zotero-bridge-item").menus[0];
-	assert.equal(visible(itemMenu), true);
-	let separator = itemMenu.menus.find(m => m.menuType === "separator" && m.onShowing && !m.l10nID && itemMenu.menus.indexOf(m) > 5);
-	assert.equal(visible(separator), false);
+	let paper = new env.MockItem("journalArticle", { title: "A" });
+	let ctx = { items: [paper], collectionTreeRows: [{ isCollection: () => true, ref: {} }] };
+	for (let [id, feature] of Object.entries(GATED_IN_GUIDED)) assert.ok(noneShown(env, id, ctx), `${id} (${feature}) in guided`);
+	for (let id of ON_IN_GUIDED) assert.ok(allShown(env, id, ctx), `${id} in guided`);
+	// The item submenu shows; the collection submenu needs a selected collection
+	let itemMenu = zbMenu(env, "zotero-bridge-item");
+	let collMenu = zbMenu(env, "zotero-bridge-collection");
+	assert.equal(visible(itemMenu, ctx), true);
+	assert.equal(visible(collMenu), false);
+	assert.equal(visible(collMenu, ctx), true);
 
 	F.applyPreset("advanced");
-	for (let id of Object.keys(GATED_IN_GUIDED)) assert.equal(visible(menuEntry(env, id)), true, `${id} in advanced`);
-	assert.equal(visible(separator), true);
-	// An entry's own condition still applies: the collection submenu needs a selected collection
-	let collMenu = env.menus.find(o => o.menuID === "zotero-bridge-collection").menus[0];
-	assert.equal(visible(collMenu), false);
-	assert.equal(visible(collMenu, { collectionTreeRows: [{ isCollection: () => true, ref: {} }] }), true);
-	let chaseColl = menuEntry(env, "zotero-bridge-chase-collection-menu");
-	assert.equal(visible(chaseColl), false, "no collection selected");
+	for (let id of Object.keys(GATED_IN_GUIDED)) assert.ok(allShown(env, id, ctx), `${id} in advanced`);
+	for (let id of ON_IN_GUIDED) assert.ok(allShown(env, id, ctx), `${id} in advanced`);
 
-	// Everything the item and collection submenus offer switched off: the submenu itself hides
+	// Everything the item submenu offers switched off: the submenu itself hides
 	F.applyPreset("guided");
-	F.setEnabled("sync", false);
-	assert.equal(visible(itemMenu), false);
-	assert.equal(visible(collMenu, { collectionTreeRows: [{ isCollection: () => true, ref: {} }] }), false);
-	assert.equal(visible(menuEntry(env, "zotero-bridge-menu-regenerate")), false, "AI notes need the sync");
+	for (let id of ["sync", "autoClassify", "searchLinks", "screening"]) F.setEnabled(id, false);
+	assert.equal(visible(itemMenu, ctx), false);
+	assert.ok(noneShown(env, "regenerate", ctx), "AI notes need the sync");
 	F.setEnabled("synthesis", true);
-	assert.equal(visible(itemMenu), true);
-	assert.equal(visible(separator), false, "no sync entries above it");
+	assert.equal(visible(itemMenu, ctx), true);
+	// The collection submenu still has 評讀總表 and 參考文獻
+	assert.equal(visible(collMenu, ctx), true);
+	F.setEnabled("appraisalForm", false);
+	F.setEnabled("bibliography", false);
+	F.setEnabled("synthesis", false);
+	assert.equal(visible(collMenu, ctx), false);
 	// Registration never changed
 	assert.deepEqual(env.menus.map(o => o.menuID), registered);
 	assert.deepEqual(env.errors, []);
@@ -272,7 +289,7 @@ test("an install used before the switches keeps everything: migrated to 進階 f
 	let env = await setup({ [P + "obsidian.vaultPath"]: vault, [P + "llm.batchAPI"]: true });
 	let F = env.ZB.features;
 	assert.equal(F.currentPreset(), "advanced");
-	for (let id of Object.keys(GATED_IN_GUIDED)) assert.equal(visible(menuEntry(env, id)), true, id);
+	for (let id of Object.keys(GATED_IN_GUIDED)) assert.ok(allShown(env, id, { items: [new env.MockItem("journalArticle")], collectionTreeRows: [{ isCollection: () => true, ref: {} }] }), id);
 	// The user goes back to 研究生引導; the next start keeps it
 	F.applyPreset("guided");
 	let next = await setup(env.prefStore);
@@ -313,7 +330,7 @@ test("switched-off features do no background work and make no network calls", as
 	await ZB.citationChase.chaseItems([a]);
 	await ZB.pubmedWatch.runAll();
 	assert.equal(env.descriptions.length, 7);
-	for (let text of env.descriptions) assert.match(text, /目前關閉。要使用的話：設定 → Zotero Bridge → 功能，把它打開。/);
+	for (let text of env.descriptions) assert.match(text, /目前關閉。要使用的話：設定 → ZotMax → 功能，把它打開。/);
 
 	// After a manual sync: the dashboard, concept cards and references.json are skipped when off
 	F.setEnabled("dashboard", false);
@@ -349,7 +366,7 @@ test("item pane: rows and actions follow the switches; the note stays readable",
 	let note = new env.MockItem("note");
 	note.parentID = item.id;
 	note.tags = ["zotero-bridge-ai"];
-	note.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 m 於 2026-10-01T00:00:00Z 產生（Zotero Bridge）</em></p><h2>一句話摘要</h2><p>衛教降低跌倒。</p>";
+	note.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 m 於 2026-10-01T00:00:00Z 產生（ZotMax）</em></p><h2>一句話摘要</h2><p>衛教降低跌倒。</p>";
 	item.children.push(note.id);
 	let doc = new JSDOM("<div id=b></div>").window.document;
 	let body = doc.getElementById("b");
@@ -401,10 +418,12 @@ function paneDOM() {
 	return new JSDOM(`<box xmlns="${XUL_NS}" xmlns:html="http://www.w3.org/1999/xhtml">${xhtml}</box>`, { contentType: "application/xml" });
 }
 
-function openPane(env) {
+/** prepare(window) runs before init(): Zotero's settings search field, scroll and highlight stubs. */
+function openPane(env, prepare) {
 	let { window } = paneDOM();
 	let paneScope = vm.createContext({ Zotero: env.Zotero, window, document: window.document, Event: window.Event, setTimeout, clearTimeout });
 	vm.runInContext(fs.readFileSync(path.join(ROOT, "content", "preferences.js"), "utf8"), paneScope);
+	if (prepare) prepare(window);
 	window.ZoteroBridgePrefs.init();
 	return window;
 }
@@ -515,8 +534,8 @@ test("settings pane: presets, switches, 自訂, undo and progressive disclosure 
 	}
 	for (let f of F.FEATURES) assert.equal(doc.querySelector(`[preference="${P}${f.pref}"]`), null, `${f.pref}: only the 功能 switch binds it`);
 
-	// Observers: the pane's own (provider, usage, search sources, one per switch) go with the pane root's unload
-	assert.equal(env.observerCount() - pluginObservers, 7 + F.FEATURES.length);
+	// Observers: the pane's own (provider, usage, search sources, one per switch, the pending section) go with the pane root's unload
+	assert.equal(env.observerCount() - pluginObservers, 8 + F.FEATURES.length);
 	doc.getElementById("zotero-bridge-prefs").dispatchEvent(new window.Event("unload"));
 	assert.equal(env.observerCount(), pluginObservers);
 	env.Zotero.Prefs.set(P + "feature.synthesis", true);
@@ -562,4 +581,434 @@ test("settings pane: 劃線顏色與意義 rows edit, reorder and reset the colo
 	assert.equal(section.hasAttribute("hidden"), true);
 	assert.ok(doc.querySelector('[data-l10n-id="zotero-bridge-notion-rename"]'), "the rename button is in the Notion section");
 	await vm.runInContext("shutdown()", env.context);
+});
+
+// ---------- settings pane: workflow tabs, search and showSection ----------
+
+const HTML_NS = "http://www.w3.org/1999/xhtml";
+// The section IDs other code links to (the toolbar's command palette); "sync" is the 同步 tab itself
+const SECTION_IDS = ["features", "sync", "obsidian", "notion", "routing", "autosync", "status", "apaZh", "bibliography", "concepts",
+	"fulltext", "colors", "classify", "searchLinks", "ncbi", "pubmedWatch", "citationChase", "screening", "ai", "usage"];
+const TAB_SECTIONS = {
+	features: ["features"],
+	sync: ["obsidian", "notion", "routing", "autosync", "status", "apaZh", "bibliography"],
+	organize: ["fulltext", "colors", "concepts", "classify"],
+	search: ["searchLinks", "ncbi", "pubmedWatch", "citationChase"],
+	appraise: ["screening"],
+	ai: ["ai", "usage"],
+};
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+/** The pane with stubs for what jsdom lacks: scrolling, CSS highlights and Zotero's settings search field. */
+function openNavPane(env) {
+	let scrolled = [];
+	let highlights = new Map();
+	let window = openPane(env, (w) => {
+		w.Element.prototype.scrollIntoView = function (opts) {
+			scrolled.push({ node: this, opts });
+		};
+		w.CSS = { highlights };
+		w.Highlight = class {
+			constructor(...ranges) {
+				this.ranges = ranges;
+			}
+		};
+		let field = w.document.createElementNS(HTML_NS, "input");
+		field.id = "prefs-search";
+		w.document.documentElement.prepend(field);
+	});
+	let doc = window.document;
+	let $ = sel => doc.querySelector(sel);
+	let section = id => $(`[data-zb-section="${id}"]`);
+	let panel = tab => $(`#zb-panel-${tab}`);
+	let selectedTab = () => $("[role=tab][aria-selected=true]").getAttribute("data-zb-tab");
+	let selectedPanels = () => [...doc.querySelectorAll("[role=tabpanel].is-selected")].map(p => p.getAttribute("data-zb-tab"));
+	let key = (target, k) => target.dispatchEvent(new window.KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+	let type = (text) => {
+		let input = $("#zb-search");
+		input.value = text;
+		input.dispatchEvent(new window.Event("input"));
+	};
+	// Sections the search shows: not switched off, not filtered out, in a panel that isn't filtered out
+	let found = () => [...doc.querySelectorAll("[data-zb-section]")]
+		.filter(s => !s.hasAttribute("hidden") && !s.classList.contains("zb-search-miss") && !s.closest("[role=tabpanel]").classList.contains("zb-search-miss"))
+		.map(s => s.getAttribute("data-zb-section"));
+	return { window, doc, $, section, panel, selectedTab, selectedPanels, key, type, found, scrolled, highlights };
+}
+
+test("settings pane: every section has a known ID in exactly one workflow tab; ARIA tabs work by keyboard and the last tab is remembered", async () => {
+	let env = await setup();
+	let pluginObservers = env.observerCount();
+	let p = openNavPane(env);
+	let { doc, $ } = p;
+
+	// Every groupbox is a section with a known, unique ID, in exactly one tab panel
+	let groupboxes = [...doc.getElementsByTagNameNS(XUL_NS, "groupbox")];
+	assert.equal(groupboxes.length, 19);
+	let ids = groupboxes.map(g => g.getAttribute("data-zb-section"));
+	assert.deepEqual([...new Set(ids)].length, ids.length, "section IDs are unique");
+	for (let g of groupboxes) {
+		let id = g.getAttribute("data-zb-section");
+		assert.ok(SECTION_IDS.includes(id), `unknown section ID ${id}`);
+		let panel = g.closest("[role=tabpanel]");
+		assert.ok(panel, `${id} is in no tab`);
+		assert.equal(panel.parentNode.closest("[role=tabpanel]"), null, `${id} is in nested tabs`);
+		assert.ok(TAB_SECTIONS[panel.getAttribute("data-zb-tab")].includes(id), `${id} is in the ${panel.getAttribute("data-zb-tab")} tab`);
+		// Keywords for both searches (ours and Zotero's own), English and Chinese
+		let keywords = g.querySelector("[data-search-strings-raw]").getAttribute("data-search-strings-raw");
+		assert.match(keywords, /[A-Za-z]/, id);
+		assert.match(keywords, /[一-鿿]/, id);
+	}
+	for (let [tab, sections] of Object.entries(TAB_SECTIONS)) {
+		assert.deepEqual([...p.panel(tab).querySelectorAll("[data-zb-section]")].map(s => s.getAttribute("data-zb-section")), sections, tab);
+	}
+	assert.deepEqual(SECTION_IDS.filter(id => !p.section(id)), ["sync"], "only the 同步 tab ID is not a section");
+	assert.deepEqual(window_sections(p), ids);
+
+	// The tablist: 功能 first, ARIA wiring, one tab in the tab order
+	let tabs = [...doc.querySelectorAll("[role=tablist] [role=tab]")];
+	assert.deepEqual(tabs.map(t => t.textContent), ["功能", "同步", "整理", "找文獻", "篩選與評讀", "AI"]);
+	assert.equal($("[role=tablist]").getAttribute("data-l10n-id"), "zotero-bridge-prefs-tabs");
+	for (let t of tabs) {
+		let panel = doc.getElementById(t.getAttribute("aria-controls"));
+		assert.equal(panel.getAttribute("role"), "tabpanel");
+		assert.equal(panel.getAttribute("aria-labelledby"), t.id);
+		assert.equal(t.getAttribute("data-l10n-id"), `zotero-bridge-prefs-tab-${t.getAttribute("data-zb-tab")}`);
+	}
+	assert.equal(p.selectedTab(), "features", "a fresh profile opens on 功能");
+	assert.deepEqual(p.selectedPanels(), ["features"]);
+	assert.deepEqual(tabs.map(t => t.getAttribute("tabindex")), ["0", "-1", "-1", "-1", "-1", "-1"]);
+	// Inactive panels are hidden by a class, never [hidden]: Zotero's own settings search skips [hidden] text
+	assert.ok([...doc.querySelectorAll("[role=tabpanel]")].every(panel => !panel.hasAttribute("hidden")));
+
+	// Click, then the arrow keys (selection follows focus), Home and End
+	$("#zb-tab-sync").click();
+	assert.equal(p.selectedTab(), "sync");
+	assert.deepEqual(p.selectedPanels(), ["sync"]);
+	assert.equal(env.prefStore[P + "prefs.lastTab"], "sync");
+	assert.equal(doc.activeElement, $("#zb-tab-sync"));
+	p.key($("#zb-tab-sync"), "ArrowRight");
+	assert.equal(p.selectedTab(), "organize");
+	assert.equal(doc.activeElement, $("#zb-tab-organize"));
+	assert.deepEqual(tabs.map(t => t.getAttribute("tabindex")), ["-1", "-1", "0", "-1", "-1", "-1"]);
+	p.key(doc.activeElement, "ArrowLeft");
+	p.key(doc.activeElement, "ArrowLeft");
+	assert.equal(p.selectedTab(), "features");
+	p.key(doc.activeElement, "ArrowLeft");
+	assert.equal(p.selectedTab(), "ai", "← on the first tab wraps to the last");
+	p.key(doc.activeElement, "Home");
+	assert.equal(p.selectedTab(), "features");
+	p.key(doc.activeElement, "End");
+	assert.equal(p.selectedTab(), "ai");
+	assert.equal(env.prefStore[P + "prefs.lastTab"], "ai");
+	p.key(doc.activeElement, "a");
+	assert.equal(p.selectedTab(), "ai", "other keys leave the tabs alone");
+	window_unload(p);
+	assert.equal(env.observerCount(), pluginObservers, "pref observers left after unload");
+
+	// The next time the pane opens, on the tab chosen last; an unknown tab falls back to 功能
+	env.Zotero.Prefs.set(P + "prefs.lastTab", "organize");
+	let again = openNavPane(env);
+	assert.equal(again.selectedTab(), "organize");
+	assert.deepEqual(again.selectedPanels(), ["organize"]);
+	window_unload(again);
+	env.Zotero.Prefs.set(P + "prefs.lastTab", "gone");
+	let fallback = openNavPane(env);
+	assert.equal(fallback.selectedTab(), "features");
+	window_unload(fallback);
+	assert.equal(env.observerCount(), pluginObservers);
+	assert.deepEqual(env.errors, []);
+});
+
+function window_sections(p) {
+	return Array.from(p.window.ZoteroBridgePrefs.sections(), s => s.id);
+}
+
+function window_unload(p) {
+	p.doc.getElementById("zotero-bridge-prefs").dispatchEvent(new p.window.Event("unload"));
+}
+
+test("settings pane: a tab whose features are all off says which and leads to 功能", async () => {
+	let env = await setup();
+	let F = env.ZB.features;
+	let p = openNavPane(env);
+	let empty = tab => p.panel(tab).querySelector(".zb-panel-empty");
+	// 研究生引導: every tab has something (AI 文獻筆記 is on)
+	for (let tab of Object.keys(TAB_SECTIONS)) assert.equal(empty(tab).hasAttribute("hidden"), true, tab);
+	F.setEnabled("aiNotes", false);
+	let box = empty("ai");
+	assert.equal(box.hasAttribute("hidden"), false);
+	assert.equal(box.getAttribute("no-highlight"), "true");
+	let text = box.querySelector("p");
+	assert.equal(text.getAttribute("data-l10n-id"), "zotero-bridge-prefs-tab-empty");
+	assert.match(text.textContent, /^這一頁的功能都關著：AI 文獻筆記、批次 API、文獻比較表、文獻探討草稿、實證報告草稿、進度報告、概念卡片 AI 綜整。/);
+	assert.equal(JSON.parse(text.getAttribute("data-l10n-args")).features.split("、")[0], "AI 文獻筆記");
+	p.window.ZoteroBridgePrefs.selectTab("ai");
+	let go = box.querySelector("button");
+	assert.equal(go.textContent, "前往「功能」");
+	go.click();
+	assert.equal(p.selectedTab(), "features");
+	assert.equal(p.doc.activeElement, p.$("#zb-tab-features"));
+	F.setEnabled("synthesis", true);
+	assert.equal(box.hasAttribute("hidden"), true, "one AI feature on: the tab shows its settings again");
+	window_unload(p);
+	assert.deepEqual(env.errors, []);
+});
+
+test("settings pane: showSection opens a section's tab, scrolls to it, highlights and focuses it; a switched-off one leads to its switch", async () => {
+	let env = await setup();
+	let F = env.ZB.features;
+	let p = openNavPane(env);
+	let { doc, $ } = p;
+	let api = p.window.ZoteroBridgePrefs;
+
+	assert.equal(api.showSection("notion"), true);
+	assert.equal(p.selectedTab(), "sync");
+	assert.equal(p.scrolled.at(-1).node, p.section("notion"));
+	assert.equal(p.scrolled.at(-1).opts.block, "start");
+	assert.ok(p.section("notion").classList.contains("zb-flash"));
+	let heading = p.section("notion").getElementsByTagNameNS(HTML_NS, "h2")[0];
+	assert.equal(doc.activeElement, heading, "focus on the section's heading");
+	assert.equal(heading.getAttribute("tabindex"), "-1");
+	assert.equal(env.prefStore[P + "prefs.lastTab"], "sync");
+	// The next one takes the highlight
+	api.showSection("classify");
+	assert.equal(p.selectedTab(), "organize");
+	assert.ok(p.section("classify").classList.contains("zb-flash"));
+	assert.ok(!p.section("notion").classList.contains("zb-flash"));
+	// A tab ID opens the tab; unknown IDs do nothing
+	assert.equal(api.showSection("sync"), true);
+	assert.equal(p.selectedTab(), "sync");
+	assert.equal(doc.activeElement, $("#zb-tab-sync"));
+	assert.equal(api.showSection("nope"), false);
+	assert.equal(p.selectedTab(), "sync");
+
+	// 引文追蹤 is off in 研究生引導: 功能, its switch highlighted and focused, one line on where its settings go
+	assert.equal(p.section("citationChase").hasAttribute("hidden"), true);
+	assert.equal(api.showSection("citationChase"), true);
+	assert.equal(p.selectedTab(), "features");
+	let row = $('.zb-feature[data-feature="citationChase"]');
+	let input = $("#zb-feature-citationChase");
+	assert.ok(row.classList.contains("zb-flash"));
+	assert.equal(p.scrolled.at(-1).node, row);
+	assert.equal(doc.activeElement, input);
+	let note = $("#zb-section-notice");
+	assert.ok(row.contains(note));
+	assert.equal(note.querySelector("span").textContent, "「引文追蹤（OpenAlex）」的設定在「找文獻」分頁，打開這個功能後才會出現。");
+	assert.equal(note.querySelector("span").getAttribute("data-l10n-id"), "zotero-bridge-prefs-section-off");
+	assert.deepEqual(JSON.parse(note.querySelector("span").getAttribute("data-l10n-args")), { section: "引文追蹤（OpenAlex）", tab: "找文獻" });
+	assert.match(input.getAttribute("aria-describedby"), /zb-section-notice/);
+	let go = note.querySelector("button");
+	assert.equal(go.hasAttribute("hidden"), true, "no way there until the feature is on");
+	// Turning it on: the line says so and offers the way to its settings
+	input.click();
+	assert.equal(F.rawValue("citationChase"), true);
+	assert.equal(note.querySelector("span").textContent, "已打開。「引文追蹤（OpenAlex）」的設定在「找文獻」分頁。");
+	assert.equal(go.hasAttribute("hidden"), false);
+	assert.equal(go.textContent, "前往設定");
+	go.click();
+	assert.equal(p.selectedTab(), "search");
+	assert.ok(p.section("citationChase").classList.contains("zb-flash"));
+	assert.equal($("#zb-section-notice"), null, "the line goes once it was used");
+	assert.equal(input.getAttribute("aria-describedby"), "zb-feature-citationChase-desc zb-feature-citationChase-req");
+
+	// 全文筆記 is on but needs the sync: the sync switch is the one to turn on
+	F.setEnabled("sync", false);
+	assert.equal(p.section("fulltext").hasAttribute("hidden"), true);
+	api.showSection("fulltext");
+	assert.equal(doc.activeElement, $("#zb-feature-sync"));
+	assert.ok($('.zb-feature[data-feature="sync"]').classList.contains("zb-flash"));
+	assert.match($("#zb-section-notice span").textContent, /「全文筆記」的設定在「整理」分頁/);
+	// …and a section with several features points at the first that is off
+	F.setEnabled("sync", true);
+	F.setEnabled("aiNotes", false);
+	api.showSection("usage");
+	assert.equal(doc.activeElement, $("#zb-feature-aiNotes"));
+	assert.equal(doc.querySelectorAll("#zb-section-notice").length, 1, "one line at a time");
+	window_unload(p);
+	assert.deepEqual(env.errors, []);
+});
+
+test("settings pane: prefs.pendingSection opens a section once the pane is on screen, then clears", async () => {
+	let env = await setup();
+	// Asked for before the pane loaded
+	env.Zotero.Prefs.set(P + "prefs.pendingSection", "screening");
+	let p = openNavPane(env);
+	await tick();
+	assert.equal(p.selectedTab(), "appraise");
+	assert.ok(p.section("screening").classList.contains("zb-flash"));
+	assert.equal(env.prefStore[P + "prefs.pendingSection"], "");
+	// Asked for while the pane is open
+	env.Zotero.Prefs.set(P + "prefs.pendingSection", "bibliography");
+	await tick();
+	assert.equal(p.selectedTab(), "sync");
+	assert.equal(env.prefStore[P + "prefs.pendingSection"], "");
+	// While Zotero shows another pane, ours is in a hidden container: it waits for "showing"
+	let root = p.$("#zotero-bridge-prefs");
+	root.parentNode.setAttribute("hidden", "true");
+	env.Zotero.Prefs.set(P + "prefs.pendingSection", "ncbi");
+	await tick();
+	assert.equal(p.selectedTab(), "sync");
+	assert.equal(env.prefStore[P + "prefs.pendingSection"], "ncbi");
+	root.parentNode.removeAttribute("hidden");
+	root.dispatchEvent(new p.window.Event("showing"));
+	await tick();
+	assert.equal(p.selectedTab(), "search");
+	assert.equal(env.prefStore[P + "prefs.pendingSection"], "");
+	window_unload(p);
+	// After unload the observer is gone: nothing happens, nothing throws
+	env.Zotero.Prefs.set(P + "prefs.pendingSection", "ai");
+	await tick();
+	assert.equal(env.prefStore[P + "prefs.pendingSection"], "ai");
+	assert.deepEqual(env.errors, []);
+});
+
+test("settings pane: search filters every tab in Chinese and English, highlights matches, and Esc brings the tabs back", async () => {
+	let env = await setup();
+	let F = env.ZB.features;
+	let p = openNavPane(env);
+	let { doc, $ } = p;
+	let root = $("#zotero-bridge-prefs");
+	let status = $("#zb-search-status");
+	assert.equal(status.getAttribute("role"), "status");
+	assert.equal($("#zb-search").getAttribute("type"), "search");
+	assert.equal($(`[for="zb-search"]`).textContent, "找設定");
+	assert.equal($(".zb-nav").getAttribute("no-highlight"), "true", "Zotero's own search skips our search box and tabs");
+	assert.equal(p.selectedTab(), "features");
+
+	// English, any case or width, finds sections in other tabs
+	p.type("Notion");
+	assert.ok(root.classList.contains("zb-searching"));
+	let notion = p.found();
+	assert.ok(notion.includes("notion") && notion.includes("fulltext") && notion.includes("features"), notion.join(", "));
+	assert.ok(!notion.includes("concepts") && !notion.includes("usage"), notion.join(", "));
+	assert.equal(p.panel("sync").classList.contains("zb-search-miss"), false);
+	assert.equal(p.section("ncbi").classList.contains("zb-search-miss"), true);
+	assert.equal(status.textContent, `找到 ${notion.length} 個設定區塊。按 Esc 回到分頁。`);
+	assert.equal(status.getAttribute("data-l10n-id"), "zotero-bridge-prefs-search-found");
+	// Each text match is a CSS highlight range over exactly the matched words
+	let ranges = p.highlights.get("zb-search").ranges;
+	assert.ok(ranges.length >= 5);
+	assert.ok(ranges.every(r => r.toString().toLowerCase() === "notion"), ranges.map(r => r.toString()).join("|"));
+	assert.ok(ranges.some(r => p.section("notion").contains(r.startContainer)));
+	p.type("ｎｏｔｉｏｎ");
+	assert.deepEqual(p.found(), notion, "full-width and lower case find the same");
+	assert.equal(p.selectedTab(), "features", "searching doesn't change the tab");
+
+	// Chinese
+	p.type("分類");
+	let classify = p.found();
+	assert.ok(classify.includes("classify") && classify.includes("routing"), classify.join(", "));
+	assert.ok(!classify.includes("autosync") && !classify.includes("usage"), classify.join(", "));
+	// Several words: every one must be in the section
+	p.type("PubMed email");
+	assert.ok(p.found().includes("ncbi"));
+	assert.ok(!p.found().includes("obsidian"));
+	// A label kept in an attribute (XUL checkbox): the element is marked
+	p.type("bibtex");
+	assert.deepEqual(p.found(), ["features", "bibliography"]);
+	let checkbox = [...p.section("bibliography").getElementsByTagNameNS(XUL_NS, "checkbox")].find(c => /BibTeX/.test(c.getAttribute("label")));
+	assert.ok(checkbox.classList.contains("zb-hit"));
+	// English keywords only: the section shows without a highlight
+	p.type("deduplication");
+	assert.deepEqual(p.found(), ["screening"]);
+	// A match inside folded options opens them for the search, and Esc folds them again
+	p.type("不套用代理");
+	assert.deepEqual(p.found(), ["searchLinks"]);
+	let details = p.section("searchLinks").getElementsByTagNameNS(HTML_NS, "details")[0];
+	assert.equal(details.open, true);
+	// Nothing
+	p.type("zzzz");
+	assert.deepEqual(p.found(), []);
+	assert.equal(status.textContent, "沒有符合「zzzz」的設定。換個說法試試，例如英文名稱：Notion、PubMed、API key。");
+	assert.equal(status.getAttribute("data-l10n-id"), "zotero-bridge-prefs-search-none");
+	assert.equal($("#zb-search-off").hasAttribute("hidden"), true);
+
+	// A match in a switched-off feature: named, and a button to its switch
+	p.type("snowballing");
+	assert.deepEqual(p.found(), []);
+	let off = $("#zb-search-off");
+	assert.equal(off.hasAttribute("hidden"), false);
+	assert.equal(off.querySelector("span").textContent, "關著的功能裡也有：");
+	assert.deepEqual([...off.querySelectorAll("button")].map(b => b.textContent), ["引文追蹤（OpenAlex）"]);
+	// The switch turned on elsewhere: the open search updates
+	F.setEnabled("citationChase", true);
+	assert.deepEqual(p.found(), ["citationChase"]);
+	F.setEnabled("citationChase", false);
+	off.querySelector("button").click();
+	assert.equal($("#zb-search").value, "", "following a result ends the search");
+	assert.ok(!root.classList.contains("zb-searching"));
+	assert.equal(p.selectedTab(), "features");
+	assert.equal(doc.activeElement, $("#zb-feature-citationChase"));
+
+	// Esc: back to the tab that was open, nothing left marked
+	$("#zb-tab-organize").click();
+	p.type("不套用代理");
+	assert.equal(details.open, true);
+	p.type("bibtex");
+	let esc = new p.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+	$("#zb-search").dispatchEvent(esc);
+	assert.equal(esc.defaultPrevented, true);
+	assert.equal($("#zb-search").value, "");
+	assert.ok(!root.classList.contains("zb-searching"));
+	assert.equal(p.selectedTab(), "organize");
+	assert.deepEqual(p.selectedPanels(), ["organize"]);
+	assert.equal(doc.querySelectorAll(".zb-search-miss, .zb-hit").length, 0);
+	assert.equal(details.open, false, "options the search unfolded are folded again");
+	assert.equal(p.highlights.has("zb-search"), false);
+	assert.equal(status.textContent, "");
+	assert.equal(status.hasAttribute("data-l10n-id"), false);
+	// Esc in an empty box is left to the window
+	let esc2 = new p.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+	$("#zb-search").dispatchEvent(esc2);
+	assert.equal(esc2.defaultPrevented, false);
+	// Clearing the box by hand is the same as Esc; the API does the same
+	p.type("notion");
+	p.type("");
+	assert.ok(!root.classList.contains("zb-searching"));
+	p.window.ZoteroBridgePrefs.search("分類");
+	assert.ok(p.found().includes("classify"));
+	p.window.ZoteroBridgePrefs.search("");
+	assert.equal(doc.querySelectorAll(".zb-search-miss").length, 0);
+	window_unload(p);
+	assert.deepEqual(env.errors, []);
+});
+
+test("settings pane: while Zotero's own settings search has text, every tab shows and ours steps aside", async () => {
+	let env = await setup();
+	let p = openNavPane(env);
+	let { $ } = p;
+	let root = $("#zotero-bridge-prefs");
+	let field = $("#prefs-search");
+	let removed = [];
+	let remove = field.removeEventListener.bind(field);
+	field.removeEventListener = (type, fn, opts) => {
+		removed.push(type);
+		return remove(type, fn, opts);
+	};
+	p.type("notion");
+	// Zotero's search field fires "command" after typing
+	field.value = "notion";
+	field.dispatchEvent(new p.window.Event("command"));
+	assert.ok(root.classList.contains("zb-global-search"));
+	assert.ok(!root.classList.contains("zb-searching"), "our own search ends");
+	assert.equal($("#zb-search").value, "");
+	assert.equal(p.doc.querySelectorAll(".zb-search-miss").length, 0);
+	// Zotero's search walks the text and skips [hidden]: text in tabs that aren't selected must not be hidden by us
+	let heading = p.section("classify").getElementsByTagNameNS(HTML_NS, "h2")[0];
+	assert.equal(heading.closest("[hidden]"), null);
+	assert.equal(p.selectedTab(), "features");
+	field.value = "";
+	field.dispatchEvent(new p.window.Event("command"));
+	assert.ok(!root.classList.contains("zb-global-search"));
+	// Zotero clears the field without an event when another pane is chosen, and sends "showing" when ours comes back
+	field.value = "PubMed";
+	root.dispatchEvent(new p.window.Event("showing"));
+	assert.ok(root.classList.contains("zb-global-search"));
+	field.value = "";
+	root.dispatchEvent(new p.window.Event("showing"));
+	assert.ok(!root.classList.contains("zb-global-search"));
+	window_unload(p);
+	assert.deepEqual(removed.sort(), ["command", "input"], "the listeners on Zotero's field go with the pane");
+	assert.deepEqual(env.errors, []);
 });

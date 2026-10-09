@@ -229,6 +229,22 @@ test("the AI block survives a rebuild and is replaced by the next synthesis", ()
 	assert.doesNotMatch(replaced, /第一版/);
 	assert.equal(replaced.split("concept-ai:start").length, 2);
 	assert.match(replaced, /ai_synthesis: "2026-10-09T08:00:00.000Z"/);
+	// A card made as Zotero Bridge (≤ 0.10), AI block included: rebuilt and replaced in place. The
+	// definition intro above the region is the user's to keep, so its old wording stays
+	const asOld = text => text.split("ZotMax").join("Zotero Bridge");
+	let oldBlock = "%% zotero-bridge:concept-ai:start — AI 綜整由 Zotero Bridge 產生，重新產生時會覆寫；要保留修改請複製到區塊外 %%\n## 🤖 AI 綜整（草稿）\n\n第一版\n\n%% zotero-bridge:concept-ai:end %%";
+	let oldCard = asOld(c.insertAIBlock(card, oldBlock, { generatedAt: NOW }));
+	assert.match(oldCard, /^%% zotero-bridge:start — 此區塊由 Zotero Bridge 自動產生/m);
+	assert.match(oldCard, /由 Zotero Bridge 依文獻筆記/);
+	let oldRebuilt = c.buildConceptNote(oldCard, more.concepts[0], { now: LATER });
+	assert.equal(oldRebuilt.split("%% zotero-bridge:start").length, 2);
+	assert.match(oldRebuilt, /papers: 4/);
+	assert.match(oldRebuilt, /第一版/, "the old AI block is kept on a rebuild");
+	let oldReplaced = c.insertAIBlock(oldRebuilt, block2, { generatedAt: LATER });
+	assert.equal(oldReplaced.split("concept-ai:start").length, 2);
+	assert.doesNotMatch(oldReplaced, /第一版/);
+	let region = oldReplaced.slice(oldReplaced.indexOf("%% zotero-bridge:start"), oldReplaced.indexOf("concept-ai:end %%"));
+	assert.doesNotMatch(region, /Zotero Bridge/, "the managed region and the AI block carry the new name");
 	// Without markers: before 我的筆記, else at the end
 	assert.match(c.insertAIBlock("# X\n\n## ✍️ 我的筆記\n\n心得\n", block1), /^# X\n\n%% zotero-bridge:concept-ai:start[\s\S]*end %%\n\n## ✍️ 我的筆記\n\n心得\n$/);
 	assert.match(c.insertAIBlock("# X\n", block1), /^# X\n\n%% zotero-bridge:concept-ai:start[\s\S]*end %%\n$/);
@@ -288,7 +304,7 @@ test("the dashboard's 熱門概念 section", () => {
 		"[[Zotero/概念/Self-efficacy|Self-efficacy]]（3） · [[Zotero/概念/跌倒|跌倒]]（2）",
 	].join("\n\n"));
 	let none = c.buildDashboardSection([]);
-	assert.match(none, /還沒有概念卡片：Zotero 工具 → 更新概念卡片/);
+	assert.match(none, /還沒有概念卡片：ZotMax 按鈕或快速指令 → 更新概念卡片/);
 	assert.doesNotMatch(none, /\[\[/);
 });
 

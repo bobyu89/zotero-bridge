@@ -435,7 +435,7 @@ test("install wizard and search page link to the appraisal page; Pages deploy co
 	assert.match(index, /<a [^>]*href="appraisal\.html"[^>]*>📋 文獻評讀表<\/a>/);
 	assert.match(search, /<a [^>]*href="appraisal\.html"[^>]*>📋 文獻評讀表/);
 	assert.match(HTML, /<a href="search\.html">🔎 醫學文獻快速搜尋<\/a>/);
-	assert.match(HTML, /<a href="\.\/">← Zotero Bridge 安裝精靈<\/a>/);
+	assert.match(HTML, /<a href="\.\/">← ZotMax 安裝精靈<\/a>/);
 	const wf = fs.readFileSync(path.join(ROOT, ".github", "workflows", "pages.yml"), "utf8");
 	assert.match(wf, /- "content\/appraisal-tools\.js"/);
 	assert.match(wf, /cp content\/appraisal-tools\.js site\/appraisal-tools\.js[\s\S]*upload-pages-artifact/);

@@ -1,7 +1,7 @@
 @namespace html url("http://www.w3.org/1999/xhtml");
 
 /*
- * Zotero Bridge settings pane. Tokens and components: DESIGN.md.
+ * ZotMax settings pane. Tokens and components: DESIGN.md.
  * Every color comes from Zotero's own variables (with a fallback), so the pane follows Zotero's light
  * and dark themes; sizes are in em, so it follows Zotero's font size. No external fonts or images.
  */
@@ -117,6 +117,192 @@
 /* Sections of a feature that is off (preferences.js applyDisclosure) */
 .zotero-bridge-prefs [data-zb-feature][hidden] {
 	display: none;
+}
+
+/* ---------- navigation: search and workflow tabs ---------- */
+
+.zotero-bridge-prefs .zb-nav {
+	display: flex;
+	flex-direction: column;
+	margin: 0 0 var(--zb-space-4);
+}
+.zotero-bridge-prefs .zb-search {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--zb-space-1) var(--zb-space-2);
+	max-width: var(--zb-measure);
+}
+.zotero-bridge-prefs .zb-search-label {
+	font-weight: 600;
+}
+.zotero-bridge-prefs .zb-search > html|input {
+	flex: 1;
+	min-width: 12em;
+}
+/* Always in the tree (a live region), empty and flat when there is no search */
+.zotero-bridge-prefs .zb-search-status {
+	margin: 0;
+	max-width: var(--zb-measure);
+	color: var(--zb-text-muted);
+	font-size: 0.92em;
+	line-height: 1.4;
+}
+.zotero-bridge-prefs.zb-searching .zb-search-status {
+	margin-top: var(--zb-space-2);
+}
+.zotero-bridge-prefs .zb-search-off {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--zb-space-1) var(--zb-space-2);
+	margin: var(--zb-space-2) 0 0;
+	max-width: var(--zb-measure);
+	color: var(--zb-text-muted);
+	font-size: 0.92em;
+}
+.zotero-bridge-prefs .zb-search-off[hidden] {
+	display: none;
+}
+.zotero-bridge-prefs .zb-search-off html|button {
+	font: inherit;
+}
+
+/* ARIA tabs: text in Pencil, the selected one in Ink with a 2px Accent rule; a hairline under the row */
+.zotero-bridge-prefs .zb-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0 var(--zb-space-1);
+	margin-top: var(--zb-space-3);
+	border-bottom: 1px solid var(--zb-line);
+}
+.zotero-bridge-prefs .zb-tab {
+	appearance: none;
+	margin: 0 0 -1px;
+	padding: var(--zb-space-2) var(--zb-space-3);
+	border: none;
+	border-bottom: 2px solid transparent;
+	border-radius: var(--zb-radius-sm) var(--zb-radius-sm) 0 0;
+	background: transparent;
+	color: var(--zb-text-muted);
+	font: inherit;
+	cursor: pointer;
+	transition: color 150ms ease-out, background-color 150ms ease-out, border-color 150ms ease-out;
+}
+.zotero-bridge-prefs .zb-tab:hover {
+	color: var(--zb-text);
+	background: var(--zb-tint);
+}
+.zotero-bridge-prefs .zb-tab:active {
+	background: var(--zb-line);
+}
+.zotero-bridge-prefs .zb-tab[aria-selected="true"] {
+	color: var(--zb-text);
+	border-bottom-color: var(--zb-accent);
+}
+.zotero-bridge-prefs .zb-tab:focus-visible {
+	outline: 2px solid var(--zb-accent);
+	outline-offset: -2px;
+}
+
+/* One panel at a time. A class, not [hidden]: Zotero's own settings search skips [hidden] text */
+.zotero-bridge-prefs:not(.zb-searching, .zb-global-search) .zb-panel:not(.is-selected) {
+	display: none;
+}
+/* Tab names as dividers, only while every tab shows at once (a search) */
+.zotero-bridge-prefs .zb-panel-title {
+	display: none;
+}
+.zotero-bridge-prefs:is(.zb-searching, .zb-global-search) .zb-panel-title {
+	display: block;
+	max-width: var(--zb-measure);
+	margin: var(--zb-space-5) 0 var(--zb-space-2);
+	padding-bottom: var(--zb-space-1);
+	border-bottom: 1px solid var(--zb-line);
+	color: var(--zb-text-muted);
+	font-weight: 600;
+}
+.zotero-bridge-prefs.zb-searching .zb-tabs,
+.zotero-bridge-prefs.zb-searching .zb-panel-empty,
+.zotero-bridge-prefs.zb-global-search .zb-nav,
+.zotero-bridge-prefs.zb-global-search .zb-panel-empty,
+.zotero-bridge-prefs .zb-search-miss {
+	display: none;
+}
+/* Matches: Gecko's CSS highlights on text, the element itself for labels kept in attributes */
+::highlight(zb-search) {
+	background-color: Mark;
+	color: MarkText;
+}
+.zotero-bridge-prefs .zb-hit {
+	background-color: Mark;
+	color: MarkText;
+	border-radius: 2px;
+}
+
+/* A tab whose features are all off: what is missing and the way to 功能 */
+.zotero-bridge-prefs .zb-panel-empty {
+	max-width: var(--zb-measure);
+	padding: var(--zb-space-4) 0;
+	color: var(--zb-text-muted);
+}
+.zotero-bridge-prefs .zb-panel-empty[hidden] {
+	display: none;
+}
+.zotero-bridge-prefs .zb-panel-empty > html|p {
+	margin: 0 0 var(--zb-space-2);
+	line-height: 1.4;
+}
+.zotero-bridge-prefs .zb-panel-empty > html|button {
+	font: inherit;
+}
+
+/* showSection(): the section (or the switch of a feature that is off) it opened, for two seconds */
+.zotero-bridge-prefs [data-zb-section],
+.zotero-bridge-prefs .zb-feature {
+	outline: 2px solid transparent;
+	outline-offset: 4px;
+	transition: outline-color 400ms ease-out, background-color 400ms ease-out;
+}
+/* Rows keep square corners: a radius would bend the hairline between them */
+.zotero-bridge-prefs [data-zb-section] {
+	border-radius: var(--zb-radius);
+}
+.zotero-bridge-prefs .zb-flash {
+	outline-color: var(--zb-accent);
+	background-color: var(--zb-tint);
+}
+.zotero-bridge-prefs html|h2[tabindex="-1"]:focus {
+	outline: none;
+}
+.zotero-bridge-prefs html|h2[tabindex="-1"]:focus-visible {
+	outline: 2px solid var(--zb-accent);
+	outline-offset: 2px;
+	border-radius: var(--zb-radius-sm);
+}
+/* The line under that switch: where its settings will be, and the way there once it is on */
+.zotero-bridge-prefs .zb-feature-note {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--zb-space-1) var(--zb-space-2);
+	margin: var(--zb-space-1) 0 0;
+	font-size: 0.92em;
+	line-height: 1.4;
+}
+.zotero-bridge-prefs .zb-feature-note html|button {
+	font: inherit;
+}
+.zotero-bridge-prefs .zb-feature-note html|button[hidden] {
+	display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.zotero-bridge-prefs .zb-tab,
+	.zotero-bridge-prefs [data-zb-section],
+	.zotero-bridge-prefs .zb-feature {
+		transition: none;
+	}
 }
 
 /* ---------- 功能: presets ---------- */

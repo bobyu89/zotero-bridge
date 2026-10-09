@@ -336,7 +336,7 @@ test("Obsidian callout: find links, similar articles, MeSH, PICO; Notion keeps t
 	assert.equal(lines[5], "> ↳ [PubMed](https://pubmed.ncbi.nlm.nih.gov/?term=%22older%20inpatients%22%20AND%20falls) · "
 		+ `[CINAHL](${PROXY}https://search.ebscohost.com/login.aspx?direct=true&db=rzh&bquery=%22older%20inpatients%22%20AND%20falls&type=1&searchMode=And&site=ehost-live) · `
 		+ "[Google Scholar](https://scholar.google.com/scholar?hl=zh-TW&q=%22older%20inpatients%22%20AND%20falls)  ");
-	assert.equal(lines[6], "> *I（介入） 沒有英文詞彙，未列入；可用 工具 → 醫學文獻快速搜尋… 查 MeSH*  ");
+	assert.equal(lines[6], "> *I（介入） 沒有英文詞彙，未列入；可用 ZotMax 按鈕或快速指令 → 醫學文獻快速搜尋… 查 MeSH*  ");
 	assert.equal(lines[7], "> **PICO（原文詞彙）**：`\"older inpatients\" AND 護理師主導衛教 AND (falls OR 跌倒自我效能)`  ");
 	assert.equal(lines[8], "> ↳ [Google Scholar](https://scholar.google.com/scholar?hl=zh-TW&q=" + sl.encodeQuery('"older inpatients" AND 護理師主導衛教 AND (falls OR 跌倒自我效能)') + ")");
 	assert.equal(lines.length, 9);

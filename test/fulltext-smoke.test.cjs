@@ -471,7 +471,7 @@ test("sync writes the full-text note with coloured highlights and the compact li
 	let ft = fs.readFileSync(fullTextPath(vault), "utf8");
 	assert.match(ft, /^---\nfulltext_of: "library\/KEY\d+"\nfulltext_source: "built-in"\n---\n/);
 	assert.doesNotMatch(ft, /zotero_key/);
-	assert.match(ft, /^> \[!info\] 全文・由 Zotero Bridge 產生\n> 每次同步都會重新產生，請不要在這裡寫字；想法寫在文獻筆記 \[\[Zotero\/lee2024\|文獻筆記\]\]。\n> 劃線：🟡 重要發現 · 🔴 限制／疑問 · 🤖 底線＝AI 標的重點（僅供參考）$/m);
+	assert.match(ft, /^> \[!info\] 全文・由 ZotMax 產生\n> 每次同步都會重新產生，請不要在這裡寫字；想法寫在文獻筆記 \[\[Zotero\/lee2024\|文獻筆記\]\]。\n> 劃線：🟡 重要發現 · 🔴 限制／疑問 · 🤖 底線＝AI 標的重點（僅供參考）$/m);
 	assert.match(ft, /^The intervention ==🟡reduced the rate of falls by thirty percent== compared with usual care\.$/m);
 	assert.match(ft, /^Adherence was high and ==🔴no serious adverse events were reported==\.$/m);
 	assert.match(ft, /^🤖<u>Nurses can deliver structured exercise safely in hospital wards<\/u>\.$/m);
@@ -506,6 +506,13 @@ test("sync writes the full-text note with coloured highlights and the compact li
 	assert.equal(log.filter(l => l.api === "anthropic").length, 0);
 	assert.equal(fs.readFileSync(fullTextPath(vault), "utf8"), before);
 	assert.equal(fs.readdirSync(path.join(vault, "Zotero")).filter(f => f.endsWith(".md")).length, 1, "the full-text note isn't taken for a literature note");
+
+	// A full-text note written by Zotero Bridge (≤ 0.10): still ours (fulltext_of), rebuilt under the new name
+	fs.writeFileSync(fullTextPath(vault), before.split("ZotMax").join("Zotero Bridge"));
+	assert.match(fs.readFileSync(fullTextPath(vault), "utf8"), /^> \[!info\] 全文・由 Zotero Bridge 產生$/m);
+	await ZB.main.run([item], { targets: ["obsidian"], ai: "reuse" });
+	assert.deepEqual(env.errors, []);
+	assert.equal(fs.readFileSync(fullTextPath(vault), "utf8"), before);
 	await vm.runInContext("shutdown()", env.context);
 });
 
@@ -541,7 +548,7 @@ test("AI 標重點 off (研究生引導): no key sentences asked for, none shown
 	fs.writeFileSync(path.join(vault, "Zotero", "全文", "lee2024nurse.md"), "# 我自己的筆記\n");
 	await ZB.main.run([item], { targets: ["obsidian"], ai: "reuse" });
 	assert.equal(fs.readFileSync(path.join(vault, "Zotero", "全文", "lee2024nurse.md"), "utf8"), "# 我自己的筆記\n");
-	assert.match(env.progressLines.at(-1).text, /⚠️ 全文筆記：「Zotero\/全文\/lee2024nurse\.md」不是 Zotero Bridge 產生的全文筆記，沒有覆寫/);
+	assert.match(env.progressLines.at(-1).text, /⚠️ 全文筆記：「Zotero\/全文\/lee2024nurse\.md」不是 ZotMax 產生的全文筆記，沒有覆寫/);
 
 	// 全文筆記 off: no full-text note, and the AI gets the raw text again
 	ZB.features.setEnabled("fullTextMarkdown", false);

@@ -303,7 +303,7 @@ function state(env) {
 
 const PI_TERM = `(pressure injury[tiab]) AND ("2020"[dp] : "3000"[dp])`;
 
-test("Tools menu checks every watch: throttled E-utilities calls, dedup, import into new collections with tags, digest", async () => {
+test("檢查新文獻 checks every watch: throttled E-utilities calls, dedup, import into new collections with tags, digest", async () => {
 	let env = await setup({ searches: { [FALLS]: ["1001", "1002", "1003", "1004"], [PI_TERM]: ["1004", "2001", "2002"] } });
 	// Already in the library: PMID 1001 in Extra (next to a look-alike PMID), and 1003's DOI in other case
 	new env.MockItem("journalArticle", { title: "Old", extra: "PMID: 10010" });
@@ -311,10 +311,10 @@ test("Tools menu checks every watch: throttled E-utilities calls, dedup, import 
 	new env.MockItem("journalArticle", { title: "Old 1003", DOI: "10.1000/a1003" });
 	env.failingPMIDs.add("2002");
 
-	let tools = env.menus.find(m => m.menuID === "zotero-bridge-pubmed-watch-tools");
-	assert.equal(tools.target, "main/menubar/tools");
-	assert.equal(tools.menus[0].l10nID, "zotero-bridge-menu-pubmed-watch");
-	tools.menus[0].onCommand();
+	// 檢查新文獻（PubMed 追蹤） from the toolbar button or 快速指令 (commands.js)
+	let C = env.context.ZB.commands;
+	assert.equal(C.get("pubmed-watch").l10n, "zotero-bridge-menu-pubmed-watch");
+	C.execute("pubmed-watch");
 	// A second request while the menu's check runs joins it
 	let { results, digest, requests } = await env.watch.runAll();
 	assert.ok(env.descriptions.includes("正在檢查新文獻，請稍候。"));
@@ -367,7 +367,7 @@ test("Tools menu checks every watch: throttled E-utilities calls, dedup, import 
 	same(st.pi.retry, { 2002: 1 });
 
 	// --- progress window and the Obsidian digest
-	assert.ok(env.headlines.includes("Zotero Bridge：PubMed 新文獻追蹤"));
+	assert.ok(env.headlines.includes("ZotMax：PubMed 新文獻追蹤"));
 	let lines = env.progressLines.map(l => l.text);
 	assert.ok(lines.includes("跌倒預防：找到 4 篇，新匯入 2 篇，已在文獻庫 2 篇"), lines.join("\n"));
 	assert.ok(lines.includes("壓傷：找到 3 篇，新匯入 1 篇，已在文獻庫 1 篇，匯入失敗 1 篇（下次再試）"), lines.join("\n"));

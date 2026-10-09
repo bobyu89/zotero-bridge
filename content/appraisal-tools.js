@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — critical appraisal checklists (文獻評讀表): the catalog of CASP and JBI tools and
+ * ZotMax — critical appraisal checklists (文獻評讀表): the catalog of CASP and JBI tools and
  * pure helpers (summary counts, Markdown tables, CSV, AI-note parsing, Cohen's kappa).
  *
  * No Zotero or DOM dependencies. Works as:

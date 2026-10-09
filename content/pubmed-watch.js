@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — PubMed new-literature watch (新文獻追蹤).
+ * ZotMax — PubMed new-literature watch (新文獻追蹤).
  *
  * Saved PubMed searches (full PubMed syntax, MeSH included) are run against NCBI E-utilities:
  * ESearch (retmode=json, datetype=edat, mindate/maxdate since the last check) for the PMIDs, then
@@ -46,7 +46,7 @@
 	const STARTUP_DELAY_MS = 2 * 60 * 1000;
 	const TICK_MS = 60 * 60 * 1000;
 	const USER_HEADING = "✍️ 我的筆記";
-	const MARK_START = "%% zotero-bridge:start — 此區塊由 Zotero Bridge 自動產生；同一天再次檢查時會加入新文獻，已勾選的項目會保留 %%";
+	const MARK_START = "%% zotero-bridge:start — 此區塊由 ZotMax 自動產生；同一天再次檢查時會加入新文獻，已勾選的項目會保留 %%";
 	const MARK_START_RE = /^%% zotero-bridge:start.*%%[ \t]*$/m;
 	const MARK_END_RE = /^%% zotero-bridge:end %%[ \t]*$/m;
 
@@ -696,7 +696,7 @@
 			return Promise.resolve(null);
 		}
 		if (checking) {
-			if (!opts.auto) scope.ZB.main.notify("Zotero Bridge：PubMed 追蹤", "正在檢查新文獻，請稍候。");
+			if (!opts.auto) scope.ZB.main.notify("ZotMax：PubMed 追蹤", "正在檢查新文獻，請稍候。");
 			return checking;
 		}
 		checking = runAllNow(opts).finally(() => {
@@ -707,7 +707,7 @@
 
 	async function runAllNow(opts) {
 		let ZB = scope.ZB;
-		let headline = "Zotero Bridge：PubMed 新文獻追蹤";
+		let headline = "ZotMax：PubMed 新文獻追蹤";
 		let cfg = config();
 		let { watches, errors: configErrors } = readWatches();
 		watches = watches.filter(w => w.enabled && (!opts.only || opts.only.includes(w.id)));
@@ -715,7 +715,7 @@
 			if (!opts.auto) {
 				ZB.main.notify(headline, configErrors.length
 					? `追蹤清單有誤：${configErrors.slice(0, 3).join("；")}`
-					: "還沒有要檢查的追蹤：請到 設定 → Zotero Bridge → PubMed 新文獻追蹤 新增。");
+					: "還沒有要檢查的追蹤：請到 設定 → ZotMax → PubMed 新文獻追蹤 新增。");
 			}
 			return { results: [], digest: "" };
 		}
@@ -973,32 +973,10 @@
 		if (errors.length) container.append(el("pre", { class: "zb-status" }, errors.map(e => `⚠️ ${e}`).join("\n")));
 	}
 
-	// ---------- menu ----------
-
 	// Feature switches (features.js): checked live; always on when this file runs without them (Node tests)
 	function featureOn(id) {
 		let f = scope.ZB && scope.ZB.features;
 		return !f || f.isEnabled(id);
-	}
-
-	/** Menu entries that hide while the feature is off (features.js gateMenus). */
-	function gated(id, menus) {
-		let f = scope.ZB && scope.ZB.features;
-		return f ? f.gateMenus(id, menus) : menus;
-	}
-
-	function registerMenus({ pluginID }) {
-		let id = Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-pubmed-watch-tools",
-			pluginID,
-			target: "main/menubar/tools",
-			menus: gated("pubmedWatch", [{
-				menuType: "menuitem",
-				l10nID: "zotero-bridge-menu-pubmed-watch",
-				onCommand: () => runAll().catch(e => Zotero.logError(e)),
-			}]),
-		});
-		return [id].filter(Boolean);
 	}
 
 	return {
@@ -1008,7 +986,7 @@
 		eutilsURL, esearchURL, esummaryURL, parseESearch, parseESummary, createThrottle, planCandidates, pmidFromExtra, normalizeDOI,
 		describeResult, digestLine, buildDigestNote, localDate,
 		runtime, config, readWatches, readState, ncbiSettings, getJSON, findExisting, ensureCollection, checkWatch, runAll, dueWatches,
-		init, shutdown, testQuery, addWatch, renderPrefs, registerMenus,
+		init, shutdown, testQuery, addWatch, renderPrefs,
 		get timerActive() { return !!timer; },
 	};
 });

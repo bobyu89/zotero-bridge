@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — image and ink annotations: the PNG Zotero renders for each one is copied into
+ * ZotMax — image and ink annotations: the PNG Zotero renders for each one is copied into
  * the Obsidian vault, uploaded to Notion (File Upload API) and, if enabled, shown to Claude.
  * The pure helpers are required directly by the Node tests; the rest uses the Zotero globals.
  * A missing image never fails a sync: the annotation keeps its caption and comment.
@@ -170,7 +170,7 @@
 			await renderer.renderAttachmentAnnotations(attachmentID, true);
 		}
 		catch (e) {
-			Zotero.debug(`Zotero Bridge: could not render annotations of attachment ${attachmentID}: ${e}`);
+			Zotero.debug(`ZotMax: could not render annotations of attachment ${attachmentID}: ${e}`);
 		}
 	}
 
@@ -190,7 +190,7 @@
 			return (await IOUtils.exists(path)) ? path : null;
 		}
 		catch (e) {
-			Zotero.debug(`Zotero Bridge: no image for annotation ${annotationKey}: ${e}`);
+			Zotero.debug(`ZotMax: no image for annotation ${annotationKey}: ${e}`);
 			return null;
 		}
 	}

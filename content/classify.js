@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — 文獻自動分類: suggest Zotero sub-collections, the user ticks what they agree with,
+ * ZotMax — 文獻自動分類: suggest Zotero sub-collections, the user ticks what they agree with,
  * then the plugin adds the items to them.
  *
  * Four dimensions, each switchable in the settings (classify.design / .topics / .rules / .pico):
@@ -29,7 +29,7 @@
 	}
 })(this, function (concepts, usage, llm, scope) {
 	const PREF = "extensions.zotero-bridge.";
-	const TITLE = "Zotero Bridge：文獻自動分類";
+	const TITLE = "ZotMax：文獻自動分類";
 	const DEFAULT_PARENT = "自動分類";
 	const HTML_NS = "http://www.w3.org/1999/xhtml";
 	const DIALOG_URL = "chrome://zotero-bridge/content/classify-review.xhtml";
@@ -781,7 +781,7 @@
 		let head = el("header", { class: "zb-cl-head" });
 		head.append(
 			el("h1", { class: "zb-cl-title" }, "文獻自動分類：先看建議，再決定"),
-			el("p", { class: "zb-cl-lead" }, "下面是建議，判斷在你。勾選你同意的，按「套用」才會把文獻加進 Zotero 子分類；不會把文獻移出任何分類，也不會改動或刪除你原本的分類。之後想反悔：工具 → 復原上次分類。"),
+			el("p", { class: "zb-cl-lead" }, "下面是建議，判斷在你。勾選你同意的，按「套用」才會把文獻加進 Zotero 子分類；不會把文獻移出任何分類，也不會改動或刪除你原本的分類。之後想反悔：ZotMax 按鈕或快速指令 → 復原上次分類。"),
 		);
 		if (plan.target) head.append(el("p", { class: "zb-cl-target" }, `放在：${plan.target}`));
 		if (plan.notes && plan.notes.length) {
@@ -810,7 +810,7 @@
 
 		let list = el("div", { class: "zb-cl-list", tabindex: "-1" });
 		if (!withSuggestions.length) {
-			list.append(el("p", { class: "zb-cl-empty" }, "這次沒有任何分類建議。可以到 設定 → Zotero Bridge → 文獻自動分類 打開更多面向、列主題或寫規則，再試一次。"));
+			list.append(el("p", { class: "zb-cl-empty" }, "這次沒有任何分類建議。可以到 設定 → ZotMax → 文獻自動分類 打開更多面向、列主題或寫規則，再試一次。"));
 		}
 		withSuggestions.forEach((item, index) => {
 			let section = el("section", { class: "zb-cl-item", "aria-labelledby": `zb-cl-item-${index}` });
@@ -929,11 +929,6 @@
 	function featureOn(id) {
 		let f = scope.ZB && scope.ZB.features;
 		return !f || f.isEnabled(id);
-	}
-
-	function gated(id, menus) {
-		let f = scope.ZB && scope.ZB.features;
-		return f ? f.gateMenus(id, menus) : menus;
 	}
 
 	function notify(text, headline = TITLE) {
@@ -1075,7 +1070,7 @@
 		let F = scope.ZB.features;
 		if (F.isEnabled("classifyAI")) return "";
 		let f = F.get("classifyAI");
-		if (!F.rawValue("classifyAI")) return `主題：「${f.label}」目前關閉，這次沒有主題建議。要使用的話：設定 → Zotero Bridge → 功能，把它打開。`;
+		if (!F.rawValue("classifyAI")) return `主題：「${f.label}」目前關閉，這次沒有主題建議。要使用的話：設定 → ZotMax → 功能，把它打開。`;
 		let req = f.requires.find(r => !F.isEnabled(r));
 		return `主題：「${f.label}」要先打開「${F.get(req).label}」，這次沒有主題建議。`;
 	}
@@ -1100,7 +1095,7 @@
 			return null;
 		}
 		if (!settings.llm.apiKey) {
-			notes.push("主題：還沒有設定 AI 的 API key（設定 → Zotero Bridge → AI 服務），這次沒有主題建議。");
+			notes.push("主題：還沒有設定 AI 的 API key（設定 → ZotMax → AI 服務），這次沒有主題建議。");
 			return null;
 		}
 		let entries = [];
@@ -1198,7 +1193,7 @@
 		}
 		let dims = options.dimensions;
 		if (!Object.values(dims).some(Boolean)) {
-			notes.push("四個面向都關著：到 設定 → Zotero Bridge → 文獻自動分類 打開至少一個。");
+			notes.push("四個面向都關著：到 設定 → ZotMax → 文獻自動分類 打開至少一個。");
 		}
 		if (dims.rules) {
 			if (options.rules.errors.length) notes.push(`規則：${describeErrors(options.rules.errors).join("；")}。這幾行先略過（設定頁會標出原因）。`);
@@ -1544,7 +1539,7 @@
 			let lines = [result.added || result.created
 				? `已加入 ${result.added} 筆分類，新建 ${result.created} 個子分類${result.already ? `（${result.already} 筆原本就在）` : ""}。`
 				: `勾選的 ${result.already} 筆原本就在這些分類裡，沒有變動。`];
-			if (result.added || result.created) lines.push("想反悔：工具 → 復原上次分類。");
+			if (result.added || result.created) lines.push("想反悔：ZotMax 按鈕或快速指令 → 復原上次分類。");
 			if (result.errors.length) lines.push(...result.errors.slice(0, 3));
 			notify(lines.join("\n"));
 			return Object.assign({ cancelled: false }, result);
@@ -1555,87 +1550,11 @@
 		}
 	}
 
-	function selectedCollections(context) {
-		return (context.collectionTreeRows || []).filter(r => r.isCollection && r.isCollection()).map(r => r.ref);
-	}
-
-	function activeScopeItems() {
-		try {
-			let pane = Zotero.getActiveZoteroPane();
-			let selected = pane && pane.getSelectedItems ? pane.getSelectedItems() : [];
-			if (selected && selected.length) return selected;
-			let collection = pane && pane.getSelectedCollections()[0];
-			return collection ? scope.ZB.adapter.itemsInCollection(collection, true) : [];
-		}
-		catch (e) {
-			return [];
-		}
-	}
-
-	/** Item, collection and Tools menu entries; returns the menu IDs to unregister. */
-	function registerMenus({ pluginID, icon }) {
-		let log = e => Zotero.logError(e);
-		let ids = [];
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-classify-item",
-			pluginID,
-			target: "main/library/item",
-			menus: gated("autoClassify", [{
-				menuType: "menuitem",
-				l10nID: "zotero-bridge-classify-items",
-				icon,
-				onCommand: (ev, context) => {
-					run(context.items || []).catch(log);
-				},
-			}]),
-		}));
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-classify-collection",
-			pluginID,
-			target: "main/library/collection",
-			menus: gated("autoClassify", [{
-				menuType: "menuitem",
-				l10nID: "zotero-bridge-classify-collection",
-				icon,
-				onShowing: (ev, context) => context.setVisible(selectedCollections(context).length > 0),
-				onCommand: (ev, context) => {
-					let items = [];
-					for (let c of selectedCollections(context)) items.push(...scope.ZB.adapter.itemsInCollection(c, true));
-					run(items).catch(log);
-				},
-			}]),
-		}));
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-classify-tools",
-			pluginID,
-			target: "main/menubar/tools",
-			menus: [
-				...gated("autoClassify", [{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-classify-tools",
-					onCommand: () => {
-						run(activeScopeItems()).catch(log);
-					},
-				}]),
-				{
-					// Not gated: what was applied can always be taken back, also after the switch went off
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-classify-undo",
-					onShowing: (ev, context) => context.setVisible(!!readLastRun()),
-					onCommand: () => {
-						undoLast().catch(log);
-					},
-				},
-			],
-		}));
-		return ids.filter(Boolean);
-	}
-
 	return {
 		DIMENSIONS, DESIGN_NAMES, DEFAULT_PARENT, TOPIC_SYSTEM, DIALOG_URL, DIALOG_ROOT, SOURCE_LABELS, CONFIDENCE_LABELS,
 		cleanName, nameKey, sameName, tokenize, parseCondition, parseRules, describeErrors, evaluate, parseTopics,
 		buildTopicPrompt, parseTopicResponse, estimateTokens, estimateTopicRun, guessDesign, designSuggestions, picoValues,
 		picoSuggestions, buildSuggestions, defaultPicks, planApply, describeCounts, renderReview,
-		readOptions, recordFor, suggest, review, apply, undoLast, readLastRun, run, registerMenus,
+		readOptions, recordFor, suggest, review, apply, undoLast, readLastRun, run,
 	};
 });

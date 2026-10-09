@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	快速指令, the command palette: content/palette.js open() opens it and render() fills it.
+	Layout and tokens: DESIGN.md (Command palette). The plugin's own code draws everything inside #zb-palette;
+	this file only provides the window, Zotero's stylesheets (theme variables) and the plugin's stylesheet.
+-->
+<?xml-stylesheet href="chrome://global/skin/global.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero/skin/zotero.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero-bridge/content/palette.css" type="text/css"?>
+<window id="zotero-bridge-palette-window"
+	xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+	xmlns:html="http://www.w3.org/1999/xhtml"
+	title="ZotMax 快速指令"
+	width="560"
+	height="460"
+	persist="width height screenX screenY">
+	<html:div id="zb-palette" class="zb-palette"/>
+</window>

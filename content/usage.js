@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — AI usage ledger and cost estimates (pure functions; persistence lives in main.js).
+ * ZotMax — AI usage ledger and cost estimates (pure functions; persistence lives in main.js).
  * Ledger: { "2026-10": { calls, input, output, cacheRead, cacheWrite, byModel: { <model>: { same counters } } } }
  * Token fields follow llm.parseUsage(): `input` is full-price input, cache reads/writes are separate;
  * cacheWrite1h (only stored when non-zero) is the part of cacheWrite written with the 1-hour TTL.

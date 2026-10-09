@@ -225,7 +225,7 @@ function notionAndClaude(log, notion) {
 		}
 		if (/^blocks\/ebhc-page-\d+\/children\?/.test(p)) return ok({ results: notion.children, has_more: false });
 		if (/^blocks\/ebhc-page-\d+\/children$/.test(p)) {
-			notion.children = [{ id: "container-1", type: "callout", callout: { rich_text: [{ plain_text: "Zotero Bridge｜…" }] } }];
+			notion.children = [{ id: "container-1", type: "callout", callout: { rich_text: [{ plain_text: "ZotMax｜…" }] } }];
 			return ok({ results: [{ id: "container-1" }] });
 		}
 		if (p === "blocks/container-1" && init.method === "DELETE") return ok({});
@@ -235,8 +235,8 @@ function notionAndClaude(log, notion) {
 
 function aiNote(env, parent, sections, data) {
 	let note = new env.MockItem("note");
-	note.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 test-model 於 2026-10-01T00:00:00Z 產生（Zotero Bridge）</em></p>"
-		+ sections + `<h2>📋 結構化資料（Zotero Bridge）</h2><pre>${JSON.stringify(data, null, 2)}</pre>`;
+	note.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 test-model 於 2026-10-01T00:00:00Z 產生（ZotMax）</em></p>"
+		+ sections + `<h2>📋 結構化資料（ZotMax）</h2><pre>${JSON.stringify(data, null, 2)}</pre>`;
 	note.tags = ["zotero-bridge-ai"];
 	env.addChild(parent, note);
 }

@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — quick medical-literature search links (醫學文獻快速搜尋).
+ * ZotMax — quick medical-literature search links (醫學文獻快速搜尋).
  *
  * A catalog of databases with a search-URL template each ({q} = the URL-encoded query). Databases
  * without a public GET search URL (Embase, JBI/Ovid, WHO ICTRP, 華藝, 博碩士論文, 國圖期刊) open
@@ -9,7 +9,7 @@
  *   - the item context menu 「在醫學資料庫搜尋」 (find this paper; PubMed similar articles)
  *   - the item pane (a row of links, plus PICO search links when the AI note has PICO data)
  *   - the Obsidian/Notion literature note (a collapsed callout 「🔎 延伸搜尋」)
- *   - Tools → 醫學文獻快速搜尋… (keywords → databases; English keywords get MeSH suggestions from
+ *   - 醫學文獻快速搜尋… (toolbar, 快速指令; keywords → databases; English keywords get MeSH suggestions from
  *     NCBI E-utilities through pubmed-watch.js, and the query can be saved as a PubMed watch)
  *
  *   extensions.zotero-bridge.searchLinks.order / .disabled      comma-separated source IDs
@@ -586,7 +586,7 @@
 				rows.push(`**PICO 檢索式**：${codeSpan(pico.en)}`);
 				let l = links(PICO_EN_SOURCES, pico.en);
 				if (l) rows.push(`↳ ${l}`);
-				if (pico.skipped.length) rows.push(`*${pico.skipped.join("、")} 沒有英文詞彙，未列入；可用 工具 → 醫學文獻快速搜尋… 查 MeSH*`);
+				if (pico.skipped.length) rows.push(`*${pico.skipped.join("、")} 沒有英文詞彙，未列入；可用 ZotMax 按鈕或快速指令 → 醫學文獻快速搜尋… 查 MeSH*`);
 			}
 			if (pico.all !== pico.en) {
 				rows.push(`**PICO（原文詞彙）**：${codeSpan(pico.all)}`);
@@ -650,7 +650,7 @@
 	}
 
 	function notify(text) {
-		scope.ZB.main.notify(`Zotero Bridge：${TITLE}`, text);
+		scope.ZB.main.notify(`ZotMax：${TITLE}`, text);
 	}
 
 	/** Open a target; copy-only sources first copy the query to the clipboard. */
@@ -815,11 +815,11 @@
 		let watchName = String(name.value || "").trim();
 		if (!watchName) return null;
 		scope.ZB.pubmedWatch.addWatch({ name: watchName, query });
-		notify(`已新增 PubMed 追蹤「${watchName}」。到 設定 → Zotero Bridge → PubMed 新文獻追蹤 可以測試或調整；工具 → 檢查新文獻（PubMed 追蹤）立即匯入。`);
+		notify(`已新增 PubMed 追蹤「${watchName}」。到 設定 → ZotMax → PubMed 新文獻追蹤 可以測試或調整；ZotMax 按鈕或快速指令 → 檢查新文獻（PubMed 追蹤）立即匯入。`);
 		return watchName;
 	}
 
-	/** Tools → 醫學文獻快速搜尋…: keywords → (MeSH suggestions) → pick databases to open. */
+	/** 醫學文獻快速搜尋…: keywords → (MeSH suggestions) → pick databases to open. */
 	async function quickSearch() {
 		if (!featureOn("searchLinks")) {
 			scope.ZB.main.notifyFeatureOff("searchLinks");
@@ -858,8 +858,17 @@
 		return { query: q, mesh, picked };
 	}
 
-	function contextItem(context) {
-		return ((context && context.items) || []).find(i => i && i.isRegularItem && i.isRegularItem()) || null;
+	/** The item menu's databases for an item: the first 「右鍵選單最多列出」 targets (commands.js). */
+	function menuTargets(item) {
+		let cfg = readConfig();
+		return itemTargets(cfg, infoForItem(item)).slice(0, cfg.menuCount);
+	}
+
+	/** PubMed's similar articles for an item with a PMID, while PubMed is among the sources; else null. */
+	function relatedFor(item) {
+		let cfg = readConfig();
+		let info = infoForItem(item);
+		return info && info.pmid && findSource(cfg, "pubmed") ? relatedURL(info.pmid) : null;
 	}
 
 	// Feature switches (features.js): checked live; always on when this file runs without them (Node tests)
@@ -868,90 +877,12 @@
 		return !f || f.isEnabled(id);
 	}
 
-	/** Menu entries that hide while the feature is off (features.js gateMenus). */
-	function gated(id, menus) {
-		let f = scope.ZB && scope.ZB.features;
-		return f ? f.gateMenus(id, menus) : menus;
-	}
-
-	/** Item context menu 「在醫學資料庫搜尋」 and Tools → 醫學文獻快速搜尋…; returns the menu IDs. */
-	function registerMenus({ pluginID, icon }) {
-		let targetsFor = (context) => {
-			let item = contextItem(context);
-			if (!item) return { cfg: null, targets: [], info: null };
-			let cfg = readConfig();
-			let info = infoForItem(item);
-			return { cfg, info, targets: itemTargets(cfg, info) };
-		};
-		let slots = Array.from({ length: MENU_SLOTS }, (_, i) => ({
-			menuType: "menuitem",
-			l10nID: "zotero-bridge-search-db",
-			onShowing: (ev, context) => {
-				let { cfg, targets } = targetsFor(context);
-				let t = cfg && i < cfg.menuCount ? targets[i] : null;
-				context.setVisible(!!t);
-				if (t) context.setL10nArgs(JSON.stringify({ name: t.copy ? `${t.name}（複製標題）` : t.name }));
-			},
-			onCommand: (ev, context) => {
-				let { targets } = targetsFor(context);
-				if (targets[i]) openTarget(targets[i]);
-			},
-		}));
-		let ids = [];
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-search-item",
-			pluginID,
-			target: "main/library/item",
-			menus: gated("searchLinks", [{
-				menuType: "submenu",
-				l10nID: "zotero-bridge-search-menu",
-				icon,
-				onShowing: (ev, context) => context.setVisible(!!contextItem(context)),
-				menus: [
-					...slots,
-					{
-						menuType: "menuitem",
-						l10nID: "zotero-bridge-search-related",
-						onShowing: (ev, context) => {
-							let { cfg, info } = targetsFor(context);
-							context.setVisible(!!(info && info.pmid && findSource(cfg, "pubmed")));
-						},
-						onCommand: (ev, context) => {
-							let { info } = targetsFor(context);
-							if (info && info.pmid) runtime.launch(relatedURL(info.pmid));
-						},
-					},
-					{ menuType: "separator" },
-					{
-						menuType: "menuitem",
-						l10nID: "zotero-bridge-search-more",
-						onCommand: (ev, context) => {
-							let item = contextItem(context);
-							if (item) showMore(item).catch(e => Zotero.logError(e));
-						},
-					},
-				],
-			}]),
-		}));
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-search-tools",
-			pluginID,
-			target: "main/menubar/tools",
-			menus: gated("searchLinks", [{
-				menuType: "menuitem",
-				l10nID: "zotero-bridge-search-tools",
-				onCommand: () => quickSearch().catch(e => Zotero.logError(e)),
-			}]),
-		}));
-		return ids.filter(Boolean);
-	}
-
 	return {
 		BUILTIN, CHECK_LABELS, CI_LABELS, CI_DATE, MENU_SLOTS, PANE_COUNT, PICO_FIELDS,
 		encodeQuery, fillTemplate, isChinese, titleWords, wrapProxy, validProxy, parseIDList, parseCustom, normalizeConfig, findSource,
 		buildTarget, routeSources, sourceLabel, itemInfo, cleanTitle, findQuery, itemTargets, relatedURL,
 		meshTerms, meshLookupURL, picoTerms, englishPhrases, picoQuery, meshConcepts, parseMeshSummary, buildMeshQuery,
 		quickEntries, noteCallout, describeSources,
-		runtime, readConfig, openTarget, calloutFor, renderPaneRow, showMore, suggestMesh, quickSearch, registerMenus,
+		runtime, readConfig, openTarget, calloutFor, renderPaneRow, showMore, suggestMesh, quickSearch, menuTargets, relatedFor,
 	};
 });

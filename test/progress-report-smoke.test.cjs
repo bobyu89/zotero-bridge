@@ -1,5 +1,5 @@
 // Advisor progress report through the real plugin in a mocked Zotero: the status log from syncs and
-// the item pane, Tools menu → dialog → the report note (reading, PRISMA change, drafts, PubMed,
+// the item pane, the command → dialog → the report note (reading, PRISMA change, drafts, PubMed,
 // carried-over goals), the optional AI paragraph (request shape, cost confirm, usage ledger), the
 // clipboard text, the Notion page, the dashboard link, and a same-day rebuild that keeps the user's edits.
 const test = require("node:test");
@@ -193,7 +193,7 @@ function services(log, notion) {
 		}
 		if (/^blocks\/report-page-\d+\/children\?/.test(p)) return ok({ results: notion.children, has_more: false });
 		if (/^blocks\/report-page-\d+\/children$/.test(p)) {
-			notion.children = [{ id: "container-1", type: "callout", callout: { rich_text: [{ plain_text: "Zotero Bridge｜…" }] } }];
+			notion.children = [{ id: "container-1", type: "callout", callout: { rich_text: [{ plain_text: "ZotMax｜…" }] } }];
 			return ok({ results: [{ id: "container-1" }] });
 		}
 		if (p === "blocks/container-1" && init.method === "DELETE") return ok({});
@@ -253,18 +253,19 @@ function addAINote(env, item, at) {
 	let note = new env.MockItem("note", { tags: ["zotero-bridge-ai"] });
 	note.parentID = item.id;
 	item.children.push(note.id);
-	note.setNote(`<h1>🤖 AI 文獻筆記</h1>\n<p><em>由 test-model 於 ${at} 產生（Zotero Bridge）</em></p>\n`
+	note.setNote(`<h1>🤖 AI 文獻筆記</h1>\n<p><em>由 test-model 於 ${at} 產生（ZotMax）</em></p>\n`
 		+ ZB.markdown.mdToHtml(`## 一句話摘要\n\nA summary.\n\n${ZB.llm.studyDataBlock(ZB.llm.normalizeStudyData({ study_design: "RCT" }))}`));
 }
 
+/** 產生進度報告（給指導教授） as the toolbar button and 快速指令 run it (commands.js). */
 function toolsEntry(env) {
-	let menu = env.menus.find(m => m.menuID === "zotero-bridge-progress-report-tools");
-	assert.equal(menu.target, "main/menubar/tools");
-	assert.equal(menu.menus[0].l10nID, "zotero-bridge-menu-progress-report");
-	return menu.menus[0];
+	let C = env.ZB.commands;
+	assert.equal(C.get("progress-report").l10n, "zotero-bridge-menu-progress-report");
+	assert.equal(C.get("progress-report").group, "ai");
+	return { onCommand: () => C.execute("progress-report") };
 }
 
-// Run the Tools menu entry and wait for the whole run (dialog, enqueue, generate)
+// Run the command (toolbar, 快速指令) and wait for the whole run (dialog, enqueue, generate)
 async function runMenu(env) {
 	let pr = env.ZB.progressReport;
 	let pending = null;
@@ -495,6 +496,6 @@ test("cancelling the cost confirm still writes the report; the prompt fallback; 
 	let before = noVault.descriptions.length;
 	noVault.ZB.progressReport.runtime.ask = async () => { throw new Error("the dialog must not open"); };
 	assert.equal(await runMenu(noVault), null);
-	assert.match(noVault.descriptions[before], /請先到 設定 → Zotero Bridge 填入 Obsidian vault 路徑/);
+	assert.match(noVault.descriptions[before], /請先到 設定 → ZotMax 填入 Obsidian vault 路徑/);
 	assert.deepEqual(noVault.errors, []);
 });

@@ -235,8 +235,15 @@ function review(env) {
 	return { inc1, inc2, exc, known, collection };
 }
 
-function menu(env, menuID) {
-	return env.menus.find(m => m.menuID === menuID);
+/** The 「ZotMax ▸」 submenu of the item or collection menu (commands.js, menus.js). */
+function zbMenu(env, menuID) {
+	return env.menus.find(m => m.menuID === menuID).menus[0];
+}
+
+function entry(submenu, l10nID) {
+	let found = submenu.menus.find(m => m.l10nID === l10nID);
+	assert.ok(found, l10nID);
+	return found;
 }
 
 async function settle(check) {
@@ -256,14 +263,17 @@ test("chase from the collection menu, tick candidates, import them, then PRISMA 
 	let ZB = env.context.ZB;
 	let { inc1, collection } = review(env);
 
-	// Collection menu → Zotero Bridge：引文追蹤 → 引文追蹤：全文納入的研究
-	let coll = menu(env, "zotero-bridge-chase-collection").menus[0];
-	assert.equal(coll.l10nID, "zotero-bridge-chase-collection-menu");
+	// Collection menu → ZotMax ▸ 引文追蹤：目前分類全文納入的研究
+	let coll = zbMenu(env, "zotero-bridge-collection");
 	let visible;
 	coll.onShowing({}, { collectionTreeRows: [], setVisible: v => (visible = v) });
-	assert.equal(visible, false);
+	assert.equal(visible, false, "no collection right-clicked");
+	let row = { collectionTreeRows: [{ isCollection: () => true, ref: collection }] };
+	let included = entry(coll, "zotero-bridge-chase-tools-included");
+	included.onShowing({}, Object.assign({ setVisible: v => (visible = v) }, row));
+	assert.equal(visible, true);
 	let notePath = path.join(env.vault, ...NOTE);
-	coll.menus.find(m => m.l10nID === "zotero-bridge-chase-included").onCommand({}, { collectionTreeRows: [{ isCollection: () => true, ref: collection }] });
+	included.onCommand({}, row);
 	await settle(() => fs.existsSync(notePath) && env.progressLines.at(-1).progress === 100);
 	assert.deepEqual(env.errors, []);
 	assert.equal(env.progressLines.at(-1).text, "找到 3 篇，其中 2 篇不在文獻庫（5 次請求）");
@@ -289,9 +299,9 @@ test("chase from the collection menu, tick candidates, import them, then PRISMA 
 		.replace("## ✍️ 我的筆記\n\n", "## ✍️ 我的筆記\n\n跟指導教授討論\n")
 		.replace("%% zotero-bridge:end %%", "- [x] **Ghost**｜[x](https://doi.org/10.5555/ghost)\n%% zotero-bridge:end %%"));
 	env.setActiveCollection(collection);
-	let tools = menu(env, "zotero-bridge-chase-tools").menus;
-	assert.deepEqual(Array.from(tools, m => m.l10nID), ["zotero-bridge-chase-tools-included", "zotero-bridge-chase-tools-import"]);
-	tools[1].onCommand({}, {});
+	// …from the toolbar button or 快速指令: the selected collection
+	assert.ok(coll.menus.some(m => m.l10nID === "zotero-bridge-chase-tools-import"), "also in the collection menu");
+	ZB.commands.execute("chase-import");
 	await settle(() => env.translations.length === 3 && /失敗/.test(env.progressLines.at(-1).text));
 	assert.match(env.confirms[0], /要用 DOI／PMID 查詢並匯入 3 篇勾選的文獻到分類「跌倒預防 SR」嗎？/);
 	assert.match(env.confirms[0], /標籤「來源\/引文追蹤」，篩選標籤不會變動；不會下載 PDF/);
@@ -339,8 +349,8 @@ test("chase from the collection menu, tick candidates, import them, then PRISMA 
 	assert.match(env.progressLines.at(-1).text, /｜其他方法：辨識 2 → 全文評估 1 → 納入 1（共納入 3）$/);
 	assert.ok(fs.readFileSync(path.join(env.vault, "Zotero", "Reviews", "跌倒預防 SR.md"), "utf8").includes("Exercise for preventing falls"), "evidence table lists the new study");
 
-	// Chasing again (Tools menu): the imports are now in the review; ticks and notes stay
-	tools[0].onCommand({}, {});
+	// Chasing again (toolbar or 快速指令, the selected collection): the imports are now in the review; ticks and notes stay
+	ZB.commands.execute("chase-included");
 	await settle(() => /chase_new: 0/.test(fs.readFileSync(notePath, "utf8")));
 	let rerun = fs.readFileSync(notePath, "utf8");
 	assert.ok(rerun.includes("| [已在本回顧](zotero://select/library/items/"), "imported candidates are flagged");
@@ -358,9 +368,10 @@ test("selected items without a collection, OpenAlex failures, the request cap an
 		fail: url => (url.includes("pmid:222") ? new TypeError("NetworkError") : undefined),
 	});
 	let { inc1, inc2 } = review(env);
-	let itemMenu = menu(env, "zotero-bridge-chase-item").menus[0];
+	// Item menu → ZotMax ▸ 引文追蹤所選文獻（OpenAlex）
+	let itemMenu = entry(zbMenu(env, "zotero-bridge-item"), "zotero-bridge-toolbar-chase-items");
 	assert.equal(itemMenu.menuType, "menuitem");
-	assert.ok(itemMenu.icon.endsWith("content/icons/bridge.svg"));
+	assert.ok(zbMenu(env, "zotero-bridge-item").icon.endsWith("content/icons/bridge.svg"));
 	itemMenu.onCommand({}, { items: [inc1, inc2] });
 	let notePath = path.join(env.vault, "Zotero", "Reviews", "所選文獻 引文追蹤.md");
 	await settle(() => fs.existsSync(notePath) && env.progressLines.at(-1).progress === 100);
@@ -390,12 +401,12 @@ test("selected items without a collection, OpenAlex failures, the request cap an
 	let c = bare.addCollection(1, "空的回顧", [paper(bare, 1)]);
 	assert.equal(await bare.context.ZB.citationChase.chaseCollection(c), null);
 	assert.match(bare.descriptions.at(-1), /「空的回顧」還沒有全文納入的研究（標籤「篩選\/全文\/納入」）/);
-	menu(bare, "zotero-bridge-chase-tools").menus[0].onCommand({}, {});
+	bare.context.ZB.commands.execute("chase-included");
 	await settle(() => /請先在左側選取系統性回顧的分類/.test(bare.descriptions.at(-1)));
 	let noVault = await setup({ prefs: { "extensions.zotero-bridge.obsidian.vaultPath": "" } });
 	let nv = review(noVault);
 	assert.equal(await noVault.context.ZB.citationChase.chaseCollection(nv.collection), null);
-	assert.match(noVault.descriptions.at(-1), /請先到 設定 → Zotero Bridge 填入 Obsidian vault 路徑/);
+	assert.match(noVault.descriptions.at(-1), /請先到 設定 → ZotMax 填入 Obsidian vault 路徑/);
 	assert.equal(noVault.api.log.length, 0);
 	assert.equal(await noVault.context.ZB.citationChase.importChecked(nv.collection), null);
 	// Import before any chase

@@ -346,6 +346,14 @@ test("the Obsidian note: frontmatter type ebhc-report, managed region, PRISMA fi
 	assert.match(again, /status: "撰寫中"/);
 	assert.match(again, /notion: "https:\/\/www\.notion\.so\/x"/);
 	assert.equal(again.match(/zotero-bridge:start/g).length, 1);
+	// A report made as Zotero Bridge (≤ 0.10): rebuilt in place under the new name
+	const asOld = text => text.split("ZotMax").join("Zotero Bridge");
+	assert.match(asOld(edited), /此區塊由 Zotero Bridge 自動產生/);
+	let fromOld = eb.buildReportNote(asOld(edited), report, p.entries, meta);
+	assert.equal(fromOld.match(/zotero-bridge:start/g).length, 1);
+	assert.match(fromOld, /# 實證報告：跌倒\n\n我的前言。\n\n%% zotero-bridge:start — 此區塊由 ZotMax 自動產生/);
+	assert.match(fromOld, /老師建議。/);
+	assert.doesNotMatch(fromOld, /Zotero Bridge/);
 });
 
 test("dialog: a modal <dialog> with the scenario, PICO, question type and search fields, or prompts as a fallback", async () => {

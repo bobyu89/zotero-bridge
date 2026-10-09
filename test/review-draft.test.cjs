@@ -222,6 +222,16 @@ test("buildDraftNote: frontmatter, managed region, checklist; re-running keeps t
 	assert.match(note2, /> \[!success\]/);
 	assert.equal(note2.match(/zotero-bridge:start/g).length, 1);
 
+	// A draft made as Zotero Bridge (≤ 0.10): the same region is found and rebuilt under the new name
+	const asOld = text => text.split("ZotMax").join("Zotero Bridge");
+	assert.match(asOld(edited), /^%% zotero-bridge:start — 此區塊由 Zotero Bridge 自動產生/m);
+	let fromOld = rd.buildDraftNote(asOld(edited), again.result, again.p.entries, META);
+	assert.equal(fromOld.match(/zotero-bridge:start/g).length, 1);
+	assert.match(fromOld, /我在標記前加的引言。\n\n%% zotero-bridge:start — 此區塊由 ZotMax 自動產生/);
+	assert.match(fromOld, /我自己的段落 \[@chen2024effects\]。/);
+	assert.doesNotMatch(fromOld, /## 一\n/);
+	assert.doesNotMatch(fromOld, /Zotero Bridge/);
+
 	// Markers deleted by the user: a fresh region after the H1, nothing of theirs removed
 	let noMarkers = "---\ntype: \"lit-review-draft\"\n---\n\n# 文獻探討：碩論\n\n我的版本。\n";
 	let note3 = rd.buildDraftNote(noMarkers, again.result, again.p.entries, META);

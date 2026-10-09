@@ -68,7 +68,7 @@ jobs:
       - name: Build the plugin
         run: npm run build
 
-      - name: Run Zotero Bridge inside Zotero ${{ steps.zotero.outputs.version }}
+      - name: Run ZotMax inside Zotero ${{ steps.zotero.outputs.version }}
         env:
           ZB_E2E_KEYRING: "1"
         run: |

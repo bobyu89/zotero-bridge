@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — reads Zotero items into plain data objects and stores the AI note.
+ * ZotMax — reads Zotero items into plain data objects and stores the AI note.
  * Runs only inside Zotero (uses the Zotero global).
  */
 (function (root) {
@@ -141,7 +141,7 @@
 			text = (await att.attachmentText) || "";
 		}
 		catch (e) {
-			Zotero.debug(`Zotero Bridge: could not read full text of ${att.key}: ${e}`);
+			Zotero.debug(`ZotMax: could not read full text of ${att.key}: ${e}`);
 		}
 		let pages = 0;
 		if (isPDF) {
@@ -157,7 +157,7 @@
 					pages = Number((await Zotero.PDFWorker.getFullText(att.id, 1)).totalPages) || 0;
 				}
 				catch (e) {
-					Zotero.debug(`Zotero Bridge: could not count the pages of ${att.key}: ${e}`);
+					Zotero.debug(`ZotMax: could not count the pages of ${att.key}: ${e}`);
 				}
 			}
 		}

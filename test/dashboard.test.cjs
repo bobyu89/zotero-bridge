@@ -216,6 +216,15 @@ test("buildDashboardNote: new note, then only the managed block and two frontmat
 	assert.equal(second.split("%% zotero-bridge:start").length, 2);
 	// Same input → same output
 	assert.equal(d.buildDashboardNote(second, "SECTION TWO", { updated: "2026-10-09T00:00:00Z" }), second);
+	// A dashboard made as Zotero Bridge (≤ 0.10): the block is replaced, not added a second time
+	const asOld = text => text.split("ZotMax").join("Zotero Bridge");
+	assert.match(asOld(edited), /Zotero Bridge/);
+	let fromOld = d.buildDashboardNote(asOld(edited), "SECTION TWO", { updated: "2026-10-09T00:00:00Z" });
+	assert.equal(fromOld.split("%% zotero-bridge:start").length, 2);
+	assert.ok(!fromOld.includes("SECTION ONE"));
+	assert.match(fromOld, /我的目標：12 月前讀完 30 篇。\n\n%% zotero-bridge:start — 此區塊由 ZotMax 自動產生/);
+	assert.match(fromOld, /今天讀了兩篇。\n$/);
+	assert.doesNotMatch(fromOld, /Zotero Bridge/);
 	// Markers deleted by the user: a fresh block after the heading, their text kept
 	let noMarkers = "---\ntype: research-dashboard\n---\n# 研究儀表板\n\n只有我的字\n";
 	let rebuilt = d.buildDashboardNote(noMarkers, "SECTION", { updated: "u" });

@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — reading status kept the same in Zotero, Notion and Obsidian.
+ * ZotMax — reading status kept the same in Zotero, Notion and Obsidian.
  *
  * Each side holds the status its own way:
  *   Zotero    exactly one tag "<prefix><status>", e.g. "狀態/已讀 ✅" (prefix and emoji are settings)
@@ -243,7 +243,7 @@
 			if (result.conflict) {
 				messages.push(describeConflict(result.conflict));
 				// Auto-sync has no progress window
-				if (action.silent) scope.ZB.main.notify("Zotero Bridge：閱讀狀態衝突", `${data.title || data.key}\n${describeConflict(result.conflict)}`);
+				if (action.silent) scope.ZB.main.notify("ZotMax：閱讀狀態衝突", `${data.title || data.key}\n${describeConflict(result.conflict)}`);
 			}
 			else if (plan.base && result.source !== "base") messages.push(`閱讀狀態 → ${result.value}（來自 ${SIDE_NAMES[result.source]}）`);
 			if (zoteroNeedsWrite(tags, result.value, cfg)) {
@@ -293,7 +293,7 @@
 			if (!schema.props.Status) {
 				if (!ctx.schemaHints.has("status:" + dsId)) {
 					ctx.schemaHints.add("status:" + dsId);
-					messages.push("Notion 資料庫還沒有 Status 欄位：到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」即可加上");
+					messages.push("Notion 資料庫還沒有 Status 欄位：到 設定 → ZotMax 按「測試連線並補齊資料庫欄位」即可加上");
 				}
 				return;
 			}
@@ -374,7 +374,7 @@
 		body.append(row);
 	}
 
-	// ---------- Tools → 同步閱讀狀態 ----------
+	// ---------- 同步閱讀狀態 (toolbar, 快速指令) ----------
 
 	/** Status-only pass over every synced item: no AI, no page or note rewrites beyond the status. */
 	function runPass() {
@@ -389,19 +389,19 @@
 			settings = await ZB.main.readSettings();
 		}
 		catch (e) {
-			ZB.main.notify("Zotero Bridge 設定有誤", String(e.message || e));
+			ZB.main.notify("ZotMax 設定有誤", String(e.message || e));
 			return null;
 		}
 		if (!cfg.enabled) {
-			ZB.main.notify("Zotero Bridge", "閱讀狀態同步已關閉：到 設定 → Zotero Bridge → 閱讀狀態 開啟。");
+			ZB.main.notify("ZotMax", "閱讀狀態同步已關閉：到 設定 → ZotMax → 閱讀狀態 開啟。");
 			return null;
 		}
 		if (!settings.vaultPath && !settings.notionToken) {
-			ZB.main.notify("Zotero Bridge", "請先到 設定 → Zotero Bridge 填入 Obsidian vault 路徑或 Notion integration token。");
+			ZB.main.notify("ZotMax", "請先到 設定 → ZotMax 填入 Obsidian vault 路徑或 Notion integration token。");
 			return null;
 		}
 		let pw = new Zotero.ProgressWindow({ closeOnClick: true });
-		pw.changeHeadline("Zotero Bridge：同步閱讀狀態");
+		pw.changeHeadline("ZotMax：同步閱讀狀態");
 		pw.show();
 		let line = new pw.ItemProgress("", "讀取文獻…");
 		let counts = { checked: 0, zotero: 0, notion: 0, obsidian: 0, conflicts: 0 };
@@ -476,7 +476,7 @@
 			if (schema.props.Status !== "select") {
 				db.hint = schema.props.Status
 					? "Notion 資料庫的 Status 欄位不是「單選（select）」類型，閱讀狀態不會同步到 Notion：把它改名後按「測試連線並補齊資料庫欄位」"
-					: "Notion 資料庫還沒有 Status 欄位：到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」即可加上";
+					: "Notion 資料庫還沒有 Status 欄位：到 設定 → ZotMax 按「測試連線並補齊資料庫欄位」即可加上";
 				return db;
 			}
 			db.usable = true;

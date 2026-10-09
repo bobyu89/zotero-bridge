@@ -226,7 +226,7 @@ test("the note: managed region rebuilt, the user's text and keys kept; plain tex
 	let region = pr.buildRegion(sections, null, meta);
 	let note = pr.buildReportNote(null, region, meta);
 	assert.match(note, /^---\ntype: "advisor-progress-report"\ndate: "2026-10-08"\nperiod_start: "2026-09-24"\nperiod_end: "2026-10-08"\nprevious_report: "2026-09-24"\ngenerated_at: "2026-10-08T04:00:00Z"\n---\n\n# 進度報告 2026-10-08\n\n%% zotero-bridge:start/);
-	assert.match(note, /> \[!info\] 報告期間 2026-09-24 至 2026-10-08（上次報告：\[\[Zotero\/進度報告\/2026-09-24\|2026-09-24\]\]）。由 Zotero Bridge 於 2026-10-08 依 Zotero 與 vault 的資料產生，沒有使用 AI。/);
+	assert.match(note, /> \[!info\] 報告期間 2026-09-24 至 2026-10-08（上次報告：\[\[Zotero\/進度報告\/2026-09-24\|2026-09-24\]\]）。由 ZotMax 於 2026-10-08 依 Zotero 與 vault 的資料產生，沒有使用 AI。/);
 	assert.match(note, /pandoc 2026-10-08\.md -f markdown\+wikilinks_title_after_pipe --lua-filter zotero-bridge-report\.lua -o 進度報告-2026-10-08\.docx/);
 	assert.match(note, /%% zotero-bridge:end %%\n\n## ✍️ 我的筆記\n\n$/);
 
@@ -245,6 +245,14 @@ test("the note: managed region rebuilt, the user's text and keys kept; plain tex
 	assert.match(again, /讀完 \*\*0\*\* 篇/);
 	assert.match(again, /## 本期摘要（AI 整理）\n\n本期讀完 1 篇。\n\n> \[!note\] 由 test-model 依本報告列出的事實整理[\s\S]*> ⚠️ 摘要中的數字 7 在報告資料中找不到/);
 	assert.match(again, /「本期摘要」由 AI 依這些資料整理/);
+	// A report made as Zotero Bridge (≤ 0.10): rebuilt in place, the old name gone from the region
+	const asOld = text => text.split("ZotMax").join("Zotero Bridge");
+	assert.match(asOld(edited), /由 Zotero Bridge 於 2026-10-08/);
+	let fromOld = pr.buildReportNote(asOld(edited), pr.buildRegion(pr.buildSections(f2, {}), summary, meta2), meta2);
+	assert.equal(fromOld.split("%% zotero-bridge:start").length, 2);
+	assert.match(fromOld, /會議時間：10\/9 14:00\n\n%% zotero-bridge:start — 此區塊由 ZotMax 自動產生/);
+	assert.match(fromOld, /## ✍️ 我的筆記\n\n老師說要先確認樣本數。\n$/);
+	assert.doesNotMatch(fromOld, /Zotero Bridge/);
 	// Markers removed by the user: a fresh region after the title, nothing lost
 	let noMarkers = again.replace(/%% zotero-bridge:start[\s\S]*%% zotero-bridge:end %%/, "我把區塊刪了");
 	let rebuilt = pr.buildReportNote(noMarkers, region, meta);

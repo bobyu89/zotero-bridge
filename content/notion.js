@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — minimal Notion API client (Notion-Version 2025-09-03, data sources).
+ * ZotMax — minimal Notion API client (Notion-Version 2025-09-03, data sources).
  * `fetch` and `sleep` are injected so the client runs both inside Zotero and in Node tests.
  */
 (function (root, factory) {
@@ -13,7 +13,10 @@
 })(this, function () {
 	const NOTION_VERSION = "2025-09-03";
 	const BASE = "https://api.notion.com/v1/";
-	const CONTAINER_MARKER = "Zotero Bridge";
+	// The managed callout on a page starts with the product name; pages written as Zotero Bridge
+	// (≤ 0.10) start with the old one and are still recognised (and rewritten with the new one)
+	const CONTAINER_MARKER = "ZotMax";
+	const LEGACY_CONTAINER_MARKERS = ["Zotero Bridge"];
 	const MIN_INTERVAL_MS = 340; // Notion allows ~3 requests/second per integration
 
 	// Database schema the plugin writes to. The title property keeps whatever name the database uses.
@@ -231,6 +234,11 @@
 		}
 		plan.skipped = skipped;
 		return plan;
+	}
+
+	/** Whether a callout's text marks the plugin's container, under the current or an old name. */
+	function isContainerText(text) {
+		return [CONTAINER_MARKER, ...LEGACY_CONTAINER_MARKERS].some(m => String(text || "").startsWith(m));
 	}
 
 	/** Extract a Notion ID from a URL or raw ID (database URLs carry the view ID in ?v=, so ignore the query). */
@@ -451,12 +459,12 @@
 
 		/**
 		 * Replace the plugin-managed container block on a page, keeping the user's own blocks.
-		 * The container is a callout whose text starts with CONTAINER_MARKER.
+		 * The container is a callout whose text starts with CONTAINER_MARKER (or an old name).
 		 */
 		async replaceManagedContainer(pageId, title, childBlocks) {
 			let existing = await this.listChildren(pageId);
 			let index = existing.findIndex(b => b.type === "callout"
-				&& (b.callout.rich_text || []).map(r => r.plain_text).join("").startsWith(CONTAINER_MARKER));
+				&& isContainerText((b.callout.rich_text || []).map(r => r.plain_text).join("")));
 			let placement = null;
 			if (index >= 0) {
 				let prev = index > 0 ? existing[index - 1] : null;
@@ -631,7 +639,7 @@
 	}
 
 	return {
-		NOTION_VERSION, PROPERTY_SCHEMA, PROPERTY_NAMES_ZH, TITLE_NAME_ZH, CONTAINER_MARKER, parseNotionId, NotionClient, NotionError, buildProperties,
+		NOTION_VERSION, PROPERTY_SCHEMA, PROPERTY_NAMES_ZH, TITLE_NAME_ZH, CONTAINER_MARKER, LEGACY_CONTAINER_MARKERS, isContainerText, parseNotionId, NotionClient, NotionError, buildProperties,
 		resolveSchema, propertyName, pageProperty, renamePlan,
 	};
 });

@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — orchestration: settings, sync pipeline, menus, auto-sync.
+ * ZotMax — orchestration: settings, sync pipeline, menus (menus.js), auto-sync.
  */
 (function (root) {
 	const ZB = root.ZB;
@@ -33,7 +33,7 @@
 	/** A turned-off feature reached anyway (e.g. an old shortcut): say where to turn it on. */
 	function notifyFeatureOff(id) {
 		let f = ZB.features.get(id);
-		notify("Zotero Bridge", `「${f.label}」目前關閉。要使用的話：設定 → Zotero Bridge → 功能，把它打開。`);
+		notify("ZotMax", `「${f.label}」目前關閉。要使用的話：設定 → ZotMax → 功能，把它打開。`);
 	}
 
 	async function readSettings() {
@@ -159,7 +159,7 @@
 	// so a later sync without AI can fill the Notion columns and frontmatter from it
 	function aiNoteHTML(md, model, at, data, raw) {
 		let block = data || raw ? ZB.llm.studyDataBlock(data, raw) : "";
-		return `<h1>${AI_TITLE}</h1>\n<p><em>由 ${model} 於 ${at} 產生（Zotero Bridge）</em></p>\n`
+		return `<h1>${AI_TITLE}</h1>\n<p><em>由 ${model} 於 ${at} 產生（ZotMax）</em></p>\n`
 			+ ZB.markdown.mdToHtml(block ? `${md}\n\n${block}` : md);
 	}
 
@@ -434,7 +434,7 @@
 					}
 				}
 				catch (e) {
-					Zotero.debug(`Zotero Bridge: skipped ${child}: ${e}`);
+					Zotero.debug(`ZotMax: skipped ${child}: ${e}`);
 				}
 			}
 		};
@@ -517,7 +517,7 @@
 					Zotero.logError(e);
 					return null;
 				}
-				Zotero.debug(`Zotero Bridge: renamed ${entry.path} → ${to}`);
+				Zotero.debug(`ZotMax: renamed ${entry.path} → ${to}`);
 			}
 			entry.path = to;
 			entry.relParts = [...entry.relParts.slice(0, -1), name + ".md"];
@@ -611,11 +611,11 @@
 		if (study && !schema.props["Study Design"] && !ctx.schemaHints.has(dsId)) {
 			// Databases set up before these columns existed: adding them is the user's call
 			ctx.schemaHints.add(dsId);
-			if (opts.messages) opts.messages.push("Notion 資料庫還沒有研讀欄位（研究設計／Study Design 等）：到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」即可加上");
+			if (opts.messages) opts.messages.push("Notion 資料庫還沒有研讀欄位（研究設計／Study Design 等）：到 設定 → ZotMax 按「測試連線並補齊資料庫欄位」即可加上");
 		}
 		if (opts.appraisal && !schema.props["Appraisal Verified"] && !ctx.schemaHints.has(dsId + "/appraisal")) {
 			ctx.schemaHints.add(dsId + "/appraisal");
-			if (opts.messages) opts.messages.push("Notion 資料庫還沒有「評讀已核對」（Appraisal Verified）欄位：到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」即可加上");
+			if (opts.messages) opts.messages.push("Notion 資料庫還沒有「評讀已核對」（Appraisal Verified）欄位：到 設定 → ZotMax 按「測試連線並補齊資料庫欄位」即可加上");
 		}
 		let zoteroKey = `${data.libraryPath}/${data.key}`;
 		let properties = ZB.notion.buildProperties(schema, {
@@ -767,7 +767,7 @@
 	function resumeBatch() {
 		let batch = readPendingBatch();
 		if (!batch) {
-			notify("Zotero Bridge", "沒有未完成的同步。");
+			notify("ZotMax", "沒有未完成的同步。");
 			return Promise.resolve();
 		}
 		let items = [];
@@ -778,7 +778,7 @@
 		}
 		if (!items.length) {
 			writePendingBatch(null);
-			notify("Zotero Bridge", "未完成的文獻都已刪除，已清除這筆紀錄。");
+			notify("ZotMax", "未完成的文獻都已刪除，已清除這筆紀錄。");
 			return Promise.resolve();
 		}
 		return run(items, { targets: batch.action.targets, ai: batch.action.ai, resumed: true });
@@ -815,7 +815,7 @@
 			settings = await readSettings();
 		}
 		catch (e) {
-			notify("Zotero Bridge 設定有誤", String(e.message || e));
+			notify("ZotMax 設定有誤", String(e.message || e));
 			return;
 		}
 		action = Object.assign({}, action, { targets: new Set(action.targets) });
@@ -830,14 +830,14 @@
 			missing.push("Obsidian vault 路徑");
 		}
 		if (!action.targets.size) {
-			if (!action.silent) notify("Zotero Bridge", `請先到 設定 → Zotero Bridge 填入：${missing.join("、")}`);
+			if (!action.silent) notify("ZotMax", `請先到 設定 → ZotMax 填入：${missing.join("、")}`);
 			return;
 		}
 
 		let willGenerate = settings.llm.enabled && (action.ai === "regenerate"
 			|| (action.ai === "missing" && items.some(i => !ZB.adapter.getAINote(i))));
 		if (willGenerate && !settings.llm.apiKey) {
-			notify("Zotero Bridge", "AI 筆記需要 API key：請到 設定 → Zotero Bridge 填入，或改用「不呼叫 AI」同步。");
+			notify("ZotMax", "AI 筆記需要 API key：請到 設定 → ZotMax 填入，或改用「不呼叫 AI」同步。");
 			return;
 		}
 		// Many AI notes with 「使用批次 API」 on: the user picks the Message Batches API or the normal path;
@@ -851,7 +851,7 @@
 			}
 		}
 		else if (willGenerate && items.length > 5 && !action.silent) {
-			let ok = Services.prompt.confirm(Zotero.getMainWindow(), "Zotero Bridge",
+			let ok = Services.prompt.confirm(Zotero.getMainWindow(), "ZotMax",
 				`即將為最多 ${items.length} 筆文獻呼叫 ${settings.llm.provider === "openai" ? "OpenAI" : "Claude"}（${settings.llm.model}）產生 AI 筆記，會產生 API 費用。`
 				+ batchEstimate(items, action, settings) + "要繼續嗎？");
 			if (!ok) return;
@@ -859,7 +859,7 @@
 
 		let pw = action.silent ? null : new Zotero.ProgressWindow({ closeOnClick: true });
 		if (pw) {
-			pw.changeHeadline(action.resumed ? "Zotero Bridge：繼續未完成的同步" : "Zotero Bridge");
+			pw.changeHeadline(action.resumed ? "ZotMax：繼續未完成的同步" : "ZotMax");
 			pw.show();
 		}
 		// Only manual batches are tracked; auto-sync runs again on the next change anyway
@@ -874,7 +874,7 @@
 				startedAt: nowISO(),
 			};
 			writePendingBatch(batch);
-			if (pw) pw.addDescription("要中途停止：工具 → 停止 Zotero Bridge 同步（處理中的這篇完成後停止）");
+			if (pw) pw.addDescription("要中途停止：工具 → 停止 ZotMax 同步（處理中的這篇完成後停止）");
 		}
 		let stopLine = null;
 		currentBatch = batch && {
@@ -970,7 +970,7 @@
 				+ (cancelled ? `，未處理 ${batch.remaining.length} 筆` : "")
 				+ (quoteSummary ? `；${quoteSummary}` : ""));
 			if (batch && pendingCount(batch)) {
-				pw.addDescription(`要接續：工具 → 繼續未完成的 Zotero Bridge 同步（${pendingCount(batch)} 筆${batch.failed.length ? `，含失敗 ${batch.failed.length} 筆` : ""}）`);
+				pw.addDescription(`要接續：工具 → 繼續未完成的 ZotMax 同步（${pendingCount(batch)} 筆${batch.failed.length ? `，含失敗 ${batch.failed.length} 筆` : ""}）`);
 			}
 			let trimLine = fullTextLine(trimmed);
 			if (trimLine) pw.addDescription(trimLine);
@@ -979,7 +979,7 @@
 			pw.startCloseTimer(failures.length || cancelled ? 15000 : 5000);
 		}
 		else if (failures.length) {
-			notify("Zotero Bridge 自動同步失敗", failures.slice(0, 3).join("\n"));
+			notify("ZotMax 自動同步失敗", failures.slice(0, 3).join("\n"));
 		}
 		// 「同步時自動更新參考文獻檔」 (export.js); never throws
 		if (ok) await ZB.bibliography.afterSync(settings);
@@ -1052,7 +1052,7 @@
 		// Cancel at button 1: closing the dialog also returns 1
 		let flags = p.BUTTON_POS_0 * p.BUTTON_TITLE_IS_STRING + p.BUTTON_POS_1 * p.BUTTON_TITLE_CANCEL
 			+ p.BUTTON_POS_2 * p.BUTTON_TITLE_IS_STRING + p.BUTTON_POS_0_DEFAULT;
-		let button = p.confirmEx(Zotero.getMainWindow(), "Zotero Bridge", text, flags,
+		let button = p.confirmEx(Zotero.getMainWindow(), "ZotMax", text, flags,
 			"批次 API（約半價）", null, "一般模式（立即產生）", null, {});
 		return button === 0 ? "batch" : button === 2 ? "normal" : null;
 	}
@@ -1116,7 +1116,7 @@
 		}
 		if (errors.length) {
 			errors.forEach(e => Zotero.logError(new Error(e)));
-			notify("Zotero Bridge：刪除的文獻同步失敗", errors.slice(0, 3).join("\n"));
+			notify("ZotMax：刪除的文獻同步失敗", errors.slice(0, 3).join("\n"));
 		}
 		return counts;
 	}
@@ -1196,7 +1196,7 @@
 		}
 		items = ZB.adapter.toRegularItems(items);
 		if (items.length < 2) {
-			notify("Zotero Bridge", "文獻比較表至少需要 2 篇文獻。");
+			notify("ZotMax", "文獻比較表至少需要 2 篇文獻。");
 			return;
 		}
 		let settings;
@@ -1204,21 +1204,21 @@
 			settings = await readSettings();
 		}
 		catch (e) {
-			notify("Zotero Bridge 設定有誤", String(e.message || e));
+			notify("ZotMax 設定有誤", String(e.message || e));
 			return;
 		}
 		if (!settings.llm.apiKey) {
-			notify("Zotero Bridge", "文獻比較表需要 LLM API key：請到 設定 → Zotero Bridge 填入。");
+			notify("ZotMax", "文獻比較表需要 LLM API key：請到 設定 → ZotMax 填入。");
 			return;
 		}
 		let extra = items.length > MAX_SYNTHESIS_ITEMS ? `（超過 ${MAX_SYNTHESIS_ITEMS} 篇，只會使用前 ${MAX_SYNTHESIS_ITEMS} 篇）` : "";
 		items = items.slice(0, MAX_SYNTHESIS_ITEMS);
-		let ok = Services.prompt.confirm(Zotero.getMainWindow(), "Zotero Bridge",
+		let ok = Services.prompt.confirm(Zotero.getMainWindow(), "ZotMax",
 			`將用 ${settings.llm.model} 比較 ${items.length} 篇文獻並產生文獻比較表${extra}，會產生一次 API 費用。要繼續嗎？`);
 		if (!ok) return;
 
 		let pw = new Zotero.ProgressWindow({ closeOnClick: true });
-		pw.changeHeadline("Zotero Bridge：文獻比較表");
+		pw.changeHeadline("ZotMax：文獻比較表");
 		pw.show();
 		let line = new pw.ItemProgress("note", `讀取 ${items.length} 篇文獻…`);
 		try {
@@ -1289,7 +1289,7 @@
 			try {
 				let note = new Zotero.Item("note");
 				note.libraryID = items[0].libraryID;
-				note.setNote(`<h1>📊 ${escapeHTML(title)}</h1>\n<p><em>由 ${escapeHTML(model)} 於 ${generatedAt} 產生（Zotero Bridge）</em></p>\n`
+				note.setNote(`<h1>📊 ${escapeHTML(title)}</h1>\n<p><em>由 ${escapeHTML(model)} 於 ${generatedAt} 產生（ZotMax）</em></p>\n`
 					+ ZB.markdown.mdToHtml(ZB.synthesis.buildSynthesisPlain(md, entries)));
 				note.addTag("zotero-bridge-synthesis");
 				if (scope.collection && scope.collection.libraryID === note.libraryID) note.addToCollection(scope.collection.id);
@@ -1444,182 +1444,27 @@
 
 	// ---------- menus ----------
 
-	// feature: the switch that hides the entry (features.js); "regenerate" also needs AI notes
-	const ITEM_ACTIONS = [
-		{ l10nID: "zotero-bridge-menu-sync", action: { targets: ["notion", "obsidian"], ai: "missing" }, feature: "sync" },
-		{ l10nID: "zotero-bridge-menu-regenerate", action: { targets: ["notion", "obsidian"], ai: "regenerate" }, feature: "aiNotes" },
-		{ l10nID: "zotero-bridge-menu-no-ai", action: { targets: ["notion", "obsidian"], ai: "reuse" }, feature: "sync" },
-		{ separator: true, feature: "sync" },
-		{ l10nID: "zotero-bridge-menu-obsidian", action: { targets: ["obsidian"], ai: "reuse" }, feature: "sync" },
-		{ l10nID: "zotero-bridge-menu-notion", action: { targets: ["notion"], ai: "reuse" }, feature: "sync" },
-	];
-
-	// The AI writing entries below the sync entries, each with its own switch
-	const WRITING_FEATURES = ["synthesis", "reviewDraft", "ebhcReport"];
-
-	/** Features with an entry in the Zotero Bridge item/collection submenu: the submenu hides when all are off. */
-	const SUBMENU_FEATURES = ["sync", ...WRITING_FEATURES];
-
-	function buildMenus(getItems, getScope) {
-		let gate = ZB.features.gateMenus;
-		let menus = ITEM_ACTIONS.flatMap((entry) => {
-			if (entry.separator) return gate(entry.feature, [{ menuType: "separator" }]);
-			return gate(entry.feature, [{
-				menuType: "menuitem",
-				l10nID: entry.l10nID,
-				onCommand: (ev, context) => {
-					run(getItems(context), entry.action).catch(e => Zotero.logError(e));
-				},
-			}]);
-		});
-		menus.push({
-			// Between the sync entries and the AI writing entries, only when both groups show something
-			menuType: "separator",
-			onShowing: (ev, context) => context.setVisible(featureOn("sync") && WRITING_FEATURES.some(featureOn)),
-		},
-		...gate("synthesis", [{
-			menuType: "menuitem",
-			l10nID: "zotero-bridge-menu-synthesis",
-			onCommand: (ev, context) => {
-				runSynthesis(getItems(context), getScope(context)).catch(e => Zotero.logError(e));
-			},
-		}]),
-		...gate("reviewDraft", [{
-			// Literature review draft (review-draft.js)
-			menuType: "menuitem",
-			l10nID: "zotero-bridge-menu-review-draft",
-			onCommand: (ev, context) => {
-				ZB.reviewDraft.run(getItems(context), getScope(context), context).catch(e => Zotero.logError(e));
-			},
-		}]),
-		...gate("ebhcReport", [{
-			// Evidence-based health care report draft (ebhc-report.js)
-			menuType: "menuitem",
-			l10nID: "zotero-bridge-menu-ebhc-report",
-			onCommand: (ev, context) => {
-				ZB.ebhcReport.run(getItems(context), getScope(context), context).catch(e => Zotero.logError(e));
-			},
-		}]));
-		return menus;
-	}
-
-	function selectedCollections(context) {
-		return (context.collectionTreeRows || []).filter(r => r.isCollection && r.isCollection()).map(r => r.ref);
-	}
-
-	function itemScope(context) {
-		let rows = selectedCollections(context);
-		return { label: rows.length ? rows.map(c => c.name).join("、") + "（選取）" : "選取的文獻", collection: null };
-	}
-
-	function collectionScope(context) {
-		let cols = selectedCollections(context);
-		return { label: cols.map(c => c.name).join("、") || "分類", collection: cols[0] || null };
-	}
-
-	function collectionItems(context) {
-		let rows = context.collectionTreeRows || [];
-		let items = [];
-		for (let row of rows) {
-			if (row.isCollection && row.isCollection()) {
-				items.push(...ZB.adapter.itemsInCollection(row.ref, true));
-			}
-		}
-		return items;
-	}
-
+	/**
+	 * The right-click and Tools menus come from the command catalog (commands.js, menus.js); the
+	 * toolbar button (toolbar.js) and 快速指令 (palette.js) from the same catalog.
+	 */
 	function registerMenus() {
 		let icon = rootURI + "content/icons/bridge.svg";
-		let itemMenu = Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-item",
-			pluginID,
-			target: "main/library/item",
-			menus: [{
-				menuType: "submenu",
-				l10nID: "zotero-bridge-menu",
-				icon,
-				onShowing: (ev, context) => context.setVisible(SUBMENU_FEATURES.some(featureOn)),
-				menus: buildMenus(context => context.items || [], itemScope),
-			}],
-		});
-		let collectionMenu = Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-collection",
-			pluginID,
-			target: "main/library/collection",
-			menus: [{
-				menuType: "submenu",
-				l10nID: "zotero-bridge-menu-collection",
-				icon,
-				onShowing: (ev, context) => {
-					let rows = context.collectionTreeRows || [];
-					context.setVisible(rows.some(r => r.isCollection && r.isCollection()) && SUBMENU_FEATURES.some(featureOn));
-				},
-				menus: buildMenus(collectionItems, collectionScope),
-			}],
-		});
-		let toolsMenu = Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-tools",
-			pluginID,
-			target: "main/menubar/tools",
-			menus: [
-				{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-menu-settings",
-					onCommand: () => Zotero.Utilities.Internal.openPreferences("zotero-bridge-prefs"),
-				},
-				...ZB.features.gateMenus("status", [{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-menu-status",
-					onCommand: () => ZB.status.runPass().catch(e => Zotero.logError(e)),
-				}]),
-				{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-menu-stop",
-					onShowing: (ev, context) => context.setVisible(!!currentBatch && !currentBatch.cancelled),
-					onCommand: () => cancelBatch(),
-				},
-				{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-menu-resume",
-					// Resuming syncs: hidden while 「同步到 Obsidian／Notion」 is off (discarding stays possible)
-					onShowing: (ev, context) => {
-						let count = currentBatch || !featureOn("sync") ? 0 : pendingCount(readPendingBatch());
-						context.setVisible(count > 0);
-						if (count) context.setL10nArgs(JSON.stringify({ count }));
-					},
-					onCommand: () => resumeBatch().catch(e => Zotero.logError(e)),
-				},
-				{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-menu-discard",
-					onShowing: (ev, context) => context.setVisible(!currentBatch && !!readPendingBatch()),
-					onCommand: () => discardBatch(),
-				},
-			],
-		});
-		menuIDs = [itemMenu, collectionMenu, toolsMenu].filter(Boolean);
-		// Bibliography export (export.js): Tools menu + collection context menu
-		menuIDs.push(...ZB.bibliography.registerMenus({ pluginID, icon }));
-		// Systematic/scoping review screening (screening.js): item, collection and Tools menus
-		menuIDs.push(...ZB.screening.registerMenus({ pluginID, icon }));
-		// PubMed new-literature watch (pubmed-watch.js): Tools menu
-		menuIDs.push(...ZB.pubmedWatch.registerMenus({ pluginID, icon }));
-		// Research dashboard (dashboard.js): Tools menu
-		menuIDs.push(...ZB.dashboard.registerMenus({ pluginID, icon }));
-		// Citation searching for reviews (citation-chase.js): item, collection and Tools menus
-		menuIDs.push(...ZB.citationChase.registerMenus({ pluginID, icon }));
-		// Medical-literature search links (search-links.js): item and Tools menus
-		menuIDs.push(...ZB.searchLinks.registerMenus({ pluginID, icon }));
-		// 文獻評讀總表 (appraisal-form.js): collection and Tools menus
-		menuIDs.push(...ZB.appraisalForm.registerMenus({ pluginID, icon }));
-		// 進度報告 for advisor meetings (progress-report.js): Tools menu
-		menuIDs.push(...ZB.progressReport.registerMenus({ pluginID, icon }));
-		// Concept hub notes (concepts.js): Tools menu
-		menuIDs.push(...ZB.concepts.registerMenus({ pluginID, icon }));
-		// 文獻自動分類 into Zotero sub-collections (classify.js): item, collection and Tools menus
-		menuIDs.push(...ZB.classify.registerMenus({ pluginID, icon }));
-		// Claude Message Batches for bulk AI notes (ai-batch.js): Tools menu
-		menuIDs.push(...ZB.aiBatch.registerMenus({ pluginID, icon }));
+		menuIDs = ZB.menus.register({ pluginID, icon });
+	}
+
+	/**
+	 * The sync batch for the menus: running (stoppable), active (a batch runs, cancelled or not),
+	 * pending (the stopped or interrupted batch record) and count (items it has left).
+	 */
+	function batchStatus() {
+		let pending = readPendingBatch();
+		return {
+			running: !!currentBatch && !currentBatch.cancelled,
+			active: !!currentBatch,
+			pending,
+			count: pendingCount(pending),
+		};
 	}
 
 	// ---------- item pane: AI note section ----------
@@ -1686,7 +1531,7 @@
 			}
 			else {
 				setSectionSummary("AI 筆記已關閉");
-				body.append(el("p", "AI 文獻筆記目前關閉，同步時只整理書目、劃線和你的筆記。要打開：設定 → Zotero Bridge → 功能。", PANE_STYLE.hint));
+				body.append(el("p", "AI 文獻筆記目前關閉，同步時只整理書目、劃線和你的筆記。要打開：設定 → ZotMax → 功能。", PANE_STYLE.hint));
 				if (syncOn) actions.append(button("同步到 Notion + Obsidian", { targets: ["notion", "obsidian"], ai: "reuse" }));
 			}
 			if (actions.childNodes.length) body.append(actions);
@@ -1821,14 +1666,14 @@
 		// Feature switches: once per profile, before anything reads them (features.js)
 		try {
 			let migrated = ZB.features.migrate();
-			if (migrated) Zotero.debug(`Zotero Bridge: feature switches set up (${migrated.preset}${migrated.evidence.length ? `; earlier use: ${migrated.evidence.join(", ")}` : ""})`);
+			if (migrated) Zotero.debug(`ZotMax: feature switches set up (${migrated.preset}${migrated.evidence.length ? `; earlier use: ${migrated.evidence.join(", ")}` : ""})`);
 		}
 		catch (e) {
 			Zotero.logError(e);
 		}
 		// Move secrets from plain prefs (earlier versions) into the login manager; readers wait for it
 		ZB.secrets.migrateFromPrefs().then((names) => {
-			if (names.length) Zotero.debug(`Zotero Bridge: moved ${names.join(", ")} from prefs to the login manager`);
+			if (names.length) Zotero.debug(`ZotMax: moved ${names.join(", ")} from prefs to the login manager`);
 		}).catch(e => Zotero.logError(e));
 		registerMenus();
 		registerItemPane();
@@ -1847,8 +1692,8 @@
 		batch.running = false;
 		writePendingBatch(batch);
 		(Zotero.uiReadyPromise || Promise.resolve()).then(() => {
-			notify("Zotero Bridge：上次的同步沒有完成",
-				`還有 ${pendingCount(batch)} 筆文獻沒有同步。要接續：工具 → 繼續未完成的 Zotero Bridge 同步。`);
+			notify("ZotMax：上次的同步沒有完成",
+				`還有 ${pendingCount(batch)} 筆文獻沒有同步。要接續：工具 → 繼續未完成的 ZotMax 同步。`);
 		}).catch(e => Zotero.logError(e));
 	}
 
@@ -1870,7 +1715,7 @@
 		ZB.aiBatch.shutdown();
 	}
 
-	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime,
+	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, batchStatus, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime,
 		// Notion columns: clients that remember column IDs, and 「把 Notion 欄位改成中文」
 		notionClient, renameNotionColumns,
 		// for ai-batch.js: the full text as Markdown for the AI (fulltext.js)

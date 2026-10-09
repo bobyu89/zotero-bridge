@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — scanned PDFs: is there usable full text, and what the AI gets when there isn't.
+ * ZotMax — scanned PDFs: is there usable full text, and what the AI gets when there isn't.
  * Pure functions apart from the injected `io` ({ stat, read }); loaded into the plugin scope by
  * bootstrap.js and required directly by the Node tests.
  *

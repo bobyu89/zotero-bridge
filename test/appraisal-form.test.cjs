@@ -79,7 +79,7 @@ test("child note: readable table + JSON block; round trip, also through an HTML 
 	assert.match(html, /<strong>整體評價<\/strong>：納入 — 整體可信/);
 	assert.match(html, /<h2>評讀者 B<\/h2>/);
 	assert.match(html, /κ = /);
-	assert.match(html, /<h2>📋 評讀表資料（Zotero Bridge）<\/h2>\n<pre>\{/);
+	assert.match(html, /<h2>📋 評讀表資料（ZotMax）<\/h2>\n<pre>\{/);
 	let back = form.readNoteHTML(html);
 	assert.deepEqual(back, r);
 	// Zotero's note editor re-serializes the HTML
@@ -88,6 +88,10 @@ test("child note: readable table + JSON block; round trip, also through an HTML 
 	// A <pre><code> wrapper and <br> line breaks
 	let wrapped = html.replace(/<pre>([\s\S]*?)<\/pre>/, (all, body) => `<pre><code>${body.replace(/\n/g, "<br>")}</code></pre>`);
 	assert.deepEqual(form.readNoteHTML(wrapped), r);
+	// A form note saved by Zotero Bridge (≤ 0.10) reads the same
+	let oldNote = html.split("ZotMax").join("Zotero Bridge");
+	assert.match(oldNote, /<h2>📋 評讀表資料（Zotero Bridge）<\/h2>/);
+	assert.deepEqual(form.readNoteHTML(oldNote), r);
 	assert.equal(form.readNoteHTML("<p>no data</p>"), null);
 	assert.equal(form.readNoteHTML("<pre>{\"format\":\"other\"}</pre>"), null);
 	assert.equal(form.readNoteHTML("<pre>{broken</pre>"), null);
@@ -246,7 +250,7 @@ test("collection summary: counts, traffic lights per tool, per-study tables, kap
 	assert.deepEqual(form.counts(entries), { total: 3, appraised: 2, verified: 1, unverified: 1, none: 1, verdicts: { 納入: 2, 排除: 0, 需更多資訊: 0 } });
 
 	let body = form.summaryBody(entries, meta);
-	assert.match(body, /^> \[!info\] 由 Zotero Bridge 依分類「跌倒實證」的 3 篇文獻於 2026-10-08 產生/);
+	assert.match(body, /^> \[!info\] 由 ZotMax 依分類「跌倒實證」的 3 篇文獻於 2026-10-08 產生/);
 	assert.match(body, /\| 已核對（研究者確認） \| 1 \|\n\| 尚未核對（AI 初評或評讀中） \| 1 \|\n\| 沒有評讀資料 \| 1 \|/);
 	assert.match(body, /### CASP Checklist: For Randomised Controlled Trials \(RCTs\) \(2024\)（1 篇）\n\n\| 文獻 \| 1 \| 2 \| 3 \| 4a \| 4b \| 4c \| 5 \|/);
 	assert.match(body, /\| \[\[Zotero\/chen2024\\\|Chen, 2024\]\] \| ✅ \| ✅ \| ❌ \| ❌ \| ⬜ /);
@@ -285,6 +289,11 @@ test("collection summary: counts, traffic lights per tool, per-study tables, kap
 	assert.match(again, /前言。\n\n%% zotero-bridge:start[^\n]*%%\n\n新內容\n\n%% zotero-bridge:end %%/);
 	assert.match(again, /老師的意見。/);
 	assert.match(again, /\nstudies: 4\n/);
+	// A summary made as Zotero Bridge (≤ 0.10): rebuilt in place under the new name
+	const asOld = text => text.split("ZotMax").join("Zotero Bridge");
+	assert.match(asOld(edited), /Zotero Bridge/);
+	let fromOld = form.buildSummaryNote(asOld(edited), Object.assign({}, fm, { studies: 4 }), meta.title, "新內容");
+	assert.equal(fromOld, again);
 	// Nothing appraised yet
 	assert.match(form.summaryBody([entries[2]], meta), /（還沒有任何評讀資料）/);
 });
