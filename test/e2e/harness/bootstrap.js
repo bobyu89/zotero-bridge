@@ -1160,7 +1160,7 @@ const TESTS = [
 			let details = section.closest("item-details");
 			let sidenav = (details && details.querySelector("item-pane-sidenav")) || doc.querySelector("#zotero-item-pane item-pane-sidenav");
 			d.sidenavPanes = sidenav ? [...sidenav.querySelectorAll("[data-pane]")].map(e => String(e.dataset.pane)) : null;
-			check(sidenav && sidenav.querySelector(`[data-pane="${ctx.paneKey}"]`), `no ZotMax button in the item pane's side navigation (panes: ${JSON.stringify(d.sidenavPanes)})`);
+			check(sidenav && [...sidenav.querySelectorAll("[data-pane]")].some(e => e.dataset.pane === ctx.paneKey), `no ZotMax button in the item pane's side navigation (panes: ${JSON.stringify(d.sidenavPanes)})`);
 			if (details && details.scrollToPane) details.scrollToPane(ctx.paneKey, "instant");
 			await waitFor(() => section.textContent.includes("E2E stubbed summary sentence."),
 				"the plugin's item pane section to render the AI note", 20000);
@@ -1222,7 +1222,7 @@ const TESTS = [
 					`<item-pane-custom-section data-pane="${ctx.paneKey}"> in the reader's side pane`, 30000);
 				let sidenavs = [...pane.querySelectorAll("item-pane-sidenav")];
 				d.sidenavPanes = sidenavs.map(n => [...n.querySelectorAll("[data-pane]")].map(e => String(e.dataset.pane)));
-				check(sidenavs.some(n => n.querySelector(`[data-pane="${ctx.paneKey}"]`)), `no ZotMax button in the reader's side navigation (${JSON.stringify(d.sidenavPanes)})`);
+				check(sidenavs.some(n => [...n.querySelectorAll("[data-pane]")].some(e => e.dataset.pane === ctx.paneKey)), `no ZotMax button in the reader's side navigation (${JSON.stringify(d.sidenavPanes)})`);
 				let details = section.closest("item-details");
 				if (details && details.scrollToPane) details.scrollToPane(ctx.paneKey, "instant");
 				// The PDF's parent item: its AI note

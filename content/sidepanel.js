@@ -114,6 +114,13 @@
 		return root.ZB;
 	}
 
+	// False after shutdown(): Zotero can still call an old section's hooks (or a timer can fire)
+	// while the plugin is being disabled, when root.ZB is already gone
+	let live = false;
+	function alive() {
+		return live && !!root.ZB;
+	}
+
 	function C() {
 		return root.ZB.commands;
 	}
@@ -685,6 +692,7 @@
 				entry.waiting = true;
 				body.addEventListener("focusout", function retry() {
 					setTimeout(() => {
+						if (!alive()) return;
 						if (editing(body)) return;
 						body.removeEventListener("focusout", retry);
 						entry.waiting = false;
@@ -717,7 +725,7 @@
 
 	/** Refresh the panels showing these items (null: all of them), once things settle. */
 	function schedule(ids) {
-		if (!bodies.size) return;
+		if (!alive() || !bodies.size) return;
 		if (ids === null) pending.all = true;
 		else for (let id of ids) pending.ids.add(id);
 		if (refreshTimer) return;
@@ -726,6 +734,7 @@
 
 	function flush() {
 		refreshTimer = null;
+		if (!alive()) return;
 		let { all, ids } = pending;
 		pending = { all: false, ids: new Set() };
 		for (let [body, entry] of [...bodies]) {
@@ -763,6 +772,7 @@
 		if (!notifierID && Zotero.Notifier && Zotero.Notifier.registerObserver) {
 			notifierID = Zotero.Notifier.registerObserver({
 				notify: (event, type, ids, extraData) => {
+					if (!alive()) return;
 					try {
 						onNotify(event, type, ids, extraData);
 					}
@@ -805,6 +815,7 @@
 	// ---------- registration ----------
 
 	function init(opts = {}) {
+		live = true;
 		pluginID = opts.pluginID || pluginID;
 		rootURI = opts.rootURI || rootURI;
 		chromeRegistered = !!opts.chrome;
@@ -825,6 +836,7 @@
 				darkIcon: more,
 				l10nID: "zotero-bridge-pane-more",
 				onClick: (props) => {
+					if (!alive()) return;
 					try {
 						openMoreMenu(props);
 					}
@@ -834,6 +846,7 @@
 				},
 			}],
 			onInit: ({ body, refresh }) => {
+				if (!alive()) return;
 				bodies.set(body, { refresh, itemID: null });
 				observe();
 			},
@@ -841,10 +854,12 @@
 				bodies.delete(body);
 			},
 			onItemChange: ({ item, setEnabled }) => {
+				if (!alive()) return true;
 				if (setEnabled) setEnabled(!!targetItem(item));
 				return true;
 			},
 			onRender: (props) => {
+				if (!alive()) return;
 				try {
 					render(props);
 				}
@@ -887,6 +902,7 @@
 
 	/** Unregister the section, the observers and the stylesheets. */
 	function shutdown() {
+		live = false;
 		if (paneKey) {
 			try {
 				Zotero.ItemPaneManager.unregisterSection(paneKey);
