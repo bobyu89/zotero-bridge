@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — core helpers (pure functions, no Zotero globals).
+ * ZotMax — core helpers (pure functions, no Zotero globals).
  * Loaded into the plugin scope by bootstrap.js and required directly by the Node tests.
  */
 (function (root, factory) {
@@ -10,7 +10,7 @@
 		(root.ZB = root.ZB || {}).core = factory(root.ZB.apaZh);
 	}
 })(this, function (apaZh) {
-	const MARK_START = "%% zotero-bridge:start — 此區塊由 Zotero Bridge 自動產生，重新同步時會覆寫 %%";
+	const MARK_START = "%% zotero-bridge:start — 此區塊由 ZotMax 自動產生，重新同步時會覆寫 %%";
 	const MARK_END = "%% zotero-bridge:end %%";
 	const MARK_START_RE = /^%% zotero-bridge:start.*%%[ \t]*$/m;
 	const MARK_END_RE = /^%% zotero-bridge:end %%[ \t]*$/m;
@@ -706,7 +706,7 @@
 		// Without the markers the user owns the whole body, so only the frontmatter changes
 		if (start && end && end.index > start.index && !body.slice(start.index, end.index).includes(DELETED_CALLOUT)) {
 			let date = String(opts.now || new Date().toISOString()).slice(0, 10);
-			let callout = `${DELETED_CALLOUT}\n> 這篇文獻已於 ${date} 在 Zotero 移到垃圾桶或刪除，Zotero Bridge 不會再更新這份筆記；從垃圾桶還原後重新同步即可恢復。`;
+			let callout = `${DELETED_CALLOUT}\n> 這篇文獻已於 ${date} 在 Zotero 移到垃圾桶或刪除，ZotMax 不會再更新這份筆記；從垃圾桶還原後重新同步即可恢復。`;
 			let at = start.index + start[0].length;
 			body = body.slice(0, at) + "\n\n" + callout + body.slice(at);
 		}

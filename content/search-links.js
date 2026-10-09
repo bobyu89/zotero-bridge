@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — quick medical-literature search links (醫學文獻快速搜尋).
+ * ZotMax — quick medical-literature search links (醫學文獻快速搜尋).
  *
  * A catalog of databases with a search-URL template each ({q} = the URL-encoded query). Databases
  * without a public GET search URL (Embase, JBI/Ovid, WHO ICTRP, 華藝, 博碩士論文, 國圖期刊) open
@@ -586,7 +586,7 @@
 				rows.push(`**PICO 檢索式**：${codeSpan(pico.en)}`);
 				let l = links(PICO_EN_SOURCES, pico.en);
 				if (l) rows.push(`↳ ${l}`);
-				if (pico.skipped.length) rows.push(`*${pico.skipped.join("、")} 沒有英文詞彙，未列入；可用 Zotero Bridge 按鈕或快速指令 → 醫學文獻快速搜尋… 查 MeSH*`);
+				if (pico.skipped.length) rows.push(`*${pico.skipped.join("、")} 沒有英文詞彙，未列入；可用 ZotMax 按鈕或快速指令 → 醫學文獻快速搜尋… 查 MeSH*`);
 			}
 			if (pico.all !== pico.en) {
 				rows.push(`**PICO（原文詞彙）**：${codeSpan(pico.all)}`);
@@ -650,7 +650,7 @@
 	}
 
 	function notify(text) {
-		scope.ZB.main.notify(`Zotero Bridge：${TITLE}`, text);
+		scope.ZB.main.notify(`ZotMax：${TITLE}`, text);
 	}
 
 	/** Open a target; copy-only sources first copy the query to the clipboard. */
@@ -815,7 +815,7 @@
 		let watchName = String(name.value || "").trim();
 		if (!watchName) return null;
 		scope.ZB.pubmedWatch.addWatch({ name: watchName, query });
-		notify(`已新增 PubMed 追蹤「${watchName}」。到 設定 → Zotero Bridge → PubMed 新文獻追蹤 可以測試或調整；Zotero Bridge 按鈕或快速指令 → 檢查新文獻（PubMed 追蹤）立即匯入。`);
+		notify(`已新增 PubMed 追蹤「${watchName}」。到 設定 → ZotMax → PubMed 新文獻追蹤 可以測試或調整；ZotMax 按鈕或快速指令 → 檢查新文獻（PubMed 追蹤）立即匯入。`);
 		return watchName;
 	}
 

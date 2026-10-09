@@ -1,9 +1,9 @@
 /*
- * Zotero Bridge — the command catalog: one list of everything the plugin can be asked to do.
+ * ZotMax — the command catalog: one list of everything the plugin can be asked to do.
  *
  * Every surface is generated from it, so a command reads and behaves the same everywhere:
  *   - the toolbar button's menu (toolbar.js): every command, grouped by research workflow
- *   - the item and collection right-click menus (menus.js): one 「Zotero Bridge ▸」 submenu each,
+ *   - the item and collection right-click menus (menus.js): one 「ZotMax ▸」 submenu each,
  *     holding the commands whose `menus` name that surface, with the same groups
  *   - the Tools menu (menus.js): 設定…, 快速指令… and the commands marked `tools` (batch entries that
  *     only show while there is something to stop, resume, discard, check or cancel)
@@ -54,7 +54,7 @@
 		return scope.ZB;
 	}
 
-	function notify(text, headline = "Zotero Bridge") {
+	function notify(text, headline = "ZotMax") {
 		ZB().main.notify(headline, text);
 	}
 
@@ -279,7 +279,7 @@
 			keywords: ["閱讀狀態", "狀態", "status", "reading status", "待讀", "已讀", "閱讀中", "已引用", "read", "to read"],
 			run: () => ZB().status.runPass() },
 		// Resuming syncs: hidden while 「同步到 Obsidian／Notion」 is off (discarding stays possible)
-		{ id: "resume", group: "sync", l10n: "zotero-bridge-menu-resume", label: "繼續未完成的 Zotero Bridge 同步（{ $count } 筆）",
+		{ id: "resume", group: "sync", l10n: "zotero-bridge-menu-resume", label: "繼續未完成的 ZotMax 同步（{ $count } 筆）",
 			features: ["sync"], needs: null, menus: [], tools: true,
 			when: () => {
 				let b = batchStatus();
@@ -288,12 +288,12 @@
 			args: () => ({ count: batchStatus().count }),
 			keywords: ["繼續", "接續", "續傳", "resume", "continue", "未完成", "失敗", "重試", "retry", "同步", "sync"],
 			run: () => ZB().main.resumeBatch() },
-		{ id: "stop", group: "sync", l10n: "zotero-bridge-menu-stop", label: "停止 Zotero Bridge 同步",
+		{ id: "stop", group: "sync", l10n: "zotero-bridge-menu-stop", label: "停止 ZotMax 同步",
 			features: [], needs: null, menus: [], tools: true,
 			when: () => batchStatus().running,
 			keywords: ["停止", "中止", "取消", "stop", "cancel", "同步", "sync"],
 			run: () => ZB().main.cancelBatch() },
-		{ id: "discard", group: "sync", l10n: "zotero-bridge-menu-discard", label: "放棄未完成的 Zotero Bridge 同步",
+		{ id: "discard", group: "sync", l10n: "zotero-bridge-menu-discard", label: "放棄未完成的 ZotMax 同步",
 			features: [], needs: null, menus: [], tools: true,
 			when: () => {
 				let b = batchStatus();
@@ -398,7 +398,7 @@
 			run: async (sel) => {
 				let c = targetCollections(sel)[0];
 				if (!c) {
-					notify(NEED_REVIEW_COLLECTION, "Zotero Bridge：引文追蹤");
+					notify(NEED_REVIEW_COLLECTION, "ZotMax：引文追蹤");
 					return null;
 				}
 				return ZB().citationChase.chaseCollection(c);
@@ -410,7 +410,7 @@
 			run: async (sel) => {
 				let c = targetCollections(sel)[0] || null;
 				if (!c && sel.surface === "collection") {
-					notify(NEED_REVIEW_COLLECTION, "Zotero Bridge：引文追蹤");
+					notify(NEED_REVIEW_COLLECTION, "ZotMax：引文追蹤");
 					return null;
 				}
 				return ZB().citationChase.importChecked(c);
@@ -503,11 +503,11 @@
 
 	/** Outside the groups: the first and the last entry of the toolbar menu, and the Tools menu. */
 	const PALETTE = { id: "palette", l10n: "zotero-bridge-cmd-palette", label: "快速指令…", toolsL10n: "zotero-bridge-menu-palette",
-		toolsLabel: "Zotero Bridge 快速指令…", features: [], needs: null, menus: [],
+		toolsLabel: "ZotMax 快速指令…", features: [], needs: null, menus: [],
 		keywords: ["快速指令", "指令", "command", "palette", "搜尋功能"],
 		run: sel => ZB().palette.open(sel && sel.window) };
 	const SETTINGS = { id: "settings", l10n: "zotero-bridge-toolbar-settings", label: "設定…", toolsL10n: "zotero-bridge-menu-settings",
-		toolsLabel: "Zotero Bridge 設定…", features: [], needs: null, menus: [],
+		toolsLabel: "ZotMax 設定…", features: [], needs: null, menus: [],
 		keywords: ["設定", "偏好", "settings", "preferences", "options"],
 		run: () => openSettings() };
 
@@ -686,7 +686,7 @@
 	function execute(entryOrID, sel) {
 		let entry = typeof entryOrID === "string" ? get(entryOrID) : entryOrID;
 		if (!entry || typeof entry.run !== "function") {
-			Zotero.logError(new Error(`Zotero Bridge: no command ${entryOrID && (entryOrID.id || entryOrID)}`));
+			Zotero.logError(new Error(`ZotMax: no command ${entryOrID && (entryOrID.id || entryOrID)}`));
 			return Promise.resolve(null);
 		}
 		sel = sel || fromWindow(null, "toolbar");
@@ -706,7 +706,7 @@
 	const PENDING_SECTION_PREF = "extensions.zotero-bridge.prefs.pendingSection";
 
 	/**
-	 * Open Zotero's settings at the Zotero Bridge pane, at a section (or tab) when one is named: the
+	 * Open Zotero's settings at the ZotMax pane, at a section (or tab) when one is named: the
 	 * pane reads prefs.pendingSection when it loads, while it is open and when it is shown again, and
 	 * sends a switched-off section to its switch on 功能. Returns the settings window.
 	 */

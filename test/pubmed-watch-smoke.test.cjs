@@ -367,7 +367,7 @@ test("檢查新文獻 checks every watch: throttled E-utilities calls, dedup, im
 	same(st.pi.retry, { 2002: 1 });
 
 	// --- progress window and the Obsidian digest
-	assert.ok(env.headlines.includes("Zotero Bridge：PubMed 新文獻追蹤"));
+	assert.ok(env.headlines.includes("ZotMax：PubMed 新文獻追蹤"));
 	let lines = env.progressLines.map(l => l.text);
 	assert.ok(lines.includes("跌倒預防：找到 4 篇，新匯入 2 篇，已在文獻庫 2 篇"), lines.join("\n"));
 	assert.ok(lines.includes("壓傷：找到 3 篇，新匯入 1 篇，已在文獻庫 1 篇，匯入失敗 1 篇（下次再試）"), lines.join("\n"));

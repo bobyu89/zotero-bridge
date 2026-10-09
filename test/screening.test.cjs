@@ -241,7 +241,7 @@ test("review note: managed block and plugin frontmatter are rewritten, the user'
 	let meta = { name: "跌倒預防 SR", title: "跌倒預防 SR：篩選與 PRISMA 2020", collectionKey: "library/collections/COLL1234",
 		uri: "zotero://select/library/collections/COLL1234", generatedAt: "2026-10-08T01:02:03.000Z", csvPath: "Zotero/Reviews/跌倒預防 SR 證據表.csv", links: true };
 	let section = s.buildReviewSection(result, [], meta);
-	assert.match(section, /^> \[!info\] 由 Zotero Bridge 依分類「跌倒預防 SR」的 15 筆文獻於 2026-10-08 產生/);
+	assert.match(section, /^> \[!info\] 由 ZotMax 依分類「跌倒預防 SR」的 15 筆文獻於 2026-10-08 產生/);
 	assert.ok(section.includes("```mermaid\nflowchart TD"));
 	assert.ok(section.includes("## 一致性檢查\n\n- ⚠️ 同時有多個標題摘要決定，視為尚未篩選（1 筆）：[Paper 15](zotero://select/library/items/KEY15)\n"));
 	assert.ok(section.includes("\n- ⚠️ 標記為重複，但也有篩選決定（以重複計算，不列入篩選）（1 筆）：[Paper 2](zotero://select/library/items/KEY2)"));
@@ -279,6 +279,11 @@ test("review note: managed block and plugin frontmatter are rewritten, the user'
 	assert.equal(again.match(/zotero-bridge:start/g).length, 1);
 	// Same input → same text (nothing to write)
 	assert.equal(s.buildReviewNote(again, s.frontmatterFor(next, meta), meta.title, s.buildReviewSection(next, [], meta)), again);
+	// A note made as Zotero Bridge (≤ 0.10): the same block is rebuilt, under the new name
+	const asOld = text => text.split("ZotMax").join("Zotero Bridge");
+	assert.match(asOld(edited), /由 Zotero Bridge 依分類/);
+	let fromOld = s.buildReviewNote(asOld(edited), s.frontmatterFor(next, meta), meta.title, s.buildReviewSection(next, [], meta));
+	assert.equal(fromOld, again);
 	// Markers removed by the user: a fresh block after the heading
 	let noMarkers = again.replace(/%% zotero-bridge:start[\s\S]*%% zotero-bridge:end %%/, "");
 	let restored = s.buildReviewNote(noMarkers, s.frontmatterFor(next, meta), meta.title, "NEW");

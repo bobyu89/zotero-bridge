@@ -1,4 +1,4 @@
-// The Zotero Bridge toolbar button (content/toolbar.js) through the real plugin in a mocked Zotero and a
+// The ZotMax toolbar button (content/toolbar.js) through the real plugin in a mocked Zotero and a
 // jsdom main window: added on load and for windows open at startup, removed on unload and shutdown
 // (no element, stylesheet, key handler or pref observer left), the menu's groups and entries for each
 // preset with live hiding, the commands calling the existing functions on the current selection, the
@@ -240,8 +240,8 @@ test("the button is added to the items toolbar at startup, removed on unload and
 	assert.equal(button.getAttribute("type"), "menu");
 	assert.equal(button.getAttribute("wantdropmarker"), "true");
 	assert.equal(button.getAttribute("tabindex"), "-1", "in Zotero's arrow-key row like its neighbours");
-	assert.equal(button.getAttribute("tooltiptext"), "Zotero Bridge");
-	assert.equal(button.getAttribute("aria-label"), "Zotero Bridge");
+	assert.equal(button.getAttribute("tooltiptext"), "ZotMax");
+	assert.equal(button.getAttribute("aria-label"), "ZotMax");
 	assert.equal(button.hidden, false);
 	let css = doc.getElementById("zotero-bridge-toolbar-css");
 	assert.equal(css.getAttribute("rel"), "stylesheet");

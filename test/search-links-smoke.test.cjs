@@ -321,8 +321,8 @@ function paper(env, fields = {}) {
 // An AI note with structured data (PICO), as main.js writes it
 function addAINote(env, item, study) {
 	let note = new env.MockItem("note");
-	note.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 test-model 於 2026-10-01T00:00:00Z 產生（Zotero Bridge）</em></p><h2>一句話摘要</h2><p>衛教降低跌倒。</p>"
-		+ `<h2>📋 結構化資料（Zotero Bridge）</h2><pre>${JSON.stringify(Object.assign({ study_design: "RCT", sample_size: 80 }, study), null, 2)}</pre>`;
+	note.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 test-model 於 2026-10-01T00:00:00Z 產生（ZotMax）</em></p><h2>一句話摘要</h2><p>衛教降低跌倒。</p>"
+		+ `<h2>📋 結構化資料（ZotMax）</h2><pre>${JSON.stringify(Object.assign({ study_design: "RCT", sample_size: 80 }, study), null, 2)}</pre>`;
 	note.tags = ["zotero-bridge-ai"];
 	env.addChild(item, note);
 	return note;
@@ -347,7 +347,7 @@ test("item context menu: find this paper per database, similar articles, more da
 		selects: [list => list.indexOf("PubMed 相似文獻"), list => list.indexOf("Europe PMC"), null],
 	});
 	let item = paper(env);
-	// Item menu → Zotero Bridge ▸ 在醫學資料庫搜尋 ▸ (commands.js, menus.js)
+	// Item menu → ZotMax ▸ 在醫學資料庫搜尋 ▸ (commands.js, menus.js)
 	let reg = env.menus.find(m => m.menuID === "zotero-bridge-item");
 	assert.equal(reg.target, "main/library/item");
 	assert.ok(reg.menus[0].icon.endsWith("content/icons/bridge.svg"));

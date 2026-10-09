@@ -1171,7 +1171,7 @@
 		resetUsage() {
 			let bridge = Zotero.ZoteroBridge;
 			if (!bridge) return;
-			if (!Services.prompt.confirm(window, "Zotero Bridge", "要清除所有 AI 用量統計嗎？（批次產生前的費用預估也會一併重新累計）")) return;
+			if (!Services.prompt.confirm(window, "ZotMax", "要清除所有 AI 用量統計嗎？（批次產生前的費用預估也會一併重新累計）")) return;
 			bridge.main.resetUsage();
 			renderUsage();
 		},

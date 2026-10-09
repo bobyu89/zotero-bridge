@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — evidence-based health care report draft (實證健康照護報告草稿).
+ * ZotMax — evidence-based health care report draft (實證健康照護報告草稿).
  *
  * Drafts a report in the structure of the Taiwan Nurses Association (台灣護理學會) EBHC
  * synthesis article (A 類實證健康照護綜整文章): 題目, 中英文摘要, 前言, 方法 (PICO, 文獻搜尋,
@@ -40,13 +40,13 @@
 	const REFERENCES_FILE = "references.json";
 	const FILTER_FILE = "zotero-bridge-ebhc.lua";
 	const FILE_PREFIX = "實證報告-";
-	const DIALOG_TITLE = "Zotero Bridge：實證健康照護報告草稿";
+	const DIALOG_TITLE = "ZotMax：實證健康照護報告草稿";
 	const CHECK_HEADING = "⚠️ 查核清單";
 	const SCORE_HEADING = "📋 評分項目自我檢核";
 	const PANDOC_HEADING = "Pandoc 指令";
 	const USER_SECTION = "## ✍️ 我的筆記\n\n";
 	const NOTION_CONTAINER_TITLE = "實證健康照護報告草稿（重新產生會覆寫，修改請寫在此區塊外）";
-	const MARK_START = "%% zotero-bridge:start — 此區塊由 Zotero Bridge 自動產生，重新產生報告時會覆寫 %%";
+	const MARK_START = "%% zotero-bridge:start — 此區塊由 ZotMax 自動產生，重新產生報告時會覆寫 %%";
 	const MARK_START_RE = /^%% zotero-bridge:start.*%%[ \t]*$/m;
 	const MARK_END_RE = /^%% zotero-bridge:end %%[ \t]*$/m;
 	const TODO = "〔待補";
@@ -475,7 +475,7 @@
 	/** PRISMA mini-summary and figure 1 (Mermaid; the Lua filter replaces it with a placeholder in Word). */
 	function prismaBlock(prisma) {
 		if (!prisma) {
-			return `> [!warning] 這個分類沒有篩選標籤，無法自動產生 PRISMA 流程圖\n> 請補上圖一（搜尋文獻及篩選流程圖）：可用 Zotero Bridge 的「篩選（PRISMA 2020）」標記各篇，或自行繪製，並寫出各階段篇數與排除原因。`;
+			return `> [!warning] 這個分類沒有篩選標籤，無法自動產生 PRISMA 流程圖\n> 請補上圖一（搜尋文獻及篩選流程圖）：可用 ZotMax 的「篩選（PRISMA 2020）」標記各篇，或自行繪製，並寫出各階段篇數與排除原因。`;
 		}
 		return [
 			"**圖一　搜尋文獻及篩選流程圖（PRISMA 2020）**",
@@ -732,7 +732,7 @@
 			"### 一、形成臨床提問（PICO）", demote(get("question")),
 			`**表一　PICO 與檢索關鍵字**（插件依對話框的 PICO 產生；問題類型：${questionTypeLabel(parts.answer.questionType)}）`,
 			picoTable(parts.answer),
-			"> [!tip] 同義字與 MeSH Terms 請自行補上：可用 Zotero Bridge 按鈕或快速指令 → 醫學文獻快速搜尋… 取得 MeSH 建議，或查 NCBI MeSH Database。",
+			"> [!tip] 同義字與 MeSH Terms 請自行補上：可用 ZotMax 按鈕或快速指令 → 醫學文獻快速搜尋… 取得 MeSH 建議，或查 NCBI MeSH Database。",
 			"### 二、文獻搜尋的方法與分析",
 			searchBlock(Object.assign({}, parts.answer, {
 				screening: screeningText,
@@ -838,7 +838,7 @@
 	}
 
 	// Drops what is only meant for Obsidian when the report is converted to Word
-	const PANDOC_FILTER = `-- Zotero Bridge：把實證健康照護報告草稿轉成 Word 時，略過 Obsidian 註解（%% … %%）、提示框（> [!info] …）、
+	const PANDOC_FILTER = `-- ZotMax：把實證健康照護報告草稿轉成 Word 時，略過 Obsidian 註解（%% … %%）、提示框（> [!info] …）、
 -- 「${CHECK_HEADING}」「${SCORE_HEADING}」「${PANDOC_HEADING}」「我的筆記」各節，並把 Mermaid 流程圖換成插圖提示。
 -- 這個檔案由插件產生，重新產生報告時會覆寫。
 local SKIP = { "查核清單", "評分項目自我檢核", "${PANDOC_HEADING}", "我的筆記" }
@@ -884,7 +884,7 @@ end
 			paths.command,
 			"```",
 			"",
-			`- \`${paths.referencesRel}\`：Zotero Bridge 按鈕或快速指令 → 匯出參考文獻到 Obsidian 產生；產生報告時插件已檢查過，缺少引用的文獻會自動重新匯出。`,
+			`- \`${paths.referencesRel}\`：ZotMax 按鈕或快速指令 → 匯出參考文獻到 Obsidian 產生；產生報告時插件已檢查過，缺少引用的文獻會自動重新匯出。`,
 			`- \`${paths.cslRel}\`：APA 7 樣式檔，放在 vault 根目錄（見 README「在 Obsidian 寫論文並用 Pandoc 產生 APA Word」）。`,
 			`- \`${FILTER_FILE}\`：插件放在同一資料夾，轉檔時略過 %% 標記、提示框、查核清單、評分自我檢核、本節與「我的筆記」，並把 PRISMA 流程圖換成插圖提示。`,
 		].join("\n");
@@ -1018,7 +1018,7 @@ end
 	}
 
 	function notify(t) {
-		root.ZB.main.notify("Zotero Bridge：實證健康照護報告", t);
+		root.ZB.main.notify("ZotMax：實證健康照護報告", t);
 	}
 
 	const HTML_NS = "http://www.w3.org/1999/xhtml";
@@ -1222,7 +1222,7 @@ end
 			return;
 		}
 		if (!settings.llm.apiKey) {
-			notify("實證健康照護報告草稿需要 LLM API key：請到 設定 → Zotero Bridge 填入。");
+			notify("實證健康照護報告草稿需要 LLM API key：請到 設定 → ZotMax 填入。");
 			return;
 		}
 		if (!settings.vaultPath && !(settings.notionToken && settings.notionSynthesisParent)) {
@@ -1273,7 +1273,7 @@ end
 		let rows = evidenceRows(sources, entriesProbe);
 		let summary = evidenceSummary(rows);
 		let prompt = buildEbhcPrompt(sources, { answer, evidenceSummary: summary });
-		if (!Services.prompt.confirm(win, "Zotero Bridge", confirmText(settings, prompt, sources, extra))) return;
+		if (!Services.prompt.confirm(win, "ZotMax", confirmText(settings, prompt, sources, extra))) return;
 		return ZB.main.enqueue(() => generate(sources, prompt, settings, where, { answer, rows, summary, search, prisma: ctx.prisma }));
 	}
 
@@ -1371,7 +1371,7 @@ end
 					}
 					catch (e) {
 						Zotero.logError(e);
-						notes.push(`⚠️ 無法更新 ${REFERENCES_FILE}：${e.message || e}；請手動執行 Zotero Bridge 按鈕或快速指令 → 匯出參考文獻到 Obsidian`);
+						notes.push(`⚠️ 無法更新 ${REFERENCES_FILE}：${e.message || e}；請手動執行 ZotMax 按鈕或快速指令 → 匯出參考文獻到 Obsidian`);
 					}
 				}
 				catch (e) {

@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — orchestration: settings, sync pipeline, menus (menus.js), auto-sync.
+ * ZotMax — orchestration: settings, sync pipeline, menus (menus.js), auto-sync.
  */
 (function (root) {
 	const ZB = root.ZB;
@@ -33,7 +33,7 @@
 	/** A turned-off feature reached anyway (e.g. an old shortcut): say where to turn it on. */
 	function notifyFeatureOff(id) {
 		let f = ZB.features.get(id);
-		notify("Zotero Bridge", `「${f.label}」目前關閉。要使用的話：設定 → Zotero Bridge → 功能，把它打開。`);
+		notify("ZotMax", `「${f.label}」目前關閉。要使用的話：設定 → ZotMax → 功能，把它打開。`);
 	}
 
 	async function readSettings() {
@@ -159,7 +159,7 @@
 	// so a later sync without AI can fill the Notion columns and frontmatter from it
 	function aiNoteHTML(md, model, at, data, raw) {
 		let block = data || raw ? ZB.llm.studyDataBlock(data, raw) : "";
-		return `<h1>${AI_TITLE}</h1>\n<p><em>由 ${model} 於 ${at} 產生（Zotero Bridge）</em></p>\n`
+		return `<h1>${AI_TITLE}</h1>\n<p><em>由 ${model} 於 ${at} 產生（ZotMax）</em></p>\n`
 			+ ZB.markdown.mdToHtml(block ? `${md}\n\n${block}` : md);
 	}
 
@@ -434,7 +434,7 @@
 					}
 				}
 				catch (e) {
-					Zotero.debug(`Zotero Bridge: skipped ${child}: ${e}`);
+					Zotero.debug(`ZotMax: skipped ${child}: ${e}`);
 				}
 			}
 		};
@@ -517,7 +517,7 @@
 					Zotero.logError(e);
 					return null;
 				}
-				Zotero.debug(`Zotero Bridge: renamed ${entry.path} → ${to}`);
+				Zotero.debug(`ZotMax: renamed ${entry.path} → ${to}`);
 			}
 			entry.path = to;
 			entry.relParts = [...entry.relParts.slice(0, -1), name + ".md"];
@@ -611,11 +611,11 @@
 		if (study && !schema.props["Study Design"] && !ctx.schemaHints.has(dsId)) {
 			// Databases set up before these columns existed: adding them is the user's call
 			ctx.schemaHints.add(dsId);
-			if (opts.messages) opts.messages.push("Notion 資料庫還沒有研讀欄位（研究設計／Study Design 等）：到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」即可加上");
+			if (opts.messages) opts.messages.push("Notion 資料庫還沒有研讀欄位（研究設計／Study Design 等）：到 設定 → ZotMax 按「測試連線並補齊資料庫欄位」即可加上");
 		}
 		if (opts.appraisal && !schema.props["Appraisal Verified"] && !ctx.schemaHints.has(dsId + "/appraisal")) {
 			ctx.schemaHints.add(dsId + "/appraisal");
-			if (opts.messages) opts.messages.push("Notion 資料庫還沒有「評讀已核對」（Appraisal Verified）欄位：到 設定 → Zotero Bridge 按「測試連線並補齊資料庫欄位」即可加上");
+			if (opts.messages) opts.messages.push("Notion 資料庫還沒有「評讀已核對」（Appraisal Verified）欄位：到 設定 → ZotMax 按「測試連線並補齊資料庫欄位」即可加上");
 		}
 		let zoteroKey = `${data.libraryPath}/${data.key}`;
 		let properties = ZB.notion.buildProperties(schema, {
@@ -767,7 +767,7 @@
 	function resumeBatch() {
 		let batch = readPendingBatch();
 		if (!batch) {
-			notify("Zotero Bridge", "沒有未完成的同步。");
+			notify("ZotMax", "沒有未完成的同步。");
 			return Promise.resolve();
 		}
 		let items = [];
@@ -778,7 +778,7 @@
 		}
 		if (!items.length) {
 			writePendingBatch(null);
-			notify("Zotero Bridge", "未完成的文獻都已刪除，已清除這筆紀錄。");
+			notify("ZotMax", "未完成的文獻都已刪除，已清除這筆紀錄。");
 			return Promise.resolve();
 		}
 		return run(items, { targets: batch.action.targets, ai: batch.action.ai, resumed: true });
@@ -815,7 +815,7 @@
 			settings = await readSettings();
 		}
 		catch (e) {
-			notify("Zotero Bridge 設定有誤", String(e.message || e));
+			notify("ZotMax 設定有誤", String(e.message || e));
 			return;
 		}
 		action = Object.assign({}, action, { targets: new Set(action.targets) });
@@ -830,14 +830,14 @@
 			missing.push("Obsidian vault 路徑");
 		}
 		if (!action.targets.size) {
-			if (!action.silent) notify("Zotero Bridge", `請先到 設定 → Zotero Bridge 填入：${missing.join("、")}`);
+			if (!action.silent) notify("ZotMax", `請先到 設定 → ZotMax 填入：${missing.join("、")}`);
 			return;
 		}
 
 		let willGenerate = settings.llm.enabled && (action.ai === "regenerate"
 			|| (action.ai === "missing" && items.some(i => !ZB.adapter.getAINote(i))));
 		if (willGenerate && !settings.llm.apiKey) {
-			notify("Zotero Bridge", "AI 筆記需要 API key：請到 設定 → Zotero Bridge 填入，或改用「不呼叫 AI」同步。");
+			notify("ZotMax", "AI 筆記需要 API key：請到 設定 → ZotMax 填入，或改用「不呼叫 AI」同步。");
 			return;
 		}
 		// Many AI notes with 「使用批次 API」 on: the user picks the Message Batches API or the normal path;
@@ -851,7 +851,7 @@
 			}
 		}
 		else if (willGenerate && items.length > 5 && !action.silent) {
-			let ok = Services.prompt.confirm(Zotero.getMainWindow(), "Zotero Bridge",
+			let ok = Services.prompt.confirm(Zotero.getMainWindow(), "ZotMax",
 				`即將為最多 ${items.length} 筆文獻呼叫 ${settings.llm.provider === "openai" ? "OpenAI" : "Claude"}（${settings.llm.model}）產生 AI 筆記，會產生 API 費用。`
 				+ batchEstimate(items, action, settings) + "要繼續嗎？");
 			if (!ok) return;
@@ -859,7 +859,7 @@
 
 		let pw = action.silent ? null : new Zotero.ProgressWindow({ closeOnClick: true });
 		if (pw) {
-			pw.changeHeadline(action.resumed ? "Zotero Bridge：繼續未完成的同步" : "Zotero Bridge");
+			pw.changeHeadline(action.resumed ? "ZotMax：繼續未完成的同步" : "ZotMax");
 			pw.show();
 		}
 		// Only manual batches are tracked; auto-sync runs again on the next change anyway
@@ -874,7 +874,7 @@
 				startedAt: nowISO(),
 			};
 			writePendingBatch(batch);
-			if (pw) pw.addDescription("要中途停止：工具 → 停止 Zotero Bridge 同步（處理中的這篇完成後停止）");
+			if (pw) pw.addDescription("要中途停止：工具 → 停止 ZotMax 同步（處理中的這篇完成後停止）");
 		}
 		let stopLine = null;
 		currentBatch = batch && {
@@ -970,7 +970,7 @@
 				+ (cancelled ? `，未處理 ${batch.remaining.length} 筆` : "")
 				+ (quoteSummary ? `；${quoteSummary}` : ""));
 			if (batch && pendingCount(batch)) {
-				pw.addDescription(`要接續：工具 → 繼續未完成的 Zotero Bridge 同步（${pendingCount(batch)} 筆${batch.failed.length ? `，含失敗 ${batch.failed.length} 筆` : ""}）`);
+				pw.addDescription(`要接續：工具 → 繼續未完成的 ZotMax 同步（${pendingCount(batch)} 筆${batch.failed.length ? `，含失敗 ${batch.failed.length} 筆` : ""}）`);
 			}
 			let trimLine = fullTextLine(trimmed);
 			if (trimLine) pw.addDescription(trimLine);
@@ -979,7 +979,7 @@
 			pw.startCloseTimer(failures.length || cancelled ? 15000 : 5000);
 		}
 		else if (failures.length) {
-			notify("Zotero Bridge 自動同步失敗", failures.slice(0, 3).join("\n"));
+			notify("ZotMax 自動同步失敗", failures.slice(0, 3).join("\n"));
 		}
 		// 「同步時自動更新參考文獻檔」 (export.js); never throws
 		if (ok) await ZB.bibliography.afterSync(settings);
@@ -1052,7 +1052,7 @@
 		// Cancel at button 1: closing the dialog also returns 1
 		let flags = p.BUTTON_POS_0 * p.BUTTON_TITLE_IS_STRING + p.BUTTON_POS_1 * p.BUTTON_TITLE_CANCEL
 			+ p.BUTTON_POS_2 * p.BUTTON_TITLE_IS_STRING + p.BUTTON_POS_0_DEFAULT;
-		let button = p.confirmEx(Zotero.getMainWindow(), "Zotero Bridge", text, flags,
+		let button = p.confirmEx(Zotero.getMainWindow(), "ZotMax", text, flags,
 			"批次 API（約半價）", null, "一般模式（立即產生）", null, {});
 		return button === 0 ? "batch" : button === 2 ? "normal" : null;
 	}
@@ -1116,7 +1116,7 @@
 		}
 		if (errors.length) {
 			errors.forEach(e => Zotero.logError(new Error(e)));
-			notify("Zotero Bridge：刪除的文獻同步失敗", errors.slice(0, 3).join("\n"));
+			notify("ZotMax：刪除的文獻同步失敗", errors.slice(0, 3).join("\n"));
 		}
 		return counts;
 	}
@@ -1196,7 +1196,7 @@
 		}
 		items = ZB.adapter.toRegularItems(items);
 		if (items.length < 2) {
-			notify("Zotero Bridge", "文獻比較表至少需要 2 篇文獻。");
+			notify("ZotMax", "文獻比較表至少需要 2 篇文獻。");
 			return;
 		}
 		let settings;
@@ -1204,21 +1204,21 @@
 			settings = await readSettings();
 		}
 		catch (e) {
-			notify("Zotero Bridge 設定有誤", String(e.message || e));
+			notify("ZotMax 設定有誤", String(e.message || e));
 			return;
 		}
 		if (!settings.llm.apiKey) {
-			notify("Zotero Bridge", "文獻比較表需要 LLM API key：請到 設定 → Zotero Bridge 填入。");
+			notify("ZotMax", "文獻比較表需要 LLM API key：請到 設定 → ZotMax 填入。");
 			return;
 		}
 		let extra = items.length > MAX_SYNTHESIS_ITEMS ? `（超過 ${MAX_SYNTHESIS_ITEMS} 篇，只會使用前 ${MAX_SYNTHESIS_ITEMS} 篇）` : "";
 		items = items.slice(0, MAX_SYNTHESIS_ITEMS);
-		let ok = Services.prompt.confirm(Zotero.getMainWindow(), "Zotero Bridge",
+		let ok = Services.prompt.confirm(Zotero.getMainWindow(), "ZotMax",
 			`將用 ${settings.llm.model} 比較 ${items.length} 篇文獻並產生文獻比較表${extra}，會產生一次 API 費用。要繼續嗎？`);
 		if (!ok) return;
 
 		let pw = new Zotero.ProgressWindow({ closeOnClick: true });
-		pw.changeHeadline("Zotero Bridge：文獻比較表");
+		pw.changeHeadline("ZotMax：文獻比較表");
 		pw.show();
 		let line = new pw.ItemProgress("note", `讀取 ${items.length} 篇文獻…`);
 		try {
@@ -1289,7 +1289,7 @@
 			try {
 				let note = new Zotero.Item("note");
 				note.libraryID = items[0].libraryID;
-				note.setNote(`<h1>📊 ${escapeHTML(title)}</h1>\n<p><em>由 ${escapeHTML(model)} 於 ${generatedAt} 產生（Zotero Bridge）</em></p>\n`
+				note.setNote(`<h1>📊 ${escapeHTML(title)}</h1>\n<p><em>由 ${escapeHTML(model)} 於 ${generatedAt} 產生（ZotMax）</em></p>\n`
 					+ ZB.markdown.mdToHtml(ZB.synthesis.buildSynthesisPlain(md, entries)));
 				note.addTag("zotero-bridge-synthesis");
 				if (scope.collection && scope.collection.libraryID === note.libraryID) note.addToCollection(scope.collection.id);
@@ -1531,7 +1531,7 @@
 			}
 			else {
 				setSectionSummary("AI 筆記已關閉");
-				body.append(el("p", "AI 文獻筆記目前關閉，同步時只整理書目、劃線和你的筆記。要打開：設定 → Zotero Bridge → 功能。", PANE_STYLE.hint));
+				body.append(el("p", "AI 文獻筆記目前關閉，同步時只整理書目、劃線和你的筆記。要打開：設定 → ZotMax → 功能。", PANE_STYLE.hint));
 				if (syncOn) actions.append(button("同步到 Notion + Obsidian", { targets: ["notion", "obsidian"], ai: "reuse" }));
 			}
 			if (actions.childNodes.length) body.append(actions);
@@ -1666,14 +1666,14 @@
 		// Feature switches: once per profile, before anything reads them (features.js)
 		try {
 			let migrated = ZB.features.migrate();
-			if (migrated) Zotero.debug(`Zotero Bridge: feature switches set up (${migrated.preset}${migrated.evidence.length ? `; earlier use: ${migrated.evidence.join(", ")}` : ""})`);
+			if (migrated) Zotero.debug(`ZotMax: feature switches set up (${migrated.preset}${migrated.evidence.length ? `; earlier use: ${migrated.evidence.join(", ")}` : ""})`);
 		}
 		catch (e) {
 			Zotero.logError(e);
 		}
 		// Move secrets from plain prefs (earlier versions) into the login manager; readers wait for it
 		ZB.secrets.migrateFromPrefs().then((names) => {
-			if (names.length) Zotero.debug(`Zotero Bridge: moved ${names.join(", ")} from prefs to the login manager`);
+			if (names.length) Zotero.debug(`ZotMax: moved ${names.join(", ")} from prefs to the login manager`);
 		}).catch(e => Zotero.logError(e));
 		registerMenus();
 		registerItemPane();
@@ -1692,8 +1692,8 @@
 		batch.running = false;
 		writePendingBatch(batch);
 		(Zotero.uiReadyPromise || Promise.resolve()).then(() => {
-			notify("Zotero Bridge：上次的同步沒有完成",
-				`還有 ${pendingCount(batch)} 筆文獻沒有同步。要接續：工具 → 繼續未完成的 Zotero Bridge 同步。`);
+			notify("ZotMax：上次的同步沒有完成",
+				`還有 ${pendingCount(batch)} 筆文獻沒有同步。要接續：工具 → 繼續未完成的 ZotMax 同步。`);
 		}).catch(e => Zotero.logError(e));
 	}
 

@@ -165,6 +165,7 @@ test("Notion variant: the same parts, no vault links, the appraisal keeps its he
 test("a note written by v0.9.0, with the user's text around the managed block, re-syncs into the new layout without losing a word", () => {
 	let old = fs.readFileSync(path.join(__dirname, "fixtures", "note-v0.9.0.md"), "utf8");
 	assert.match(old, /^## Annotations$/m, "the fixture is the old layout");
+	assert.match(old, /^%% zotero-bridge:start — 此區塊由 Zotero Bridge 自動產生/m, "the fixture's marker carries the old name");
 	// The user's own edits: a frontmatter key, a changed status, text above the block and under 我的筆記
 	let edited = old
 		.replace("status: \"待讀\"", "status: \"閱讀中\"\nmy_rating: 4\naliases:\n  - \"Chen RCT\"")
@@ -186,6 +187,9 @@ test("a note written by v0.9.0, with the user's text around the managed block, r
 	// The managed block is the new layout, and only that
 	assert.equal(body.match(/zotero-bridge:start/g).length, 1);
 	assert.equal(body.match(/zotero-bridge:end/g).length, 1);
+	// …written under the new name (the old name was only ever inside the block)
+	assert.match(body, /^%% zotero-bridge:start — 此區塊由 ZotMax 自動產生/m);
+	assert.doesNotMatch(resynced, /Zotero Bridge/);
 	assert.doesNotMatch(body, /^## (Annotations|Abstract|Zotero Notes|🤖 AI 文獻筆記)$/m, "old sections are gone");
 	assert.ok(body.indexOf("寫在自動區塊上方") < body.indexOf("%% zotero-bridge:start"));
 	assert.ok(body.indexOf("%% zotero-bridge:end %%") < body.indexOf("## ✍️ 我的筆記"));

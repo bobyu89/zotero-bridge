@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — the toolbar button (content/toolbar.js; DESIGN.md › Toolbar button).
+ * ZotMax — the toolbar button (content/toolbar.js; DESIGN.md › Toolbar button).
  * Size, padding, hover, active/open, disabled, the focus ring and the dropmarker come from Zotero's own
  * rules for `.zotero-tb-button` in `#zotero-items-toolbar`; this file only adds the icon and the menus'
  * group labels. No colors of its own: the icon is drawn in the button's text color, so it follows
@@ -18,7 +18,7 @@
 }
 
 /*
- * Group labels (同步, 整理, …) in the toolbar menu and in the 「Zotero Bridge ▸」 right-click submenus
+ * Group labels (同步, 整理, …) in the toolbar menu and in the 「ZotMax ▸」 right-click submenus
  * (menus.js marks those captions with the same class): the Label weight, in Pencil, never clickable.
  */
 .zotero-bridge-caption,

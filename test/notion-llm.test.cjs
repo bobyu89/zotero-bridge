@@ -59,6 +59,7 @@ test("NotionClient: resolve data source, upsert flow and container replacement",
 	let calls = [];
 	let pageChildren = [
 		{ id: "user-1", type: "paragraph", paragraph: { rich_text: [{ plain_text: "my note" }] } },
+		// Written by Zotero Bridge (≤ 0.10): still recognised as the plugin's container
 		{ id: "old-container", type: "callout", callout: { rich_text: [{ plain_text: "Zotero Bridge｜自動同步區" }] } },
 		{ id: "user-2", type: "paragraph", paragraph: { rich_text: [{ plain_text: "more" }] } },
 	];
@@ -96,8 +97,18 @@ test("NotionClient: resolve data source, upsert flow and container replacement",
 	let append = calls.find(c => c.method === "PATCH" && c.path === "blocks/page-1/children");
 	assert.equal(append.body.after, "user-1", "container stays where it was");
 	assert.equal(append.body.children[0].callout.children.length, 100);
+	assert.equal(append.body.children[0].callout.rich_text[0].text.content, "ZotMax｜title", "rewritten under the new name");
 	let rest = calls.find(c => c.path === "blocks/new-container/children");
 	assert.equal(rest.body.children.length, 50);
+});
+
+test("the managed container is recognised under the current and the old name, and nothing else", () => {
+	assert.equal(notion.CONTAINER_MARKER, "ZotMax");
+	assert.ok(notion.isContainerText("ZotMax｜自動同步區"));
+	assert.ok(notion.isContainerText("Zotero Bridge｜自動同步區"));
+	assert.ok(!notion.isContainerText("我的提醒：Zotero Bridge 改名了"));
+	assert.ok(!notion.isContainerText(""));
+	assert.ok(!notion.isContainerText(undefined));
 });
 
 test("NotionClient finds pages by many Zotero keys in batches and moves them to the trash", async () => {
@@ -366,6 +377,12 @@ test("studyDataBlock round-trips through the stored-note format (plain ``` under
 	// Invalid JSON is stored raw so the user can fix it in Zotero
 	assert.equal(llm.studyDataBlock(null, "{ broken"), `## ${llm.STUDY_DATA_HEADING}\n\n\`\`\`json\n{ broken\n\`\`\``);
 	assert.equal(llm.studyDataBlock(null, ""), "");
+	// A note stored by Zotero Bridge (≤ 0.10): the old heading is found and taken out the same way
+	assert.equal(llm.STUDY_DATA_HEADING, "📋 結構化資料（ZotMax）");
+	let old = llm.extractStudyData(stored.replace("（ZotMax）", "（Zotero Bridge）"));
+	assert.ok(stored.includes("（ZotMax）"));
+	assert.equal(old.md, AI_MD.trim());
+	assert.deepEqual(old.data, data);
 	let broken = llm.extractStudyData(`x\n\n## ${llm.STUDY_DATA_HEADING}\n\n\`\`\`\n{ broken\n\`\`\``);
 	assert.equal(broken.md, "x");
 	assert.match(broken.error, /JSON/);

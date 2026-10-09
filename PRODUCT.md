@@ -6,7 +6,7 @@
 
 web
 
-Zotero Bridge 是 Zotero 10 的外掛（bootstrap plugin），介面跑在 Zotero 內建的 Gecko（Firefox 140）裡：設定頁（preferences.xhtml）、項目窗格區塊（Item Pane section）、右鍵／工具選單與對話框。另有一個 GitHub Pages 靜態網站（`site/`：首頁、醫學文獻快速搜尋、文獻評讀表），可在一般瀏覽器與手機上使用。
+ZotMax 是 Zotero 10 的外掛（bootstrap plugin），介面跑在 Zotero 內建的 Gecko（Firefox 140）裡：設定頁（preferences.xhtml）、項目窗格區塊（Item Pane section）、右鍵／工具選單與對話框。另有一個 GitHub Pages 靜態網站（`site/`：首頁、醫學文獻快速搜尋、文獻評讀表），可在一般瀏覽器與手機上使用。
 
 ## Users
 
@@ -20,7 +20,7 @@ Zotero Bridge 是 Zotero 10 的外掛（bootstrap plugin），介面跑在 Zoter
 
 ## Positioning
 
-一般的 AI 文獻工具把「找」和「寫」都自動化；Zotero Bridge 刻意把**找文獻與寫作留給使用者**，只在整理、追蹤、評讀等雜事上幫忙。所有功能都可以逐一開關，並有兩種預設組合：
+一般的 AI 文獻工具把「找」和「寫」都自動化；ZotMax 刻意把**找文獻與寫作留給使用者**，只在整理、追蹤、評讀等雜事上幫忙。所有功能都可以逐一開關，並有兩種預設組合：
 
 - **研究生引導**（新使用者的預設）：自動找文獻（PubMed 追蹤、引文追蹤）與 AI 寫作（綜整、文獻回顧草稿、EBHC 報告草稿、進度報告、概念 AI 綜整、批次 AI）預設關閉。
 - **進階**：全部打開。
@@ -44,7 +44,7 @@ Zotero Bridge 是 Zotero 10 的外掛（bootstrap plugin），介面跑在 Zoter
 
 ## Brand Commitments
 
-- 名稱：Zotero Bridge。圖示：`content/icons/bridge.svg`。
+- 名稱：ZotMax，介紹時說它是「給 Zotero 的外掛」，不把 Zotero 當成產品名的一部分（[Zotero 商標規範](https://www.zotero.org/support/terms/trademark)）。外掛 ID、偏好設定、檔名等內部識別仍用 `zotero-bridge`。圖示：`content/icons/bridge.svg`。
 - 語氣：像學長姐在旁邊提點，直接、溫和、不說教；不誇大 AI 能力，未驗證的就標示未驗證。
 
 ## Evidence on Hand

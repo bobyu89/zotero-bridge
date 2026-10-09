@@ -235,7 +235,7 @@ function review(env) {
 	return { inc1, inc2, exc, known, collection };
 }
 
-/** The 「Zotero Bridge ▸」 submenu of the item or collection menu (commands.js, menus.js). */
+/** The 「ZotMax ▸」 submenu of the item or collection menu (commands.js, menus.js). */
 function zbMenu(env, menuID) {
 	return env.menus.find(m => m.menuID === menuID).menus[0];
 }
@@ -263,7 +263,7 @@ test("chase from the collection menu, tick candidates, import them, then PRISMA 
 	let ZB = env.context.ZB;
 	let { inc1, collection } = review(env);
 
-	// Collection menu → Zotero Bridge ▸ 引文追蹤：目前分類全文納入的研究
+	// Collection menu → ZotMax ▸ 引文追蹤：目前分類全文納入的研究
 	let coll = zbMenu(env, "zotero-bridge-collection");
 	let visible;
 	coll.onShowing({}, { collectionTreeRows: [], setVisible: v => (visible = v) });
@@ -368,7 +368,7 @@ test("selected items without a collection, OpenAlex failures, the request cap an
 		fail: url => (url.includes("pmid:222") ? new TypeError("NetworkError") : undefined),
 	});
 	let { inc1, inc2 } = review(env);
-	// Item menu → Zotero Bridge ▸ 引文追蹤所選文獻（OpenAlex）
+	// Item menu → ZotMax ▸ 引文追蹤所選文獻（OpenAlex）
 	let itemMenu = entry(zbMenu(env, "zotero-bridge-item"), "zotero-bridge-toolbar-chase-items");
 	assert.equal(itemMenu.menuType, "menuitem");
 	assert.ok(zbMenu(env, "zotero-bridge-item").icon.endsWith("content/icons/bridge.svg"));
@@ -406,7 +406,7 @@ test("selected items without a collection, OpenAlex failures, the request cap an
 	let noVault = await setup({ prefs: { "extensions.zotero-bridge.obsidian.vaultPath": "" } });
 	let nv = review(noVault);
 	assert.equal(await noVault.context.ZB.citationChase.chaseCollection(nv.collection), null);
-	assert.match(noVault.descriptions.at(-1), /請先到 設定 → Zotero Bridge 填入 Obsidian vault 路徑/);
+	assert.match(noVault.descriptions.at(-1), /請先到 設定 → ZotMax 填入 Obsidian vault 路徑/);
 	assert.equal(noVault.api.log.length, 0);
 	assert.equal(await noVault.context.ZB.citationChase.importChecked(nv.collection), null);
 	// Import before any chase

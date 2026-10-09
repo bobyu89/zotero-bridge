@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — citation searching for reviews (引文追蹤, PRISMA 2020 "other methods").
+ * ZotMax — citation searching for reviews (引文追蹤, PRISMA 2020 "other methods").
  *
  * For the included studies of a review (items tagged 篩選/全文/納入) or selected items, OpenAlex
  * (free, no key) gives the references (backward ←) and the citing works (forward →):
@@ -437,7 +437,7 @@
 		let known = run.candidates.length - fresh.length;
 		let checked = meta.checked || new Set();
 		let info = [
-			`> [!info] 由 Zotero Bridge 依「${meta.name}」的 ${run.reports.length} 篇研究，於 ${String(meta.generatedAt || "").slice(0, 10)} 查詢 OpenAlex（${run.requests} 次請求）產生；重新產生只會覆寫這個區塊（勾選會保留）。`,
+			`> [!info] 由 ZotMax 依「${meta.name}」的 ${run.reports.length} 篇研究，於 ${String(meta.generatedAt || "").slice(0, 10)} 查詢 OpenAlex（${run.requests} 次請求）產生；重新產生只會覆寫這個區塊（勾選會保留）。`,
 			"> " + [meta.uri ? `Zotero：[開啟分類](${meta.uri})` : "", meta.csvPath ? `CSV：\`${meta.csvPath}\`` : ""].filter(Boolean).join(" · "),
 			meta.email ? "" : "> 建議在 設定 → 引文追蹤 填入 email（OpenAlex 的 polite pool，回應較穩定）。",
 		].filter(line => line && line !== "> ").join("\n");
@@ -455,7 +455,7 @@
 			"## 查詢結果",
 			seedTable(run.reports),
 			`## 候選文獻（${fresh.length} 篇不在文獻庫中）`,
-			"勾選要加入的文獻（`- [x]`），再到 Zotero 的分類上按右鍵 → **Zotero Bridge → 匯入引文追蹤勾選的文獻**。匯入的文獻會加上標籤 `來源/引文追蹤`，請照常篩選；PRISMA 流程圖會把它們算在右側「其他方法」欄。←：該研究引用的文獻；→：引用該研究的文獻。",
+			"勾選要加入的文獻（`- [x]`），再到 Zotero 的分類上按右鍵 → **ZotMax → 匯入引文追蹤勾選的文獻**。匯入的文獻會加上標籤 `來源/引文追蹤`，請照常篩選；PRISMA 流程圖會把它們算在右側「其他方法」欄。←：該研究引用的文獻；→：引用該研究的文獻。",
 			list,
 			`## 總表（${run.candidates.length} 篇，其中 ${known} 篇已在文獻庫）`,
 			candidateTable(run.candidates),
@@ -629,11 +629,11 @@
 			settings = await ZB.main.readSettings();
 		}
 		catch (e) {
-			ZB.main.notify("Zotero Bridge 設定有誤", String(e.message || e));
+			ZB.main.notify("ZotMax 設定有誤", String(e.message || e));
 			return null;
 		}
 		if (!settings.vaultPath) {
-			ZB.main.notify(headline, "引文追蹤的候選清單存成 Obsidian 筆記：請先到 設定 → Zotero Bridge 填入 Obsidian vault 路徑。");
+			ZB.main.notify(headline, "引文追蹤的候選清單存成 Obsidian 筆記：請先到 設定 → ZotMax 填入 Obsidian vault 路徑。");
 			return null;
 		}
 		return settings;
@@ -653,8 +653,8 @@
 		let items = ZB.adapter.itemsInCollection(collection, true);
 		let seeds = items.filter(i => screening.readState(i.getTags().map(t => t.tag), cfg).ft === "include");
 		if (!seeds.length) {
-			ZB.main.notify("Zotero Bridge：引文追蹤", `「${collection.name}」還沒有全文納入的研究（標籤「${screening.stageTag(cfg, "ft", "include")}」）。`
-				+ "\n也可以選取文獻後按右鍵 → Zotero Bridge → 引文追蹤所選文獻（OpenAlex）。");
+			ZB.main.notify("ZotMax：引文追蹤", `「${collection.name}」還沒有全文納入的研究（標籤「${screening.stageTag(cfg, "ft", "include")}」）。`
+				+ "\n也可以選取文獻後按右鍵 → ZotMax → 引文追蹤所選文獻（OpenAlex）。");
 			return null;
 		}
 		return runChase(seeds, collection, items);
@@ -666,7 +666,7 @@
 		if (!featureOn("citationChase")) return featureOff();
 		let seeds = ZB.adapter.toRegularItems(items);
 		if (!seeds.length) {
-			ZB.main.notify("Zotero Bridge：引文追蹤", "請先選取文獻。");
+			ZB.main.notify("ZotMax：引文追蹤", "請先選取文獻。");
 			return null;
 		}
 		let members = collection ? ZB.adapter.itemsInCollection(collection, true) : seeds;
@@ -675,7 +675,7 @@
 
 	async function runChase(seedItems, collection, reviewItems) {
 		let ZB = scope.ZB;
-		let headline = "Zotero Bridge：引文追蹤";
+		let headline = "ZotMax：引文追蹤";
 		if (busy) {
 			ZB.main.notify(headline, "引文追蹤正在進行中，請等它完成。");
 			return null;
@@ -765,7 +765,7 @@
 	async function importChecked(collection) {
 		let ZB = scope.ZB;
 		if (!featureOn("citationChase")) return featureOff();
-		let headline = "Zotero Bridge：匯入引文追蹤";
+		let headline = "ZotMax：匯入引文追蹤";
 		if (busy) {
 			ZB.main.notify(headline, "引文追蹤正在進行中，請等它完成。");
 			return null;

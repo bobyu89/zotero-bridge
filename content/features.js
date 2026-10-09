@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — feature switches and presets.
+ * ZotMax — feature switches and presets.
  *
  * Every feature has one on/off pref. Features that already had an enable pref keep it as the single
  * source of truth (llm.enabled, status.enabled, apaZh.enabled, llm.batchAPI, images.export); the
@@ -98,7 +98,7 @@
 			desc: "依研究設計、PICO 和你寫的規則建議 Zotero 子分類，你勾選後才放進去，也能整批復原。" },
 		{ id: "toolbarButton", group: "organize", pref: "feature.toolbarButton", presets: { guided: true, advanced: true }, since: 2,
 			label: "工具列按鈕",
-			desc: "在文獻清單上方的工具列放一個 Zotero Bridge 按鈕，常用功能依研究流程分組，不必再從右鍵或工具選單找。" },
+			desc: "在文獻清單上方的工具列放一個 ZotMax 按鈕，常用功能依研究流程分組，不必再從右鍵或工具選單找。" },
 		// 找文獻
 		{ id: "searchLinks", group: "search", pref: "feature.searchLinks", presets: { guided: true, advanced: true }, usesNetwork: true,
 			label: "醫學資料庫搜尋連結",

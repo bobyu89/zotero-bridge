@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
-  "name": "Zotero Bridge",
+  "name": "ZotMax",
   "version": "0.10.1",
-  "description": "Generate structured literature notes with Claude or OpenAI and sync Zotero items, annotations and notes to Notion and Obsidian, routed per library/collection.",
+  "description": "A literature plugin for Zotero: structured notes with Claude or OpenAI, and items, annotations and notes synced to Notion and Obsidian, routed per library/collection.",
   "homepage_url": "https://github.com/bobyu89/zotero-bridge",
   "author": "BOB",
   "icons": {

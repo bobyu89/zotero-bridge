@@ -345,11 +345,11 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 		},
 	});
 	await vm.runInContext(`startup({ id: "zotero-bridge@bobyu89.github.io", version: "0.1.0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
-	// One registration per menu: the item and collection menus' 「Zotero Bridge ▸」 and the Tools menu (menus.js)
+	// One registration per menu: the item and collection menus' 「ZotMax ▸」 and the Tools menu (menus.js)
 	assert.deepEqual(env.menus.map(m => [m.menuID, m.target]), [["zotero-bridge-item", "main/library/item"],
 		["zotero-bridge-collection", "main/library/collection"], ["zotero-bridge-tools", "main/menubar/tools"]]);
 	assert.equal(env.panes[0].paneID, "zotero-bridge-ai-note");
-	// The Zotero Bridge submenus (items and collections) end with the AI group: AI notes, then the drafts
+	// The ZotMax submenus (items and collections) end with the AI group: AI notes, then the drafts
 	// (review-draft.js, ebhc-report.js)
 	for (let i of [0, 1]) {
 		assert.deepEqual([...env.menus[i].menus[0].menus.slice(-6).map(m => m.l10nID || m.menuType)],
@@ -414,7 +414,7 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	assert.ok(aiNote);
 	assert.match(aiNote.noteHTML, /<h1>🤖 AI 文獻筆記<\/h1>/);
 	// The structured data is kept at the end of the Zotero note as a heading + <pre>
-	assert.match(aiNote.noteHTML, /<h2>📋 結構化資料（Zotero Bridge）<\/h2>\n<pre>\{\n {2}&quot;study_design&quot;: &quot;RCT&quot;,[\s\S]*<\/pre>$/);
+	assert.match(aiNote.noteHTML, /<h2>📋 結構化資料（ZotMax）<\/h2>\n<pre>\{\n {2}&quot;study_design&quot;: &quot;RCT&quot;,[\s\S]*<\/pre>$/);
 	assert.match(aiNote.noteHTML, /Falls decreased by 30%&quot; \(p\. 5\) ⚠️ 未在全文中找到/);
 
 	// Notion: routed to the thesis database, page created with properties and a managed container
@@ -671,8 +671,8 @@ test("item pane shows the AI note; synthesis from a collection writes Obsidian, 
 	let a = new env.MockItem("journalArticle", { title: "A", year: "2024", citationKey: "chen2024", creators: [{ lastName: "Chen", creatorType: "author" }] });
 	let b = new env.MockItem("journalArticle", { title: "B", year: "2021", citationKey: "lee2021", creators: [{ lastName: "Lee", creatorType: "author" }], abstractNote: "abstract B" });
 	let aiNote = new env.MockItem("note");
-	aiNote.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 claude-opus-5-5 於 2026-10-01T00:00:00Z 產生（Zotero Bridge）</em></p><h2>一句話摘要</h2><p>衛教降低跌倒。</p><ul><li>設計：RCT</li></ul>"
-		+ "<h2>📋 結構化資料（Zotero Bridge）</h2><pre>{\n  \"study_design\": \"RCT\",\n  \"sample_size\": 80\n}</pre>";
+	aiNote.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 claude-opus-5-5 於 2026-10-01T00:00:00Z 產生（ZotMax）</em></p><h2>一句話摘要</h2><p>衛教降低跌倒。</p><ul><li>設計：RCT</li></ul>"
+		+ "<h2>📋 結構化資料（ZotMax）</h2><pre>{\n  \"study_design\": \"RCT\",\n  \"sample_size\": 80\n}</pre>";
 	aiNote.tags = ["zotero-bridge-ai"];
 	env.addChild(a, aiNote);
 	// Item A already has a literature note in the vault, so the synthesis links to it
@@ -692,6 +692,14 @@ test("item pane shows the AI note; synthesis from a collection writes Obsidian, 
 	// Two actions, plus 「開啟評讀表」 on the 文獻評讀表 row (appraisal-form.js)
 	assert.equal(body.querySelectorAll("button").length, 3);
 	assert.match(body.textContent, /文獻評讀表：尚未評讀/);
+	// An AI note saved by Zotero Bridge (≤ 0.10): read exactly like a current one
+	let oldHTML = aiNote.noteHTML.split("ZotMax").join("Zotero Bridge");
+	assert.match(oldHTML, /產生（Zotero Bridge）<\/em>[\s\S]*📋 結構化資料（Zotero Bridge）/);
+	let fromOld = env.context.ZB.main.readAINote(oldHTML);
+	assert.equal(JSON.stringify(fromOld), JSON.stringify(env.context.ZB.main.readAINote(aiNote.noteHTML)));
+	assert.equal(fromOld.data.sample_size, 80);
+	assert.equal(fromOld.at, "2026-10-01T00:00:00Z");
+	assert.doesNotMatch(fromOld.md, /Zotero Bridge|結構化資料/);
 	env.panes[0].onRender({ doc, body, item: b, setSectionSummary: s => { summary = s; } });
 	assert.equal(summary, "尚未產生");
 	assert.match(body.textContent, /還沒有 AI 文獻筆記/);
@@ -937,7 +945,7 @@ test("bibliography export: the 匯出參考文獻 command writes references.json
 	await env.context.ZB.bibliography.whenIdle();
 	assert.equal(fs.statSync(file).mtimeMs, mtime);
 
-	// Collection menu → Zotero Bridge ▸ 匯出目前分類的參考文獻: same keys as the main file, only that collection's items
+	// Collection menu → ZotMax ▸ 匯出目前分類的參考文獻: same keys as the main file, only that collection's items
 	let collEntry = env.menus.find(m => m.menuID === "zotero-bridge-collection").menus[0].menus.find(m => m.l10nID === "zotero-bridge-cmd-export-collection");
 	let collection = { id: 7, name: "碩論", libraryID: 1, getChildItems: () => [newer] };
 	let context = { collectionTreeRows: [{ isCollection: () => true, ref: collection }] };
@@ -1285,7 +1293,7 @@ test("a batch can be stopped from the Tools menu and resumed later; failures are
 	let stopLine = env.progressLines.find(l => l.text === "已停止");
 	assert.ok(stopLine && stopLine.progress === 100);
 	assert.ok(env.descriptions.includes("完成 2 筆，未處理 2 筆"), env.descriptions.join("\n"));
-	assert.equal(env.descriptions.at(-1), "要接續：工具 → 繼續未完成的 Zotero Bridge 同步（2 筆）");
+	assert.equal(env.descriptions.at(-1), "要接續：工具 → 繼續未完成的 ZotMax 同步（2 筆）");
 	let saved = pending();
 	assert.deepEqual(saved.remaining, ["1/KEYC", "1/KEYD"]);
 	assert.deepEqual(saved.failed, []);
@@ -1307,7 +1315,7 @@ test("a batch can be stopped from the Tools menu and resumed later; failures are
 	saved = pending();
 	assert.deepEqual(saved.remaining, []);
 	assert.deepEqual(saved.failed, ["1/KEYC"]);
-	assert.equal(env.descriptions.at(-1), "要接續：工具 → 繼續未完成的 Zotero Bridge 同步（1 筆，含失敗 1 筆）");
+	assert.equal(env.descriptions.at(-1), "要接續：工具 → 繼續未完成的 ZotMax 同步（1 筆，含失敗 1 筆）");
 	assert.deepEqual(showing("zotero-bridge-menu-resume").args, { count: 1 });
 
 	// Retrying the failure clears the record
@@ -1360,7 +1368,7 @@ test("a batch cut off by shutdown is reported at the next startup", async () => 
 	let next = makeEnv({ fetch: async () => { throw new Error("no network expected"); }, prefs: env.prefStore });
 	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, next.context);
 	await new Promise(r => setTimeout(r, 0));
-	assert.equal(next.descriptions.at(-1), "還有 2 筆文獻沒有同步。要接續：工具 → 繼續未完成的 Zotero Bridge 同步。");
+	assert.equal(next.descriptions.at(-1), "還有 2 筆文獻沒有同步。要接續：工具 → 繼續未完成的 ZotMax 同步。");
 	assert.equal(JSON.parse(next.prefStore["extensions.zotero-bridge.batch.pending"]).running, false, "reminded once");
 	assert.deepEqual(next.errors, []);
 });

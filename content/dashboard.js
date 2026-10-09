@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — research dashboard (研究儀表板) in Obsidian.
+ * ZotMax — research dashboard (研究儀表板) in Obsidian.
  *
  * `<folder>/研究儀表板.md` sums up the vault's literature notes: reading progress (with a Mermaid
  * pie chart), evidence overview, a to-do list (longest unread, data-quality issues), review
@@ -415,7 +415,7 @@
 				return `- ⚠️ ${wikilink(record.link, record.title)}：${detail.join("、")}`;
 			}).join("\n") + (stats.issues.length > MAX_ISSUES ? `\n\n（另有 ${stats.issues.length - MAX_ISSUES} 篇未列出）` : ""));
 			parts.push("> [!tip] 怎麼補\n"
-				+ "> - 無 AI 筆記：在 Zotero 選取文獻 → 右鍵 → Zotero Bridge → 同步（沒有 AI 筆記才產生）\n"
+				+ "> - 無 AI 筆記：在 Zotero 選取文獻 → 右鍵 → ZotMax → 同步（沒有 AI 筆記才產生）\n"
 				+ "> - 掃描檔：用 OCR 工具替 PDF 加上文字層後重新同步，或讓 AI 直接讀 PDF（設定 → AI 文獻筆記 → 掃描版 PDF 直接傳給 AI 讀）\n"
 				+ "> - 缺 DOI：在 Zotero 補上 DOI 欄位\n"
 				+ "> - 中文作者姓名可疑：在 Zotero 把作者改成「姓／名」兩欄或單欄全名（例如 陳／美玲）");
@@ -427,7 +427,7 @@
 		let parts = ["## 🗂️ 回顧專案"];
 		parts.push("### 系統性／範圍回顧（PRISMA）");
 		if (!reviews.length) {
-			parts.push("還沒有回顧專案：在 Zotero 的分類上按右鍵 → Zotero Bridge → 產生 PRISMA 流程圖與證據表（目前分類）。");
+			parts.push("還沒有回顧專案：在 Zotero 的分類上按右鍵 → ZotMax → 產生 PRISMA 流程圖與證據表（目前分類）。");
 		}
 		else {
 			parts.push(reviews.map((r) => {
@@ -448,7 +448,7 @@
 		}
 		parts.push("### 文獻探討草稿");
 		if (!drafts.length) {
-			parts.push("還沒有草稿：選取文獻或分類 → 右鍵 → Zotero Bridge → 產生文獻探討草稿（AI）。");
+			parts.push("還沒有草稿：選取文獻或分類 → 右鍵 → ZotMax → 產生文獻探討草稿（AI）。");
 		}
 		else {
 			parts.push(drafts.map((d) => {
@@ -500,8 +500,8 @@
 	 */
 	function buildDashboardSection(stats, meta = {}) {
 		let info = [
-			`> [!info] 由 Zotero Bridge 於 ${stamp(meta.now || new Date())} 依 vault 中的文獻筆記 frontmatter 產生；`
-				+ "重新整理：Zotero Bridge 按鈕或快速指令 → 更新研究儀表板（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。",
+			`> [!info] 由 ZotMax 於 ${stamp(meta.now || new Date())} 依 vault 中的文獻筆記 frontmatter 產生；`
+				+ "重新整理：ZotMax 按鈕或快速指令 → 更新研究儀表板（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。",
 		];
 		if (meta.baseLink) info.push(`> Bases 檢視：[[${meta.baseLink}|${BASE_NAME}]]（證據等級表、掃描檔待 OCR、待讀（依分類））`);
 		if (meta.latestReport) info.push(`> 最新進度報告（給指導教授）：[[${meta.latestReport.link}|${meta.latestReport.date}]]`);
@@ -663,7 +663,7 @@
 				if (fm !== null) records.push(noteRecord(fm, entry.relParts.join("/")));
 			}
 			catch (e) {
-				Zotero.debug(`Zotero Bridge: dashboard skipped ${entry.path}: ${e}`);
+				Zotero.debug(`ZotMax: dashboard skipped ${entry.path}: ${e}`);
 			}
 		}
 		return records;
@@ -687,7 +687,7 @@
 				out.push(projectRecord((await readFrontmatter(child)) || "", [...dirParts, name].join("/")));
 			}
 			catch (e) {
-				Zotero.debug(`Zotero Bridge: dashboard skipped ${child}: ${e}`);
+				Zotero.debug(`ZotMax: dashboard skipped ${child}: ${e}`);
 			}
 		}
 		return out.sort((a, b) => String(b.generatedAt).localeCompare(String(a.generatedAt)) || a.name.localeCompare(b.name));
@@ -749,18 +749,18 @@
 	/** Tools menu: rebuild now (after any sync in progress) and report. */
 	function runFromMenu() {
 		let ZB = scope.ZB;
-		let headline = "Zotero Bridge：研究儀表板";
+		let headline = "ZotMax：研究儀表板";
 		return ZB.main.enqueue(async () => {
 			let settings;
 			try {
 				settings = await ZB.main.readSettings();
 			}
 			catch (e) {
-				ZB.main.notify("Zotero Bridge 設定有誤", String(e.message || e));
+				ZB.main.notify("ZotMax 設定有誤", String(e.message || e));
 				return null;
 			}
 			if (!settings.vaultPath) {
-				ZB.main.notify(headline, "請先到 設定 → Zotero Bridge 填入 Obsidian vault 路徑。");
+				ZB.main.notify(headline, "請先到 設定 → ZotMax 填入 Obsidian vault 路徑。");
 				return null;
 			}
 			try {

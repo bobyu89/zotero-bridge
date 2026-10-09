@@ -3,12 +3,12 @@
 把 Claude Code 或 OpenAI Codex 變成你的「研究大腦」：它能直接讀你的 Obsidian 文獻筆記、搜尋 Zotero、寫入 Notion，用一句指令完成文獻比較、研究缺口與文獻探討初稿。
 
 ```
-Zotero ──(Zotero Bridge 插件)──► Obsidian 文獻筆記 ◄──┐
+Zotero ──(ZotMax 插件)──► Obsidian 文獻筆記 ◄──┐
    │                              Notion 資料庫   ◄──┤
    └──────────(Zotero MCP)────────────────────────► 研究大腦（Claude Code／Codex）
 ```
 
-**分工**：Zotero Bridge 插件負責「每一篇」的固定流程（書目、劃線、AI 筆記、同步），大腦負責「跨文獻」的思考。大腦先讀插件整理好的筆記，比每次重讀 PDF 快、也便宜很多。
+**分工**：ZotMax 插件負責「每一篇」的固定流程（書目、劃線、AI 筆記、同步），大腦負責「跨文獻」的思考。大腦先讀插件整理好的筆記，比每次重讀 PDF 快、也便宜很多。
 
 ## 檔案說明
 
@@ -26,7 +26,7 @@ Zotero ──(Zotero Bridge 插件)──► Obsidian 文獻筆記 ◄──┐
 
 Zotero 只能從你的電腦連線，所以大腦要裝在你的電腦，不能用雲端版。
 
-1. **先完成 Zotero Bridge 設定**，讓 vault 裡已經有文獻筆記。
+1. **先完成 ZotMax 設定**，讓 vault 裡已經有文獻筆記。
 2. **開啟 Zotero 本機連線**：Zotero → 設定 → 進階 → 勾選「Allow other applications on this computer to communicate with Zotero」。使用大腦時 Zotero 要開著。
 3. **安裝 uv**（執行 Zotero MCP 用）：<https://docs.astral.sh/uv/getting-started/installation/>
 4. **安裝 Claude Code**：<https://code.claude.com/docs>（或改用 Codex，見下方）

@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — 快速指令, the command palette.
+ * ZotMax — 快速指令, the command palette.
  *
  * A small window (content/palette.xhtml, served from chrome://zotero-bridge/ like the classify review)
  * with a search field over the command catalog (commands.js) and the settings destinations: type to
@@ -9,7 +9,7 @@
  * settings at that switch) or nothing to act on (「先選取文獻」…). Switched-off commands are listed so they can be
  * found, but never run. A command runs on the main window's selection at the moment it is chosen.
  *
- * Opened from the toolbar menu's first entry, Tools → Zotero Bridge 快速指令…, and Ctrl+Shift+P
+ * Opened from the toolbar menu's first entry, Tools → ZotMax 快速指令…, and Ctrl+Shift+P
  * (⇧⌘P on macOS) in the main window. Zotero 10 and Firefox 140 bind neither on any platform (Firefox's
  * private window is a browser shortcut, not part of Zotero); attach() checks Zotero's configurable
  * shortcuts (Ctrl/Cmd+Shift+letter) and the window's <key> elements first and leaves the key alone when
@@ -31,7 +31,7 @@
 
 	// zh-TW text of the palette's own Fluent messages (identical to locale/zh-TW; tests check)
 	const STRINGS = {
-		title: ["zotero-bridge-palette-title", "Zotero Bridge 快速指令"],
+		title: ["zotero-bridge-palette-title", "ZotMax 快速指令"],
 		inputLabel: ["zotero-bridge-palette-input-label", "快速指令"],
 		placeholder: ["zotero-bridge-palette-placeholder", "輸入功能名稱，例如：分類、PRISMA、sync"],
 		listLabel: ["zotero-bridge-palette-list-label", "指令與設定"],
@@ -46,7 +46,7 @@
 		itemsOrCollection: ["zotero-bridge-palette-needs-either", "先選取文獻或分類"],
 		groupSettings: ["zotero-bridge-palette-group-settings", "設定"],
 		settingsEntry: ["zotero-bridge-palette-settings-entry", "設定：{ $name }"],
-		error: ["zotero-bridge-palette-error", "快速指令視窗沒有開啟（{ $error }）。可以改用工具列的 Zotero Bridge 按鈕或右鍵選單。"],
+		error: ["zotero-bridge-palette-error", "快速指令視窗沒有開啟（{ $error }）。可以改用工具列的 ZotMax 按鈕或右鍵選單。"],
 	};
 
 	let current = null;
@@ -114,7 +114,7 @@
 		detach(win);
 		let conflict = shortcutConflict(win);
 		if (conflict) {
-			Zotero.debug(`Zotero Bridge: Ctrl/Cmd+Shift+P is taken (${conflict}); 快速指令 has no shortcut in this window`);
+			Zotero.debug(`ZotMax: Ctrl/Cmd+Shift+P is taken (${conflict}); 快速指令 has no shortcut in this window`);
 			return false;
 		}
 		let onKeyDown = (ev) => {
@@ -501,7 +501,7 @@
 		catch (e) {
 			log(e);
 			if (current === dialog) current = null;
-			ZB().main.notify("Zotero Bridge", texts.string("error", { error: e.message || e }));
+			ZB().main.notify("ZotMax", texts.string("error", { error: e.message || e }));
 			return null;
 		}
 	}

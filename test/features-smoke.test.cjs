@@ -198,7 +198,7 @@ function visible(menu, context = {}) {
 	return v;
 }
 
-/** The 「Zotero Bridge ▸」 submenu of the item or collection menu (commands.js, menus.js). */
+/** The 「ZotMax ▸」 submenu of the item or collection menu (commands.js, menus.js). */
 function zbMenu(env, menuID) {
 	return env.menus.find(o => o.menuID === menuID).menus[0];
 }
@@ -330,7 +330,7 @@ test("switched-off features do no background work and make no network calls", as
 	await ZB.citationChase.chaseItems([a]);
 	await ZB.pubmedWatch.runAll();
 	assert.equal(env.descriptions.length, 7);
-	for (let text of env.descriptions) assert.match(text, /目前關閉。要使用的話：設定 → Zotero Bridge → 功能，把它打開。/);
+	for (let text of env.descriptions) assert.match(text, /目前關閉。要使用的話：設定 → ZotMax → 功能，把它打開。/);
 
 	// After a manual sync: the dashboard, concept cards and references.json are skipped when off
 	F.setEnabled("dashboard", false);
@@ -366,7 +366,7 @@ test("item pane: rows and actions follow the switches; the note stays readable",
 	let note = new env.MockItem("note");
 	note.parentID = item.id;
 	note.tags = ["zotero-bridge-ai"];
-	note.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 m 於 2026-10-01T00:00:00Z 產生（Zotero Bridge）</em></p><h2>一句話摘要</h2><p>衛教降低跌倒。</p>";
+	note.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 m 於 2026-10-01T00:00:00Z 產生（ZotMax）</em></p><h2>一句話摘要</h2><p>衛教降低跌倒。</p>";
 	item.children.push(note.id);
 	let doc = new JSDOM("<div id=b></div>").window.document;
 	let body = doc.getElementById("b");

@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — the toolbar button in Zotero's main window.
+ * ZotMax — the toolbar button in Zotero's main window.
  *
  * One menu button in the items toolbar (#zotero-items-toolbar), right after Zotero's own 「新增筆記」
  * button: the toolbar whose buttons act on the selected items, before the search box. It reuses
@@ -241,7 +241,7 @@
 		let doc = win.document;
 		let toolbar = doc.getElementById(TOOLBAR_ID);
 		if (!toolbar) {
-			Zotero.debug(`Zotero Bridge: no #${TOOLBAR_ID} in this window; toolbar button not added`);
+			Zotero.debug(`ZotMax: no #${TOOLBAR_ID} in this window; toolbar button not added`);
 			return null;
 		}
 		remove(win);
@@ -260,8 +260,8 @@
 		button.setAttribute("type", "menu");
 		button.setAttribute("wantdropmarker", "true");
 		// The product name, the same in every language
-		button.setAttribute("tooltiptext", "Zotero Bridge");
-		button.setAttribute("aria-label", "Zotero Bridge");
+		button.setAttribute("tooltiptext", "ZotMax");
+		button.setAttribute("aria-label", "ZotMax");
 		button.append(buildPopup(doc, win));
 		let after = doc.getElementById(AFTER_ID);
 		if (after && after.parentNode === toolbar) after.after(button);

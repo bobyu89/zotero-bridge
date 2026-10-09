@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — full text as Markdown (pure functions, no Zotero globals).
+ * ZotMax — full text as Markdown (pure functions, no Zotero globals).
  *
  *   toMarkdown       the text Zotero already extracted (PDF worker: one paragraph per line, pages
  *                    separated by \f) or markitdown's output → Markdown: hyphenation rejoined,
@@ -546,7 +546,7 @@
 			"---",
 		].join("\n");
 		let callout = [
-			"> [!info] 全文・由 Zotero Bridge 產生",
+			"> [!info] 全文・由 ZotMax 產生",
 			`> 每次同步都會重新產生，請不要在這裡寫字；想法寫在文獻筆記 [[${o.noteLink}|${o.noteLabel || "文獻筆記"}]]。`,
 		];
 		let legend = (o.legend || []).map(l => `${l.emoji} ${l.meaning}`);

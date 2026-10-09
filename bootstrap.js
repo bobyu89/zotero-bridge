@@ -18,7 +18,7 @@ function registerChrome(rootURI) {
 	catch (e) {
 		// Only the review dialog and 快速指令 need it; everything else keeps working
 		chromeHandle = null;
-		if (typeof Zotero !== "undefined" && Zotero.debug) Zotero.debug(`Zotero Bridge: could not register chrome://zotero-bridge/: ${e}`);
+		if (typeof Zotero !== "undefined" && Zotero.debug) Zotero.debug(`ZotMax: could not register chrome://zotero-bridge/: ${e}`);
 	}
 }
 
@@ -36,7 +36,7 @@ async function startup({ id, version, rootURI }) {
 	await Zotero.PreferencePanes.register({
 		pluginID: id,
 		id: "zotero-bridge-prefs",
-		label: "Zotero Bridge",
+		label: "ZotMax",
 		image: rootURI + "content/icons/bridge.svg",
 		src: rootURI + "content/preferences.xhtml",
 		scripts: [rootURI + "content/preferences.js"],
@@ -49,7 +49,7 @@ async function startup({ id, version, rootURI }) {
 
 function onMainWindowLoad({ window }) {
 	window.MozXULElement.insertFTLIfNeeded("zotero-bridge.ftl");
-	// The Zotero Bridge button in the items toolbar
+	// The ZotMax button in the items toolbar
 	if (ZB && ZB.toolbar) ZB.toolbar.add(window);
 	// Ctrl+Shift+P (⇧⌘P) opens 快速指令
 	if (ZB && ZB.palette) ZB.palette.attach(window);

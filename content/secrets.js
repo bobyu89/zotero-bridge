@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — API keys and the Notion token, kept in the Gecko login manager instead of prefs.js.
+ * ZotMax — API keys and the Notion token, kept in the Gecko login manager instead of prefs.js.
  * Follows Zotero's own API-key storage (Zotero.Sync.Data.Local in xpcom/sync/syncLocal.js): one
  * nsILoginInfo per secret under a chrome:// origin, the value encrypted with Zotero.OSKeyStore
  * (Keychain / DPAPI / libsecret) when that is usable.
@@ -15,6 +15,8 @@
 	}
 })(this, function () {
 	const ORIGIN = "chrome://zotero-bridge";
+	// The login-manager realm the keys are stored under: the plugin's former name, kept on purpose
+	// (changing it would lose every stored key)
 	const REALM = "Zotero Bridge";
 	const PREF_PREFIX = "extensions.zotero-bridge.";
 	// name → the plain pref that held it in earlier versions (migrated once, then cleared)
@@ -73,7 +75,7 @@
 				}
 				catch (e) {
 					log(e);
-					throw new Error(`無法解密已儲存的 ${SECRETS[name].label}（作業系統鑰匙圈無法使用）。請到 設定 → Zotero Bridge 重新輸入。`);
+					throw new Error(`無法解密已儲存的 ${SECRETS[name].label}（作業系統鑰匙圈無法使用）。請到 設定 → ZotMax 重新輸入。`);
 				}
 			}
 			return stored;

@@ -220,7 +220,7 @@ function addAINote(env, item, study) {
 	let note = new env.MockItem("note", { tags: ["zotero-bridge-ai"] });
 	note.parentID = item.id;
 	item.children.push(note.id);
-	note.setNote(`<h1>🤖 AI 文獻筆記</h1>\n<p><em>由 test-model 於 2026-10-01T00:00:00Z 產生（Zotero Bridge）</em></p>\n`
+	note.setNote(`<h1>🤖 AI 文獻筆記</h1>\n<p><em>由 test-model 於 2026-10-01T00:00:00Z 產生（ZotMax）</em></p>\n`
 		+ ZB.markdown.mdToHtml(`## 一句話摘要\n\nA summary.\n\n${ZB.llm.studyDataBlock(ZB.llm.normalizeStudyData(study))}`));
 	return note;
 }
@@ -368,6 +368,6 @@ test("更新研究儀表板 without a vault asks for the vault path", async () =
 	let before = env.descriptions.length;
 	toolsEntry(env).onCommand();
 	await settle(() => env.descriptions.length > before);
-	assert.match(env.descriptions.at(-1), /請先到 設定 → Zotero Bridge 填入 Obsidian vault 路徑/);
+	assert.match(env.descriptions.at(-1), /請先到 設定 → ZotMax 填入 Obsidian vault 路徑/);
 	assert.deepEqual(env.errors, []);
 });

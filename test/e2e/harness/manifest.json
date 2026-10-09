@@ -1,8 +1,8 @@
 {
   "manifest_version": 2,
-  "name": "Zotero Bridge E2E Harness",
+  "name": "ZotMax E2E Harness",
   "version": "1.0.0",
-  "description": "Test runner for the Zotero Bridge end-to-end test (test/e2e). Not for normal use.",
+  "description": "Test runner for the ZotMax end-to-end test (test/e2e). Not for normal use.",
   "applications": {
     "zotero": {
       "id": "zb-e2e-harness@bobyu89.github.io",

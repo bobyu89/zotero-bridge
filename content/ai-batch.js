@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — bulk AI notes through the Claude Message Batches API (約半價，最長 24 小時).
+ * ZotMax — bulk AI notes through the Claude Message Batches API (約半價，最長 24 小時).
  *
  * With 「大量產生 AI 筆記時使用批次 API」 on, a manual run that needs AI notes for at least
  * llm.batchThreshold items (Claude only) can send them as one Message Batch instead of one call per
@@ -9,7 +9,7 @@
  * the normal post-processing (processGeneratedNote: JSON block, quote verification; the AI child
  * note; the usage ledger at batch prices) and the items are synced with ai: "reuse". Results that
  * errored, expired, were canceled or refused are put into the stop/resume list (batch.pending), so
- * 「繼續未完成的 Zotero Bridge 同步」 retries them on the normal path.
+ * 「繼續未完成的 ZotMax 同步」 retries them on the normal path.
  *
  *   extensions.zotero-bridge.batch.ai   { batches: [{ id, createdAt, expiresAt, model, action,
  *                                          status, counts, checkedAt, requests: [{ id, ref, title, pdf, notes, done }] }] }
@@ -354,7 +354,7 @@
 	async function submit(items, action, settings) {
 		let ZB = scope.ZB;
 		let pw = new Zotero.ProgressWindow({ closeOnClick: true });
-		pw.changeHeadline("Zotero Bridge：AI 批次");
+		pw.changeHeadline("ZotMax：AI 批次");
 		pw.show();
 		let line = new pw.ItemProgress("", "準備 AI 批次…");
 		let ctx = {};
@@ -470,7 +470,7 @@
 	async function checkNow(opts) {
 		let state = readState();
 		if (!state.batches.length) {
-			if (opts.manual) scope.ZB.main.notify("Zotero Bridge：AI 批次", "目前沒有處理中的 AI 批次。");
+			if (opts.manual) scope.ZB.main.notify("ZotMax：AI 批次", "目前沒有處理中的 AI 批次。");
 			return [];
 		}
 		let key = await apiKey();
@@ -506,7 +506,7 @@
 			}
 			lines.push(describeBatch(batch, runtime.now()));
 		}
-		if (opts.manual) scope.ZB.main.notify("Zotero Bridge：AI 批次進度", lines.join("\n"));
+		if (opts.manual) scope.ZB.main.notify("ZotMax：AI 批次進度", lines.join("\n"));
 		return lines;
 	}
 
@@ -519,7 +519,7 @@
 		removeBatch(batch.id);
 		let refs = batch.requests.filter(r => !r.done).map(r => r.ref);
 		scope.ZB.main.enqueue(() => scope.ZB.main.addPendingFailures(refs, batch.action)).catch(e => Zotero.logError(e));
-		scope.ZB.main.notify("Zotero Bridge：AI 批次", `${reason}。要重試：工具 → 繼續未完成的 Zotero Bridge 同步。`);
+		scope.ZB.main.notify("ZotMax：AI 批次", `${reason}。要重試：工具 → 繼續未完成的 ZotMax 同步。`);
 	}
 
 	function getItem(ref) {
@@ -536,10 +536,10 @@
 		let ZB = scope.ZB;
 		let text = batch.resultsUrl ? await fetchResults(batch.resultsUrl, key) : "";
 		let { results, invalid } = parseResults(text);
-		if (invalid) Zotero.debug(`Zotero Bridge: ${invalid} unreadable line(s) in the results of ${batch.id}`);
+		if (invalid) Zotero.debug(`ZotMax: ${invalid} unreadable line(s) in the results of ${batch.id}`);
 		let byId = new Map(results.map(r => [r.customId, r]));
 		let pw = new Zotero.ProgressWindow({ closeOnClick: true });
-		pw.changeHeadline("Zotero Bridge：AI 批次完成");
+		pw.changeHeadline("ZotMax：AI 批次完成");
 		pw.show();
 		// Notes are written between sync runs, never during one
 		let outcome = await ZB.main.enqueue(() => applyResults(batch, byId, pw));
@@ -548,7 +548,7 @@
 		let usageLine = ZB.main.runUsageLine(outcome.usage);
 		pw.addDescription(`AI 批次：成功 ${outcome.ok.length} 筆${outcome.failed.length ? `，失敗 ${outcome.failed.length} 筆` : ""}`
 			+ (outcome.gone ? `，${outcome.gone} 筆已刪除` : ""));
-		if (outcome.failed.length) pw.addDescription("要重試失敗的文獻（一般模式）：工具 → 繼續未完成的 Zotero Bridge 同步");
+		if (outcome.failed.length) pw.addDescription("要重試失敗的文獻（一般模式）：工具 → 繼續未完成的 ZotMax 同步");
 		if (usageLine) pw.addDescription(usageLine);
 		pw.startCloseTimer(outcome.failed.length ? 20000 : 10000);
 		// Sync the new notes like 「同步但不呼叫 AI」, then list the failures (after the run, which keeps
@@ -624,13 +624,13 @@
 		let state = readState();
 		let open = state.batches.filter(b => b.status !== "ended");
 		if (!open.length) {
-			scope.ZB.main.notify("Zotero Bridge：AI 批次", "目前沒有處理中的 AI 批次。");
+			scope.ZB.main.notify("ZotMax：AI 批次", "目前沒有處理中的 AI 批次。");
 			return 0;
 		}
 		let n = open.reduce((sum, b) => sum + b.requests.length, 0);
-		if (!Services.prompt.confirm(Zotero.getMainWindow(), "Zotero Bridge",
+		if (!Services.prompt.confirm(Zotero.getMainWindow(), "ZotMax",
 			`要取消 ${open.length} 個 AI 批次（${n} 筆）嗎？\n\n已經完成的文獻仍會寫入筆記並同步；尚未處理的不收費，`
-			+ "會列入「繼續未完成的 Zotero Bridge 同步」，之後可用一般模式重試。")) return 0;
+			+ "會列入「繼續未完成的 ZotMax 同步」，之後可用一般模式重試。")) return 0;
 		let key = await apiKey();
 		let canceled = 0;
 		let errors = [];
@@ -648,7 +648,7 @@
 				errors.push(e.message || String(e));
 			}
 		}
-		scope.ZB.main.notify("Zotero Bridge：AI 批次", errors.length ? `⚠️ 無法取消：${errors[0]}`
+		scope.ZB.main.notify("ZotMax：AI 批次", errors.length ? `⚠️ 無法取消：${errors[0]}`
 			: "已要求取消；批次結束後會寫入已完成的筆記，其餘列入「繼續未完成的同步」。");
 		// Canceling takes a moment: look again soon
 		polls = 0;

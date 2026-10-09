@@ -262,7 +262,7 @@ async function setup(opts = {}) {
 	note.tags = ["zotero-bridge-ai"];
 	let data = { study_design: "RCT", sample_size: 120, population: "Inpatients", intervention: "運動訓練", outcomes: "Accidental Falls、跌倒自我效能",
 		measures: ["Morse Fall Scale"], evidence_level: "2", jbi_level: "1.c" };
-	note.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 m 於 2026-10-01T00:00:00Z 產生（Zotero Bridge）</em></p>"
+	note.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 m 於 2026-10-01T00:00:00Z 產生（ZotMax）</em></p>"
 		+ ZB.markdown.mdToHtml("## 一句話摘要\n運動訓練降低住院長者跌倒。\n\n" + ZB.llm.studyDataBlock(ZB.llm.normalizeStudyData(data)));
 	aiPaper.children.push(note.id);
 	let rct = new env.MockItem("journalArticle", { key: "RCTPAPER", title: "Hip protectors: a randomized controlled trial", date: "2018",
@@ -273,7 +273,7 @@ async function setup(opts = {}) {
 	return Object.assign(env, { ZB, requests, papers: { aiPaper, rct, zh }, review });
 }
 
-/** The 「Zotero Bridge ▸」 submenu of the item or collection menu (commands.js, menus.js). */
+/** The 「ZotMax ▸」 submenu of the item or collection menu (commands.js, menus.js). */
 function zbMenu(env, menuID) {
 	return env.menus.find(o => o.menuID === menuID).menus[0];
 }
@@ -327,7 +327,7 @@ test("menus follow the switches; 復原上次分類 shows only while there is a 
 	let F = env.ZB.features;
 	let row = { collectionTreeRows: [{ isCollection: () => true, ref: env.review }] };
 	let items = { items: [env.papers.aiPaper] };
-	// Item menu, collection menu (Zotero Bridge ▸ 整理), toolbar and 快速指令: one command
+	// Item menu, collection menu (ZotMax ▸ 整理), toolbar and 快速指令: one command
 	assert.equal(visible(menuEntry(env, "zotero-bridge-item", "zotero-bridge-classify-tools"), items), true, "on in 研究生引導");
 	assert.equal(offered(env, "classify"), true);
 	assert.equal(visible(zbMenu(env, "zotero-bridge-collection")), false, "no collection selected");
@@ -341,7 +341,7 @@ test("menus follow the switches; 復原上次分類 shows only while there is a 
 	// Reached anyway: the usual message, nothing opened or written
 	let before = env.descriptions.length;
 	assert.equal(await env.ZB.classify.run([env.papers.aiPaper]), null);
-	assert.match(env.descriptions[before], /「文獻自動分類」目前關閉。要使用的話：設定 → Zotero Bridge → 功能，把它打開。/);
+	assert.match(env.descriptions[before], /「文獻自動分類」目前關閉。要使用的話：設定 → ZotMax → 功能，把它打開。/);
 	assert.equal(env.dialogs.length, 0);
 	// A run to undo: the entry shows even with the switch off, so a run can always be taken back
 	env.prefStore[P + "classify.lastRun"] = JSON.stringify({ at: "2026-10-08T00:00:00Z", libraries: [{ libraryID: 1, created: [], added: [] }] });
@@ -389,7 +389,7 @@ test("collection menu → review → 套用 creates the tree and memberships; un
 	]);
 	// PICO values only one paper uses were offered unticked (Accidental Falls joined the 跌倒 alias group: ticked)
 	let done = env.descriptions.find(d => /已加入/.test(d));
-	assert.equal(done, "已加入 8 筆分類，新建 9 個子分類。\n想反悔：Zotero Bridge 按鈕或快速指令 → 復原上次分類。");
+	assert.equal(done, "已加入 8 筆分類，新建 9 個子分類。\n想反悔：ZotMax 按鈕或快速指令 → 復原上次分類。");
 	assert.ok(env.prefStore[P + "classify.lastRun"]);
 	assert.equal(offered(env, "classify-undo"), true);
 
@@ -497,7 +497,7 @@ test("AI topics skipped with a message — switch off, no key, 跳過 — and ne
 	let env = await setup({ prefs: topics });
 	let run = env.ZB.classify.run([env.papers.rct]);
 	let root = await openedDialog(env);
-	assert.ok([...root.querySelectorAll(".zb-cl-notes li")].some(li => li.textContent === "主題：「AI 主題分類」目前關閉，這次沒有主題建議。要使用的話：設定 → Zotero Bridge → 功能，把它打開。"));
+	assert.ok([...root.querySelectorAll(".zb-cl-notes li")].some(li => li.textContent === "主題：「AI 主題分類」目前關閉，這次沒有主題建議。要使用的話：設定 → ZotMax → 功能，把它打開。"));
 	root.querySelector(".zb-cl-cancel").click();
 	await run;
 	assert.deepEqual(env.requests, []);

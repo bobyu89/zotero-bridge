@@ -211,7 +211,7 @@ test("buildFullTextNote: managed note without zotero_key, a small callout, legen
 	});
 	assert.match(note, /^---\nfulltext_of: "library\/ABCD1234"\nfulltext_source: "markitdown"\n---\n/);
 	assert.doesNotMatch(note, /zotero_key/, "the vault index and Bases only list literature notes");
-	assert.match(note, /^> \[!info\] 全文・由 Zotero Bridge 產生\n> 每次同步都會重新產生，請不要在這裡寫字；想法寫在文獻筆記 \[\[Zotero\/chen2024\|文獻筆記\]\]。\n> 劃線：🟡 重要發現 · 🤖 底線＝AI 標的重點（僅供參考）$/m);
+	assert.match(note, /^> \[!info\] 全文・由 ZotMax 產生\n> 每次同步都會重新產生，請不要在這裡寫字；想法寫在文獻筆記 \[\[Zotero\/chen2024\|文獻筆記\]\]。\n> 劃線：🟡 重要發現 · 🤖 底線＝AI 標的重點（僅供參考）$/m);
 	assert.match(note, /^# Falls RCT$/m);
 	assert.match(note, /## 沒有在全文中找到位置的劃線\n\n.*\n\n- ==🔴lost text== — 限制／疑問 · p\. 7\n$/);
 	// Nothing time-based: the same input gives the same file (no rewrite on every sync)

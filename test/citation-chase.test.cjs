@@ -202,7 +202,7 @@ test("note: task list of new candidates, full table with the library flag, check
 	let run = sampleRun();
 	let meta = { name: "跌倒預防 SR", uri: "zotero://select/library/collections/C1", generatedAt: "2026-10-08T00:00:00Z", csvPath: "Zotero/Reviews/跌倒預防 SR 引文追蹤.csv", email: "" };
 	let section = cc.buildChaseSection(run, Object.assign({ checked: new Set(["pmid:1212"]) }, meta));
-	assert.match(section, /^> \[!info\] 由 Zotero Bridge 依「跌倒預防 SR」的 2 篇研究，於 2026-10-08 查詢 OpenAlex（7 次請求）產生/);
+	assert.match(section, /^> \[!info\] 由 ZotMax 依「跌倒預防 SR」的 2 篇研究，於 2026-10-08 查詢 OpenAlex（7 次請求）產生/);
 	assert.match(section, /建議在 設定 → 引文追蹤 填入 email/);
 	assert.match(section, /標示「已達上限」的研究只列出被引次數最高的部分文獻/);
 	assert.ok(section.includes("| Lin, 2023 | [W2](https://openalex.org/W2) | 1 | 2 / 812（已達上限） | 完成 |"));

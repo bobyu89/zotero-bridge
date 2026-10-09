@@ -339,7 +339,7 @@ function addItems(env, names = ["a", "b", "c", "d", "e", "f", "g"]) {
 	}
 	if (items.g) {
 		let note = new env.MockItem("note");
-		note.noteHTML = "<h1>🤖 AI 文獻筆記</h1>\n<p><em>由 claude-opus-5-5 於 2026-01-01T00:00:00Z 產生（Zotero Bridge）</em></p>\n<h2>一句話摘要</h2>\n<p>舊的筆記</p>";
+		note.noteHTML = "<h1>🤖 AI 文獻筆記</h1>\n<p><em>由 claude-opus-5-5 於 2026-01-01T00:00:00Z 產生（ZotMax）</em></p>\n<h2>一句話摘要</h2>\n<p>舊的筆記</p>";
 		note.tags = ["zotero-bridge-ai"];
 		env.addChild(items.g, note);
 	}
@@ -506,8 +506,8 @@ test("AI batch: confirm, one batch with the normal requests, restart while in pr
 	for (let k of ["a", "b"]) {
 		let note = aiNoteOf(env2, items2[k]);
 		assert.ok(note, k);
-		assert.match(note.noteHTML, /^<h1>🤖 AI 文獻筆記<\/h1>\n<p><em>由 claude-opus-5-5 於 .* 產生（Zotero Bridge）<\/em><\/p>/);
-		assert.match(note.noteHTML, /<h2>📋 結構化資料（Zotero Bridge）<\/h2>\n<pre>\{\n {2}&quot;study_design&quot;: &quot;RCT&quot;/);
+		assert.match(note.noteHTML, /^<h1>🤖 AI 文獻筆記<\/h1>\n<p><em>由 claude-opus-5-5 於 .* 產生（ZotMax）<\/em><\/p>/);
+		assert.match(note.noteHTML, /<h2>📋 結構化資料（ZotMax）<\/h2>\n<pre>\{\n {2}&quot;study_design&quot;: &quot;RCT&quot;/);
 		// Quote verification: no full text here, so the quote is flagged as not checkable
 		assert.match(note.noteHTML, /Falls decreased by 30%&quot; \(p\. 5\) ⚠️ 無全文可查證/);
 	}

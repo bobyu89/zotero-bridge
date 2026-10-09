@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — the full text as Markdown (feature fullTextMarkdown): conversion with a per-attachment
+ * ZotMax — the full text as Markdown (feature fullTextMarkdown): conversion with a per-attachment
  * cache, optional markitdown, the plugin-managed full-text note in Obsidian (the user's highlights
  * coloured in place, verified AI quotes marked differently) and, when enabled, a Notion child page.
  * The text conversion itself is pure (fulltext-md.js); this file uses the Zotero globals.
@@ -81,7 +81,7 @@
 			await IOUtils.writeUTF8(file, JSON.stringify(record));
 		}
 		catch (e) {
-			Zotero.debug(`Zotero Bridge: could not write the full-text cache ${file}: ${e}`);
+			Zotero.debug(`ZotMax: could not write the full-text cache ${file}: ${e}`);
 		}
 	}
 
@@ -211,7 +211,7 @@
 			}
 			catch (e) {
 				record.note = String(e.message || e);
-				Zotero.debug(`Zotero Bridge: markitdown failed for ${source.key}, using the built-in conversion: ${record.note}`);
+				Zotero.debug(`ZotMax: markitdown failed for ${source.key}, using the built-in conversion: ${record.note}`);
 			}
 		}
 		if (record.engine !== "markitdown") {
@@ -350,7 +350,7 @@
 		let existing = (await IOUtils.exists(target.path)) ? await IOUtils.readUTF8(target.path) : null;
 		if (existing !== null && !isOurs(existing, zoteroKey)) {
 			// A note of the user's with that name: never overwrite it
-			throw new Error(`「${target.link}.md」不是 Zotero Bridge 產生的全文筆記，沒有覆寫`);
+			throw new Error(`「${target.link}.md」不是 ZotMax 產生的全文筆記，沒有覆寫`);
 		}
 		if (existing !== text) await IOUtils.writeUTF8(target.path, text);
 		if (opts.previousLink && opts.previousLink !== target.link && opts.vaultPath) {
@@ -359,7 +359,7 @@
 				if (old !== target.path && (await IOUtils.exists(old)) && isOurs(await IOUtils.readUTF8(old), zoteroKey)) await IOUtils.remove(old);
 			}
 			catch (e) {
-				Zotero.debug(`Zotero Bridge: could not remove the old full-text note ${old}: ${e}`);
+				Zotero.debug(`ZotMax: could not remove the old full-text note ${old}: ${e}`);
 			}
 		}
 		return target.link;
@@ -377,7 +377,7 @@
 		let F = ZB().fulltextMd;
 		let legend = rendered.legend.map(l => `${l.emoji} ${l.meaning}`);
 		if (rendered.aiMarked) legend.push("🤖 底線＝AI 標的重點（僅供參考）");
-		let head = "> [!info] 全文・由 Zotero Bridge 產生\n> 每次同步會整頁重建，請不要在這裡寫字，想法寫在上一層的文獻頁面。"
+		let head = "> [!info] 全文・由 ZotMax 產生\n> 每次同步會整頁重建，請不要在這裡寫字，想法寫在上一層的文獻頁面。"
 			+ (legend.length ? `\n> 劃線：${legend.join(" · ")}` : "");
 		let missing = F.missingSection(rendered.missing);
 		return [head, rendered.md, missing].filter(Boolean).join("\n\n");

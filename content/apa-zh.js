@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — Chinese-language references in Chinese APA 7, as Taiwanese nursing journals
+ * ZotMax — Chinese-language references in Chinese APA 7, as Taiwanese nursing journals
  * and theses write them:
  *
  *   陳美玲、林小華（2023）。題目。*護理雜誌，70*(2)，45–56。https://doi.org/10.6224/JN...

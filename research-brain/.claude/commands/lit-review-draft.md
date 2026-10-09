@@ -17,4 +17,4 @@ argument-hint: <章節主題，例如：跌倒預防衛教的成效>
 2. 我確認後再寫完整內文，文末依序加「⚠️ 查核清單」與 `## 參考文獻`（放在最後，Pandoc 會在這個標題下產生 APA 7 列表）。
 3. 存成 `研究大腦/<今天日期> 文獻探討初稿 - $ARGUMENTS.md`，並附上轉 Word 的指令（在 vault 根目錄）：`pandoc "研究大腦/<檔名>.md" --citeproc --bibliography Zotero/references.json --csl apa.csl -o 文獻探討.docx`。
 
-Zotero 裡也可以直接產生同樣格式的草稿：在分類上按右鍵 → Zotero Bridge → 產生文獻探討草稿（AI），存在 `Zotero/Drafts/文獻探討-<分類>.md`。那份檔案 `%% zotero-bridge:start/end %%` 之間的內容重新產生時會被覆寫；要在它的基礎上修改，請寫在標記外或另存新檔。
+Zotero 裡也可以直接產生同樣格式的草稿：在分類上按右鍵 → ZotMax → 產生文獻探討草稿（AI），存在 `Zotero/Drafts/文獻探討-<分類>.md`。那份檔案 `%% zotero-bridge:start/end %%` 之間的內容重新產生時會被覆寫；要在它的基礎上修改，請寫在標記外或另存新檔。

@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — bibliography export for Pandoc / Obsidian citations.
+ * ZotMax — bibliography export for Pandoc / Obsidian citations.
  *
  * Writes the library as CSL JSON (and optionally BibTeX) into the vault, e.g.
  * `Zotero/references.json`, so `[@citekey]` in Obsidian notes renders with
@@ -378,7 +378,7 @@
 
 	async function readSettings() {
 		let settings = await scope.ZB.main.readSettings();
-		if (!settings.vaultPath) throw new Error("請先到 設定 → Zotero Bridge 填入 Obsidian vault 路徑");
+		if (!settings.vaultPath) throw new Error("請先到 設定 → ZotMax 填入 Obsidian vault 路徑");
 		return settings;
 	}
 
@@ -406,11 +406,11 @@
 		return enqueue(async () => {
 			try {
 				let settings = await readSettings();
-				notify("Zotero Bridge：參考文獻", report(await writeBibliography(null, MAIN_FILE, settings)));
+				notify("ZotMax：參考文獻", report(await writeBibliography(null, MAIN_FILE, settings)));
 			}
 			catch (e) {
 				Zotero.logError(e);
-				notify("Zotero Bridge：參考文獻匯出失敗", [String(e.message || e)]);
+				notify("ZotMax：參考文獻匯出失敗", [String(e.message || e)]);
 			}
 		});
 	}
@@ -425,11 +425,11 @@
 					let items = scope.ZB.adapter.itemsInCollection(collection, true);
 					lines.push(...report(await writeBibliography(items, collectionFileName(collection.name), settings)));
 				}
-				notify("Zotero Bridge：參考文獻", lines);
+				notify("ZotMax：參考文獻", lines);
 			}
 			catch (e) {
 				Zotero.logError(e);
-				notify("Zotero Bridge：參考文獻匯出失敗", [String(e.message || e)]);
+				notify("ZotMax：參考文獻匯出失敗", [String(e.message || e)]);
 			}
 		});
 	}
@@ -446,7 +446,7 @@
 			refreshQueued = false;
 			try {
 				let result = await writeBibliography(null, MAIN_FILE, settings);
-				if (result.warnings.length) Zotero.debug(`Zotero Bridge: references.json — ${result.warnings.join("; ")}`);
+				if (result.warnings.length) Zotero.debug(`ZotMax: references.json — ${result.warnings.join("; ")}`);
 			}
 			catch (e) {
 				Zotero.logError(e);

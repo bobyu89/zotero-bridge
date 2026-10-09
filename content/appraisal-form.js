@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — 文獻評讀表 (appraisal form): the interactive checklist in the item pane, its child
+ * ZotMax — 文獻評讀表 (appraisal form): the interactive checklist in the item pane, its child
  * note, sync to Obsidian and Notion, and the collection summary (評讀總表).
  *
  * The form is prefilled from the AI note's 嚴格評讀 section (AI 初評) and saved as its own child note
@@ -20,7 +20,7 @@
 })(this, function (tools, core, markdown, synthesis, scope) {
 	const NOTE_TAG = "zotero-bridge-appraisal";
 	const NOTE_TITLE = "📝 文獻評讀表";
-	const DATA_HEADING = "📋 評讀表資料（Zotero Bridge）";
+	const DATA_HEADING = "📋 評讀表資料（ZotMax）";
 	const SECTION_HEADING = "文獻評讀表";
 	const AI_HEADING = tools.AI_HEADING;
 	const REVIEW_FOLDER = "Reviews";
@@ -121,7 +121,7 @@
 		let tool = tools.getTool(record.tool);
 		let parts = [`<h1>${NOTE_TITLE}</h1>`];
 		let status = statusText(record);
-		parts.push(`<p><em>${escapeHTML(status)}${meta.title ? ` · ${escapeHTML(meta.title)}` : ""}（Zotero Bridge；在條目窗格「AI 文獻筆記 → 文獻評讀表」編輯）</em></p>`);
+		parts.push(`<p><em>${escapeHTML(status)}${meta.title ? ` · ${escapeHTML(meta.title)}` : ""}（ZotMax；在條目窗格「AI 文獻筆記 → 文獻評讀表」編輯）</em></p>`);
 		if (tool) {
 			parts.push(`<p>評讀工具：<a href="${escapeHTML(tool.source)}">${escapeHTML(tool.name)}</a>（${escapeHTML(tool.license)}）</p>`);
 			parts.push(markdown.mdToHtml(tools.toMarkdownTable(tool, record.answers)));
@@ -338,7 +338,7 @@
 		let out = [];
 		if (!word) {
 			out.push([
-				`> [!info] 由 Zotero Bridge 依分類「${meta.name}」的 ${c.total} 篇文獻於 ${String(meta.generatedAt || "").slice(0, 10)} 產生；重新產生只會覆寫這個區塊。`,
+				`> [!info] 由 ZotMax 依分類「${meta.name}」的 ${c.total} 篇文獻於 ${String(meta.generatedAt || "").slice(0, 10)} 產生；重新產生只會覆寫這個區塊。`,
 				meta.uri ? `> Zotero：[開啟分類](${meta.uri})` + (meta.paths ? ` · CSV：\`${meta.paths.csv}\` · Word 版：\`${meta.paths.word}\`` : "") : "",
 				"> 「AI 初評」是 AI 筆記的評讀結果，尚未經研究者核對；請在 Zotero 條目窗格的文獻評讀表逐題確認後勾選「我已核對」。",
 			].filter(Boolean).join("\n"));
@@ -651,7 +651,7 @@
 		toolRow.append(makeSelect(doc, options, tool.id, (id) => {
 			if (id === tool.id) return;
 			let answered = Object.values(r.answers).some(a => a.source !== "ai" && a.answer);
-			if (answered && !Services.prompt.confirm(Zotero.getMainWindow(), "Zotero Bridge", "換評讀工具會清除目前逐題的答案（AI 初評會依新工具重新帶入）。要繼續嗎？")) {
+			if (answered && !Services.prompt.confirm(Zotero.getMainWindow(), "ZotMax", "換評讀工具會清除目前逐題的答案（AI 初評會依新工具重新帶入）。要繼續嗎？")) {
 				redraw();
 				return;
 			}
@@ -959,17 +959,17 @@
 
 	async function exportSummaryNow(collection) {
 		let z = ZB();
-		let headline = "Zotero Bridge：文獻評讀總表";
+		let headline = "ZotMax：文獻評讀總表";
 		let settings;
 		try {
 			settings = await z.main.readSettings();
 		}
 		catch (e) {
-			z.main.notify("Zotero Bridge 設定有誤", String(e.message || e));
+			z.main.notify("ZotMax 設定有誤", String(e.message || e));
 			return null;
 		}
 		if (!settings.vaultPath) {
-			z.main.notify(headline, "請先到 設定 → Zotero Bridge 填入 Obsidian vault 路徑。");
+			z.main.notify(headline, "請先到 設定 → ZotMax 填入 Obsidian vault 路徑。");
 			return null;
 		}
 		let items = summaryItems(collection);
@@ -1023,7 +1023,7 @@
 	/** The summary of each collection; with none, says which to select. */
 	async function exportCollections(collections) {
 		if (!collections.length) {
-			ZB().main.notify("Zotero Bridge", "請先在左側選取分類。");
+			ZB().main.notify("ZotMax", "請先在左側選取分類。");
 			return;
 		}
 		for (let c of collections) await exportSummary(c);

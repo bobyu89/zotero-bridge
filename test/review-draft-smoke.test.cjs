@@ -195,7 +195,7 @@ function notionAndClaude(log, notion) {
 		}
 		if (/^blocks\/draft-page-\d+\/children\?/.test(p)) return ok({ results: notion.children, has_more: false });
 		if (/^blocks\/draft-page-\d+\/children$/.test(p)) {
-			notion.children = [{ id: "container-1", type: "callout", callout: { rich_text: [{ plain_text: "Zotero Bridge｜…" }] } }];
+			notion.children = [{ id: "container-1", type: "callout", callout: { rich_text: [{ plain_text: "ZotMax｜…" }] } }];
 			return ok({ results: [{ id: "container-1" }] });
 		}
 		if (p === "blocks/container-1" && init.method === "DELETE") return ok({});
@@ -228,9 +228,9 @@ test("literature review draft: menu → dialog → Claude → Obsidian (Pandoc) 
 		creators: [{ lastName: "Chen", firstName: "Mei", creatorType: "author" }],
 	});
 	let aiNote = new env.MockItem("note");
-	aiNote.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 claude-opus-5-5 於 2026-10-01T00:00:00Z 產生（Zotero Bridge）</em></p>"
+	aiNote.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 claude-opus-5-5 於 2026-10-01T00:00:00Z 產生（ZotMax）</em></p>"
 		+ "<h2>主要結果</h2><p>介入組跌倒率降低 30%。</p>"
-		+ "<h2>📋 結構化資料（Zotero Bridge）</h2><pre>{\n  \"study_design\": \"RCT\",\n  \"sample_size\": 80,\n  \"evidence_level\": \"2\",\n  \"jbi_level\": \"1.c\"\n}</pre>";
+		+ "<h2>📋 結構化資料（ZotMax）</h2><pre>{\n  \"study_design\": \"RCT\",\n  \"sample_size\": 80,\n  \"evidence_level\": \"2\",\n  \"jbi_level\": \"1.c\"\n}</pre>";
 	aiNote.tags = ["zotero-bridge-ai"];
 	env.addChild(a, aiNote);
 	// No Citation Key: the generated key export.js gives it
@@ -278,7 +278,7 @@ test("literature review draft: menu → dialog → Claude → Obsidian (Pandoc) 
 	assert.deepEqual(req.system[0].cache_control, { type: "ephemeral" });
 	let user = req.messages[0].content;
 	assert.match(user, /<source id="S1">\n標題：Nurse-led education and falls[\s\S]*<study_data>\n研究設計：RCT\n樣本數：80\nOxford CEBM 證據等級：2\nJBI 證據等級：1\.c\n<\/study_data>\n<ai_note>\n## 主要結果\n\n介入組跌倒率降低 30%。\n<\/ai_note>/);
-	assert.doesNotMatch(user, /結構化資料（Zotero Bridge）/);
+	assert.doesNotMatch(user, /結構化資料（ZotMax）/);
 	assert.match(user, /<source id="S2">[\s\S]*<abstract>\nFalls fell from 18\.5% to 9\.2% \(p = \.03\)\.\n<\/abstract>/);
 	assert.match(user, /<my_study>\n研究問題／目的：探討衛教對住院高齡病人跌倒的成效\n<\/my_study>/);
 	assert.match(user, /<outline>\n1\. 住院病人跌倒的現況\n2\. 跌倒預防衛教的成效\n<\/outline>/);

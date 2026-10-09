@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — quote verification (pure functions, no Zotero globals).
+ * ZotMax — quote verification (pure functions, no Zotero globals).
  * Checks each line of the AI note's 「可引用的句子」 section against the item's full text
  * and annotation texts, and marks it ✅ (found) or ⚠️ (not found / nothing to check against).
  *

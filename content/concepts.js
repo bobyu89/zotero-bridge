@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — concept hub notes (概念卡片) in Obsidian.
+ * ZotMax — concept hub notes (概念卡片) in Obsidian.
  *
  * The AI literature notes list 3–8 reusable concepts as [[概念]] links under 「關鍵概念」 (llm.js).
  * This module scans the plugin's literature notes (only their %% zotero-bridge:start/end %% region),
@@ -30,7 +30,7 @@
 	const PREF = "extensions.zotero-bridge.";
 	const DEFAULT_FOLDER = "概念";
 	const INDEX_NAME = "概念索引";
-	const TITLE = "Zotero Bridge：概念卡片";
+	const TITLE = "ZotMax：概念卡片";
 	const TYPES = { concept: "概念", measure: "測量工具", outcome: "結果指標" };
 	const TYPE_ORDER = [TYPES.concept, TYPES.measure, TYPES.outcome];
 	const MAX_COOCCUR = 10;
@@ -44,10 +44,10 @@
 	const DASHBOARD_TOP = 10;
 	const HEAD_BYTES = 8192;
 	const USER_SECTION = "## ✍️ 我的筆記\n\n";
-	const DEFINITION_SECTION = "## 📖 我的定義\n\n> [!note] 用自己的話寫下這個概念的定義與出處（例如概念分析、理論或量表手冊）；這一段由你維護，Zotero Bridge 不會覆寫。";
+	const DEFINITION_SECTION = "## 📖 我的定義\n\n> [!note] 用自己的話寫下這個概念的定義與出處（例如概念分析、理論或量表手冊）；這一段由你維護，ZotMax 不會覆寫。";
 	const MARK_START_RE = /^%% zotero-bridge:start.*%%[ \t]*$/m;
 	const MARK_END_RE = /^%% zotero-bridge:end %%[ \t]*$/m;
-	const AI_START = "%% zotero-bridge:concept-ai:start — AI 綜整由 Zotero Bridge 產生，重新產生時會覆寫；要保留修改請複製到區塊外 %%";
+	const AI_START = "%% zotero-bridge:concept-ai:start — AI 綜整由 ZotMax 產生，重新產生時會覆寫；要保留修改請複製到區塊外 %%";
 	const AI_END = "%% zotero-bridge:concept-ai:end %%";
 	const AI_START_RE = /^%% zotero-bridge:concept-ai:start.*%%[ \t]*$/m;
 	const AI_END_RE = /^%% zotero-bridge:concept-ai:end %%[ \t]*$/m;
@@ -401,9 +401,9 @@
 	/** The managed region of a card. meta: { indexLink, cfg, total } */
 	function buildConceptSection(concept, meta = {}) {
 		let parts = [];
-		parts.push("> [!info] 概念卡片：由 Zotero Bridge 依文獻筆記「關鍵概念」的連結"
+		parts.push("> [!info] 概念卡片：由 ZotMax 依文獻筆記「關鍵概念」的連結"
 			+ (concept.types.some(t => t !== TYPES.concept) ? "與研讀資料（測量工具／結果指標）" : "")
-			+ "整理；重新整理：Zotero Bridge 按鈕或快速指令 → 更新概念卡片（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。");
+			+ "整理；重新整理：ZotMax 按鈕或快速指令 → 更新概念卡片（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。");
 		let facts = [
 			`**類型**：${concept.types.join("、") || TYPES.concept}`,
 			`**文獻數**：${concept.papers.length}`,
@@ -433,7 +433,7 @@
 	/** The managed region of a card no paper mentions any more (the note itself is kept). */
 	function buildOrphanSection(meta = {}) {
 		return [
-			"> [!info] 概念卡片：由 Zotero Bridge 整理。目前沒有文獻筆記提到這個概念（可能已改名、合併到別名，或文獻已刪除）；"
+			"> [!info] 概念卡片：由 ZotMax 整理。目前沒有文獻筆記提到這個概念（可能已改名、合併到別名，或文獻已刪除）；"
 				+ "這份筆記不會被刪除，不需要時可以自行刪除。",
 			meta.indexLink ? `← ${wikilink(meta.indexLink, INDEX_NAME)}` : "",
 		].filter(Boolean).join("\n\n");
@@ -534,8 +534,8 @@
 	/** The managed region of 概念索引. */
 	function buildIndexSection(result, meta = {}) {
 		let { concepts, papers } = result;
-		let parts = ["> [!info] 由 Zotero Bridge 依文獻筆記的「關鍵概念」連結（與研讀資料的測量工具／結果指標）整理；"
-			+ "重新整理：Zotero Bridge 按鈕或快速指令 → 更新概念卡片（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。"];
+		let parts = ["> [!info] 由 ZotMax 依文獻筆記的「關鍵概念」連結（與研讀資料的測量工具／結果指標）整理；"
+			+ "重新整理：ZotMax 按鈕或快速指令 → 更新概念卡片（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。"];
 		if (meta.aliasErrors && meta.aliasErrors.length) {
 			parts.push("> [!warning] 別名設定有問題\n" + meta.aliasErrors.map(e => `> - ${e}`).join("\n"));
 		}
@@ -565,7 +565,7 @@
 	function buildDashboardSection(top, meta = {}) {
 		let parts = ["## 🧠 熱門概念"];
 		if (!top.length) {
-			parts.push("還沒有概念卡片：Zotero Bridge 按鈕或快速指令 → 更新概念卡片（AI 文獻筆記「關鍵概念」中的雙中括號連結會整理成概念卡片）。");
+			parts.push("還沒有概念卡片：ZotMax 按鈕或快速指令 → 更新概念卡片（AI 文獻筆記「關鍵概念」中的雙中括號連結會整理成概念卡片）。");
 			return parts.join("\n\n");
 		}
 		parts.push(`${meta.indexLink ? wikilink(meta.indexLink, INDEX_NAME) + "：" : ""}共 ${meta.total || top.length} 個概念；文獻數最多的 ${Math.min(DASHBOARD_TOP, top.length)} 個：`);
@@ -708,7 +708,7 @@
 				papers.push(paperRecord(await IOUtils.readUTF8(entry.path), entry.relParts.join("/"), options));
 			}
 			catch (e) {
-				Zotero.debug(`Zotero Bridge: concepts skipped ${entry.path}: ${e}`);
+				Zotero.debug(`ZotMax: concepts skipped ${entry.path}: ${e}`);
 			}
 		}
 		return papers;
@@ -834,11 +834,11 @@
 			settings = await scope.ZB.main.readSettings();
 		}
 		catch (e) {
-			scope.ZB.main.notify("Zotero Bridge 設定有誤", String(e.message || e));
+			scope.ZB.main.notify("ZotMax 設定有誤", String(e.message || e));
 			return null;
 		}
 		if (!settings.vaultPath) {
-			notify("請先到 設定 → Zotero Bridge 填入 Obsidian vault 路徑。");
+			notify("請先到 設定 → ZotMax 填入 Obsidian vault 路徑。");
 			return null;
 		}
 		return settings;
@@ -906,7 +906,7 @@
 		let settings = await settingsOrNotify();
 		if (!settings) return null;
 		if (!settings.llm.apiKey) {
-			notify("AI 綜整需要 LLM API key：請到 設定 → Zotero Bridge 填入。");
+			notify("AI 綜整需要 LLM API key：請到 設定 → ZotMax 填入。");
 			return null;
 		}
 		let result;
@@ -948,7 +948,7 @@
 			return null;
 		}
 		let prompt = buildConceptPrompt(concept, sources, { systemPrompt: pref("concepts.aiPrompt") });
-		if (!Services.prompt.confirm(win, "Zotero Bridge", confirmText(settings, prompt, concept, sources, extra))) return null;
+		if (!Services.prompt.confirm(win, "ZotMax", confirmText(settings, prompt, concept, sources, extra))) return null;
 		return ZB.main.enqueue(() => generate(settings, concept, sources, prompt));
 	}
 

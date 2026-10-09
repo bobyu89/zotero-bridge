@@ -1,7 +1,7 @@
 @namespace html url("http://www.w3.org/1999/xhtml");
 
 /*
- * Zotero Bridge settings pane. Tokens and components: DESIGN.md.
+ * ZotMax settings pane. Tokens and components: DESIGN.md.
  * Every color comes from Zotero's own variables (with a fallback), so the pane follows Zotero's light
  * and dark themes; sizes are in em, so it follows Zotero's font size. No external fonts or images.
  */

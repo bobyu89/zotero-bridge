@@ -30,4 +30,4 @@ if (!entry) {
 }
 entry.applications.zotero.strict_max_version = max;
 writeFileSync(updatesPath, JSON.stringify(updates, null, 2) + "\n");
-console.log(`Zotero Bridge ${manifest.version} now declares Zotero up to ${max}`);
+console.log(`ZotMax ${manifest.version} now declares Zotero up to ${max}`);

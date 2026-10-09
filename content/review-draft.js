@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — literature review draft (文獻探討草稿).
+ * ZotMax — literature review draft (文獻探討草稿).
  *
  * One LLM call over several items' AI notes (or abstracts + highlights), the user's outline and
  * research question. Sources are labelled [S1], [S2]… by synthesis.js, so the model never writes a
@@ -29,12 +29,12 @@
 	const DRAFTS_FOLDER = "Drafts";
 	const REFERENCES_FILE = "references.json";
 	const FILTER_FILE = "zotero-bridge-draft.lua";
-	const DIALOG_TITLE = "Zotero Bridge：文獻探討草稿";
+	const DIALOG_TITLE = "ZotMax：文獻探討草稿";
 	const CHECK_HEADING = "⚠️ 查核清單";
 	const PANDOC_HEADING = "Pandoc 指令";
 	const USER_SECTION = "## ✍️ 我的筆記\n\n";
 	const NOTION_CONTAINER_TITLE = "文獻探討草稿（重新產生會覆寫，修改請寫在此區塊外）";
-	const MARK_START = "%% zotero-bridge:start — 此區塊由 Zotero Bridge 自動產生，重新產生草稿時會覆寫 %%";
+	const MARK_START = "%% zotero-bridge:start — 此區塊由 ZotMax 自動產生，重新產生草稿時會覆寫 %%";
 	const MARK_START_RE = /^%% zotero-bridge:start.*%%[ \t]*$/m;
 	const MARK_END_RE = /^%% zotero-bridge:end %%[ \t]*$/m;
 	// Output budget for the cost estimate: llm.js asks Claude for at most 16000 tokens (thinking included)
@@ -399,7 +399,7 @@
 	}
 
 	// Drops what is only meant for Obsidian when the draft is converted to Word
-	const PANDOC_FILTER = `-- Zotero Bridge：把文獻探討草稿轉成 Word 時，略過 Obsidian 註解（%% … %%）、提示框（> [!info] …）
+	const PANDOC_FILTER = `-- ZotMax：把文獻探討草稿轉成 Word 時，略過 Obsidian 註解（%% … %%）、提示框（> [!info] …）
 -- 以及「${CHECK_HEADING}」「${PANDOC_HEADING}」「我的筆記」各節。這個檔案由插件產生，重新產生草稿時會覆寫。
 local SKIP = { "查核清單", "${PANDOC_HEADING}", "我的筆記" }
 
@@ -440,7 +440,7 @@ end
 			paths.command,
 			"```",
 			"",
-			`- \`${paths.referencesRel}\`：Zotero Bridge 按鈕或快速指令 → 匯出參考文獻到 Obsidian 產生；產生草稿時插件已檢查過，缺少引用的文獻會自動重新匯出。`,
+			`- \`${paths.referencesRel}\`：ZotMax 按鈕或快速指令 → 匯出參考文獻到 Obsidian 產生；產生草稿時插件已檢查過，缺少引用的文獻會自動重新匯出。`,
 			`- \`${paths.cslRel}\`：APA 7 樣式檔，放在 vault 根目錄（見 README「在 Obsidian 寫論文並用 Pandoc 產生 APA Word」）。`,
 			`- \`${FILTER_FILE}\`：插件放在同一資料夾，轉檔時略過 %% 標記、提示框、查核清單、本節與「我的筆記」；不加 \`--lua-filter\` 也能轉，只是 Word 會多出這些內容。`,
 		].join("\n");
@@ -609,7 +609,7 @@ end
 	}
 
 	function notify(text) {
-		root.ZB.main.notify("Zotero Bridge：文獻探討草稿", text);
+		root.ZB.main.notify("ZotMax：文獻探討草稿", text);
 	}
 
 	const HTML_NS = "http://www.w3.org/1999/xhtml";
@@ -737,7 +737,7 @@ end
 			return;
 		}
 		if (!settings.llm.apiKey) {
-			notify("文獻探討草稿需要 LLM API key：請到 設定 → Zotero Bridge 填入。");
+			notify("文獻探討草稿需要 LLM API key：請到 設定 → ZotMax 填入。");
 			return;
 		}
 		if (!settings.vaultPath && !(settings.notionToken && settings.notionSynthesisParent)) {
@@ -767,7 +767,7 @@ end
 			});
 		}
 		let prompt = buildReviewPrompt(sources, { outline: parseOutline(answer.outline), question: answer.question });
-		if (!Services.prompt.confirm(win, "Zotero Bridge", confirmText(settings, prompt, sources, extra))) return;
+		if (!Services.prompt.confirm(win, "ZotMax", confirmText(settings, prompt, sources, extra))) return;
 		return ZB.main.enqueue(() => generate(sources, prompt, settings, where, answer));
 	}
 
@@ -874,7 +874,7 @@ end
 					}
 					catch (e) {
 						Zotero.logError(e);
-						notes.push(`⚠️ 無法更新 ${REFERENCES_FILE}：${e.message || e}；請手動執行 Zotero Bridge 按鈕或快速指令 → 匯出參考文獻到 Obsidian`);
+						notes.push(`⚠️ 無法更新 ${REFERENCES_FILE}：${e.message || e}；請手動執行 ZotMax 按鈕或快速指令 → 匯出參考文獻到 Obsidian`);
 					}
 				}
 				catch (e) {

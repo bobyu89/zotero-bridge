@@ -1,10 +1,10 @@
 /*
- * Zotero Bridge — the right-click and Tools menus, generated from the command catalog (commands.js).
+ * ZotMax — the right-click and Tools menus, generated from the command catalog (commands.js).
  *
- *   item menu        one 「Zotero Bridge ▸」 submenu: the commands for the selected items, in the
+ *   item menu        one 「ZotMax ▸」 submenu: the commands for the selected items, in the
  *                    catalog's workflow groups (a caption per group, separators between groups)
- *   collection menu  one 「Zotero Bridge ▸」 submenu: the commands for the selected collection
- *   Tools menu       Zotero Bridge 設定…, Zotero Bridge 快速指令…, and the batch entries (stop, resume,
+ *   collection menu  one 「ZotMax ▸」 submenu: the commands for the selected collection
+ *   Tools menu       ZotMax 設定…, ZotMax 快速指令…, and the batch entries (stop, resume,
  *                    discard a sync batch; check or cancel AI batches) only while they apply
  *
  * Commands with variants (篩選 decisions, databases) are a submenu inside their group, so nothing is
@@ -129,7 +129,7 @@
 		};
 	}
 
-	/** The entries of a 「Zotero Bridge ▸」 submenu: per group a separator, a caption, the commands. */
+	/** The entries of a 「ZotMax ▸」 submenu: per group a separator, a caption, the commands. */
 	function buildEntries(surface) {
 		let menus = [];
 		for (let g of C().GROUPS) {

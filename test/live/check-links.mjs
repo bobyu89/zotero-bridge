@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * Live check of the external services Zotero Bridge depends on (run by .github/workflows/link-check.yml;
+ * Live check of the external services ZotMax depends on (run by .github/workflows/link-check.yml;
  * not part of `npm test`, it needs the open internet).
  *
  *   1. Every entry of both search catalogs — content/search-links.js (plugin) and site/search.html

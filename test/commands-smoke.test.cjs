@@ -1,5 +1,5 @@
 // The command catalog (content/commands.js) and everything generated from it, through the real plugin in
-// a mocked Zotero with jsdom windows: one 「Zotero Bridge ▸」 submenu in the item and in the collection
+// a mocked Zotero with jsdom windows: one 「ZotMax ▸」 submenu in the item and in the collection
 // menu (workflow groups, at most two levels), a Tools menu with only 設定…, 快速指令… and the batch
 // entries, live gating, the commands acting on what was right-clicked, 快速指令 (search in Chinese and
 // English, fuzzy, keyboard, disabled results with their reason, settings destinations), the shortcut,
@@ -31,7 +31,7 @@ const MAIN_WINDOW = `<!DOCTYPE html><html><body>
  * and l10n ID → the catalog command (or variant) and the surfaces that offer it.
  */
 const OLD_ENTRIES = [
-	// Item menu: 「Zotero Bridge ▸」
+	// Item menu: 「ZotMax ▸」
 	["zotero-bridge-item", "zotero-bridge-menu-sync", "sync", ["item", "collection"]],
 	["zotero-bridge-item", "zotero-bridge-menu-regenerate", "regenerate", ["item", "collection"]],
 	["zotero-bridge-item", "zotero-bridge-menu-no-ai", "sync-no-ai", ["item", "collection"]],
@@ -425,7 +425,7 @@ test("every entry of the old menus is reachable: same command, on the surfaces t
 
 // ---------- the menus ----------
 
-test("right-click and Tools menus: one Zotero Bridge submenu each, workflow groups, two levels at most; Tools keeps settings, palette, batch entries", async () => {
+test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two levels at most; Tools keeps settings, palette, batch entries", async () => {
 	let env = await setup();
 	let { a, collection } = papers(env);
 	// Exactly three registrations: the item menu, the collection menu, the Tools menu
@@ -722,7 +722,7 @@ test("palette window: grouped results, type to filter, arrows move, Enter runs t
 	assert.equal(doc.querySelector('label[for="zb-pal-input"]').textContent, "快速指令");
 	assert.equal(doc.getElementById("zb-pal-list").getAttribute("role"), "listbox");
 	assert.equal(doc.getElementById("zb-pal-status").getAttribute("role"), "status");
-	assert.equal(doc.documentElement.getAttribute("title"), "Zotero Bridge 快速指令");
+	assert.equal(doc.documentElement.getAttribute("title"), "ZotMax 快速指令");
 	assert.match(root.querySelector(".zb-pal-foot").textContent, /上下鍵選擇 · Enter 執行 · Esc 關閉隨時開啟：Ctrl\+Shift\+P/);
 	// Empty query: grouped by workflow, settings last
 	same([...root.querySelectorAll(".zb-pal-group-title")].map(t => t.textContent), ["同步", "整理", "找文獻", "篩選與評讀", "AI 輔助與寫作", "設定"]);
@@ -820,7 +820,7 @@ test("palette: a switched-off result shows where to turn it on and never runs; o
 	same(env.errors, []);
 });
 
-test("palette: settings destinations open the Zotero Bridge pane at their section (prefs.pendingSection, read by the pane)", async () => {
+test("palette: settings destinations open the ZotMax pane at their section (prefs.pendingSection, read by the pane)", async () => {
 	let env = await setup();
 	let pending = () => env.prefStore[P + "prefs.pendingSection"];
 	let { dialog, view, doc } = await openPalette(env);
@@ -864,7 +864,7 @@ test("palette: opened from the toolbar's first entry and the Tools menu; a secon
 	await tick(30);
 	assert.equal(env.dialogs.length, 1);
 	assert.equal(env.ZB.palette.isOpen, true);
-	// Tools → Zotero Bridge 快速指令…: the open palette comes to the front
+	// Tools → ZotMax 快速指令…: the open palette comes to the front
 	let focused = 0;
 	env.dialogs[0].focus = () => focused++;
 	let tools = env.menus.find(o => o.menuID === "zotero-bridge-tools").menus;
@@ -880,7 +880,7 @@ test("palette: opened from the toolbar's first entry and the Tools menu; a secon
 	// A window that can't open: said in words, nothing breaks
 	env.win.openDialog = () => { throw new Error("no chrome package"); };
 	assert.equal(await env.ZB.palette.open(env.win), null);
-	assert.equal(env.descriptions.pop(), "快速指令視窗沒有開啟（no chrome package）。可以改用工具列的 Zotero Bridge 按鈕或右鍵選單。");
+	assert.equal(env.descriptions.pop(), "快速指令視窗沒有開啟（no chrome package）。可以改用工具列的 ZotMax 按鈕或右鍵選單。");
 	assert.equal(env.errors.length, 1, "logged for the debug output");
 });
 

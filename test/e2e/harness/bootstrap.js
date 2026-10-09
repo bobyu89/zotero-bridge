@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge end-to-end test harness: a second bootstrap plugin installed next to Zotero Bridge
+ * ZotMax end-to-end test harness: a second bootstrap plugin installed next to ZotMax
  * in a throwaway profile (test/e2e/run.sh). It waits for Zotero and the plugin, runs the checks below
  * against the real Zotero (items, PDF worker, login manager, MenuManager, Fluent, preferences window),
  * writes <workDir>/results.json and quits Zotero.
@@ -79,6 +79,59 @@ function errText(e) {
 	let s = e.message ? e.message : String(e);
 	if (e.stack) s += `\n${String(e.stack).split("\n").slice(0, 6).join("\n")}`;
 	return s;
+}
+
+/**
+ * A plain copy of a value for results.json: arrays and objects become harness-owned copies, so
+ * nothing refers to a window (or the plugin's sandbox) that may be gone by the end of the run
+ * ("can't access dead object"). Whatever can't be read is replaced by a note, not lost with the rest.
+ */
+function plain(value, depth = 0) {
+	try {
+		return JSON.parse(JSON.stringify(value === undefined ? null : value));
+	}
+	catch (e) {
+		// Fall through: copy what can still be read, one value at a time
+	}
+	try {
+		if (value === null || typeof value !== "object") return typeof value === "function" ? undefined : value;
+		if (depth > 20) return "[too deep]";
+		if (Array.isArray(value)) return Array.from(value, v => plain(v, depth + 1));
+		let out = {};
+		for (let k of Object.keys(value)) {
+			try {
+				out[k] = plain(value[k], depth + 1);
+			}
+			catch (e) {
+				out[k] = `[unreadable: ${e}]`;
+			}
+		}
+		return out;
+	}
+	catch (e) {
+		return `[unreadable: ${e}]`;
+	}
+}
+
+/** results as JSON; a test whose record can't be written is reduced to { name, ok, error }. */
+function resultsJSON() {
+	let out = {};
+	for (let [k, v] of Object.entries(results)) {
+		if (k === "tests") {
+			out.tests = v.map((t) => {
+				try {
+					return JSON.parse(JSON.stringify(t));
+				}
+				catch (e) {
+					return { name: t.name, ok: t.ok, error: t.error, unserializable: String(e) };
+				}
+			});
+		}
+		else {
+			out[k] = plain(v);
+		}
+	}
+	return JSON.stringify(out, null, 2);
 }
 
 // ---------- console capture ----------
@@ -219,7 +272,7 @@ function fmValue(fm, key) {
 }
 
 /**
- * Open the Zotero Bridge toolbar menu as a click does, read what it shows (visible group IDs, entry
+ * Open the ZotMax toolbar menu as a click does, read what it shows (visible group IDs, entry
  * IDs and translated labels), close it again.
  */
 async function openToolbarMenu(button) {
@@ -228,7 +281,7 @@ async function openToolbarMenu(button) {
 	check(popup, "the toolbar button has no menupopup");
 	popup.openPopup(button, "after_start", 0, 0, false, false);
 	try {
-		await waitFor(() => popup.state === "open", "the Zotero Bridge toolbar menu to open", 10000);
+		await waitFor(() => popup.state === "open", "the ZotMax toolbar menu to open", 10000);
 		// Fluent translates the entries asynchronously
 		await win.document.l10n.translateFragment(popup);
 		let shown = el => !el.hidden;
@@ -243,7 +296,7 @@ async function openToolbarMenu(button) {
 	}
 	finally {
 		popup.hidePopup();
-		await waitFor(() => popup.state === "closed", "the Zotero Bridge toolbar menu to close", 10000);
+		await waitFor(() => popup.state === "closed", "the ZotMax toolbar menu to close", 10000);
 	}
 }
 
@@ -253,19 +306,23 @@ const ctx = { l10nSourceErrors: [] };
 
 const TESTS = [
 	{
-		name: "Zotero Bridge is installed and enabled (AddonManager)",
+		name: "ZotMax is installed and enabled (AddonManager)",
 		async fn(d) {
 			const { AddonManager } = ChromeUtils.importESModule("resource://gre/modules/AddonManager.sys.mjs");
 			let addon = await AddonManager.getAddonByID(PLUGIN_ID);
 			check(addon, `AddonManager does not know ${PLUGIN_ID}: the .xpi in <profile>/extensions was not picked up at startup`);
 			Object.assign(d, {
-				version: addon.version, isActive: addon.isActive, userDisabled: addon.userDisabled,
+				id: addon.id, name: addon.name, version: addon.version, isActive: addon.isActive, userDisabled: addon.userDisabled,
 				appDisabled: addon.appDisabled, scope: addon.scope, type: addon.type,
 			});
 			check(addon.type === "extension", `add-on type is ${addon.type}, not "extension"`);
 			check(addon.isActive, `the plugin is installed but not active (userDisabled=${addon.userDisabled}, appDisabled=${addon.appDisabled}, `
 				+ `softDisabled=${addon.softDisabled}); appDisabled usually means Zotero rejected manifest.json (strict_min_version/strict_max_version)`);
 			eq(addon.version, ctx.expectedVersion, "installed plugin version differs from manifest.json");
+			// The display name is ZotMax; the ID stays the one earlier versions (Zotero Bridge) installed
+			// under, so they update in place and keep their settings and keys
+			eq(addon.name, "ZotMax", "add-on name (manifest.json name)");
+			eq(addon.id, "zotero-bridge@bobyu89.github.io", "add-on ID");
 		},
 		// Startup errors are judged by "no plugin errors in the console during startup" (against the baseline)
 		allowUnattributed: ["uncaught exception: undefined", "uncaught exception: undefined"],
@@ -399,12 +456,12 @@ const TESTS = [
 			}
 			let unexpected = mine.filter(o => !Object.keys(EXPECTED).some(id => o.menuID === id || o.menuID === CSS.escape(`${PLUGIN_ID}-${id}`)));
 			if (unexpected.length) problems.push(`registrations besides the three menus: ${unexpected.map(o => o.menuID).join(", ")}`);
-			// The right-click menus: one 「Zotero Bridge ▸」 submenu each; at most two levels below it
+			// The right-click menus: one 「ZotMax ▸」 submenu each; at most two levels below it
 			for (let id of ["zotero-bridge-item", "zotero-bridge-collection"]) {
 				let opt = mine.find(o => o.menuID === id || o.menuID === CSS.escape(`${PLUGIN_ID}-${id}`));
 				if (!opt) continue;
 				if (opt.menus.length !== 1 || opt.menus[0].menuType !== "submenu" || opt.menus[0].l10nID !== "zotero-bridge-menu") {
-					problems.push(`${id}: not one Zotero Bridge submenu (${opt.menus.map(m => m.l10nID || m.menuType).join(", ")})`);
+					problems.push(`${id}: not one ZotMax submenu (${opt.menus.map(m => m.l10nID || m.menuType).join(", ")})`);
 					continue;
 				}
 				for (let child of opt.menus[0].menus) {
@@ -436,8 +493,9 @@ const TESTS = [
 		async fn(d) {
 			let pane = (Zotero.PreferencePanes.pluginPanes || []).find(p => p.id === PANE_ID);
 			check(pane, `Zotero.PreferencePanes has no pane "${PANE_ID}" (register() in bootstrap startup failed)`);
-			Object.assign(d, { pluginID: pane.pluginID, src: pane.src, scripts: pane.scripts, label: pane.label });
+			Object.assign(d, { pluginID: pane.pluginID, src: pane.src, scripts: Array.from(pane.scripts || [], String), label: pane.label });
 			eq(pane.pluginID, PLUGIN_ID, "pane pluginID");
+			eq(pane.label, "ZotMax", "pane label (the settings sidebar entry)");
 			check(/content\/preferences\.xhtml$/.test(pane.src), `pane src is ${pane.src}`);
 			check((pane.scripts || []).some(s => /content\/preferences\.js$/.test(s)), "pane scripts do not include content/preferences.js");
 		},
@@ -447,8 +505,8 @@ const TESTS = [
 		needs: ["Zotero.ZoteroBridge is set and has every module"],
 		async fn(d) {
 			let data = Zotero.ItemPaneManager.customSectionData;
-			let mine = (data.options || []).filter(o => o.pluginID === PLUGIN_ID);
-			d.sections = mine.map(o => o.paneID);
+			let mine = Array.from(data.options || []).filter(o => o.pluginID === PLUGIN_ID);
+			d.sections = mine.map(o => String(o.paneID));
 			eq(mine.length, 1, "number of item pane sections registered by the plugin");
 			let section = mine[0];
 			check(/zotero-bridge-ai-note$/.test(section.paneID), `unexpected paneID ${section.paneID}`);
@@ -486,17 +544,19 @@ const TESTS = [
 				}
 				let msgs = await l10n.formatMessages(ids.map(id => ({ id, args })));
 				let missing = [];
+				let oldName = [];
 				ids.forEach((id, i) => {
 					let m = msgs[i];
 					let text = m && (m.value || (m.attributes || []).map(a => a.value).join(""));
 					if (!text || !text.trim()) missing.push(id);
+					else if (/Zotero Bridge/.test(text)) oldName.push(id);
 				});
-				report[locale] = { checked: ids.length, missing };
+				report[locale] = { checked: ids.length, missing, oldName };
 				if (missing.length) problems.push(`${locale}: no text for ${missing.join(", ")}`);
-				if (locale === "zh-TW") {
-					let [label] = await l10n.formatMessages([{ id: "zotero-bridge-menu-settings" }]);
-					report[locale].sample = label && label.attributes && label.attributes[0] && label.attributes[0].value;
-				}
+				if (oldName.length) problems.push(`${locale}: the old name Zotero Bridge shows in ${oldName.join(", ")}`);
+				let [label] = await l10n.formatMessages([{ id: "zotero-bridge-menu-settings" }]);
+				report[locale].sample = label && label.attributes && label.attributes[0] && String(label.attributes[0].value);
+				if (!/^ZotMax /.test(report[locale].sample || "")) problems.push(`${locale}: Tools menu settings entry is ${JSON.stringify(report[locale].sample)}, expected it to start with ZotMax`);
 			}
 			// The main window must have the FTL linked (bootstrap onMainWindowLoad)
 			let doc = mainWindow().document;
@@ -526,7 +586,7 @@ const TESTS = [
 						tabType: "library",
 						skipGrouping: true,
 					});
-					// Open the submenus as Gecko does (popupshowing builds their entries): the 「Zotero Bridge ▸」
+					// Open the submenus as Gecko does (popupshowing builds their entries): the 「ZotMax ▸」
 					// submenu, then the variant submenus inside it (篩選, 在醫學資料庫搜尋)
 					let opened = new Set();
 					for (let round = 0; round < 3; round++) {
@@ -544,10 +604,10 @@ const TESTS = [
 					}
 					await doc.l10n.translateFragment(popup);
 					rendered[target] = ours.map(e => `${e.dataset.l10nId}: ${e.getAttribute("label")}`);
-					if (!ours.length) problems.push(`${target}: no Zotero Bridge menu elements were created`);
+					if (!ours.length) problems.push(`${target}: no ZotMax menu elements were created`);
 					// The submenus' entries were built too: group captions and commands from the catalog
 					if (target !== "main/menubar/tools" && !ours.some(e => e.dataset.l10nId === "zotero-bridge-toolbar-group-sync")) {
-						problems.push(`${target}: the Zotero Bridge submenu built no entries when it opened`);
+						problems.push(`${target}: the ZotMax submenu built no entries when it opened`);
 					}
 					for (let el of ours) {
 						if (!(el.getAttribute("label") || "").trim()) problems.push(`${target}: ${el.dataset.l10nId} has no label after translation`);
@@ -569,13 +629,13 @@ const TESTS = [
 			let doc = win.document;
 			let T = zb().toolbar;
 			let button = await waitFor(() => doc.getElementById(T.BUTTON_ID),
-				"the Zotero Bridge toolbar button (bootstrap onMainWindowLoad → ZB.toolbar.add)", 10000);
+				"the ZotMax toolbar button (bootstrap onMainWindowLoad → ZB.toolbar.add)", 10000);
 			eq(doc.querySelectorAll("#" + T.BUTTON_ID).length, 1, "toolbar buttons in the main window");
 			d.parent = button.parentNode && button.parentNode.id;
 			eq(d.parent, "zotero-items-toolbar", "the toolbar holding the button");
 			eq(button.previousElementSibling && button.previousElementSibling.id, "zotero-tb-note-add", "the button's neighbour on the left");
-			eq(button.getAttribute("aria-label"), "Zotero Bridge", "aria-label");
-			eq(button.getAttribute("tooltiptext"), "Zotero Bridge", "tooltiptext");
+			eq(button.getAttribute("aria-label"), "ZotMax", "aria-label");
+			eq(button.getAttribute("tooltiptext"), "ZotMax", "tooltiptext");
 			eq(button.getAttribute("type"), "menu", "button type");
 			check(button.classList.contains("zotero-tb-button"), "the button lacks Zotero's zotero-tb-button class");
 			check(!button.hidden, "the button is hidden although 工具列按鈕 is on");
@@ -638,6 +698,8 @@ const TESTS = [
 				let doc = dialog.document;
 				d.url = doc.documentURI;
 				eq(doc.documentURI, P.DIALOG_URL, "palette window URL");
+				await waitFor(() => /ZotMax/.test(doc.title), "the palette window title to name ZotMax", 10000);
+				d.title = String(doc.title);
 				let root = doc.getElementById(P.DIALOG_ROOT);
 				// palette.css is applied (registered chrome package)
 				d.rootDisplay = dialog.getComputedStyle(root).display;
@@ -1118,7 +1180,7 @@ const TESTS = [
 				let items = [ctx.english, ctx.chinese, ctx.book, ctx.extra1, ctx.extra2];
 				let plan = await C.suggest(items, { ui: { confirmAI: () => "skip", status: () => {} } });
 				check(plan && Array.isArray(plan.items), `suggest() returned ${JSON.stringify(plan)}`);
-				d.notes = plan.notes;
+				d.notes = plain(plan.notes);
 				let picks = C.defaultPicks(plan);
 				d.picks = picks.map(p => `${p.itemKey} → ${p.dimension}/${p.value}`);
 				let want = [
@@ -1386,7 +1448,7 @@ const TESTS = [
 				// Search: matches from every tab, highlighted; Esc brings the tabs back
 				api.selectTab("features");
 				let box = c.querySelector("#zb-search");
-				let found = () => api.sections().filter(s => s.visible
+				let found = () => Array.from(api.sections()).filter(s => s.visible
 					&& !c.querySelector(`[data-zb-section="${s.id}"]`).classList.contains("zb-search-miss")).map(s => s.id);
 				box.focus();
 				box.value = "Notion";
@@ -1531,7 +1593,7 @@ const TESTS = [
 				return found;
 			};
 			// Off in 研究生引導, on in 進階 (features.js); none of these has its own onShowing condition
-			// (entries of the item and collection menus' 「Zotero Bridge ▸」 submenus, from content/commands.js)
+			// (entries of the item and collection menus' 「ZotMax ▸」 submenus, from content/commands.js)
 			const GATED = [
 				"zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-menu-ebhc-report",
 				"zotero-bridge-toolbar-chase-items", "zotero-bridge-chase-tools-included", "zotero-bridge-chase-tools-import",
@@ -1559,7 +1621,7 @@ const TESTS = [
 			let button = mainWindow().document.getElementById(ZB.toolbar.BUTTON_ID);
 			let before = F.snapshot();
 			let problems = [];
-			if (!button) problems.push("no Zotero Bridge toolbar button in the main window");
+			if (!button) problems.push("no ZotMax toolbar button in the main window");
 			d.visible = {};
 			d.toolbar = {};
 			try {
@@ -1757,6 +1819,18 @@ async function runTest(t, passed) {
 			+ unattributed.slice(0, 3).map(m => m.text).join(" | ");
 	}
 	rec.ms = Date.now() - start;
+	// Copy the details while their windows are still open: a value from a window closed later would
+	// make results.json unwritable ("can't access dead object")
+	for (let k of ["details", "pluginErrors", "allowedErrors", "otherConsoleErrors"]) {
+		if (rec[k] === undefined) continue;
+		try {
+			rec[k] = JSON.parse(JSON.stringify(rec[k]));
+		}
+		catch (e) {
+			let copy = plain(rec[k]);
+			rec[k] = copy && typeof copy === "object" ? copy : { unserializable: String(e) };
+		}
+	}
 	if (rec.ok) passed.add(t.name);
 	log(`${rec.ok ? "PASS" : "FAIL"} ${t.name} (${rec.ms} ms)${rec.ok ? "" : `\n       ${rec.error.split("\n")[0]}`}`);
 }
@@ -1767,9 +1841,9 @@ async function finish(reason) {
 	results.finishedAt = new Date().toISOString();
 	results.reason = reason;
 	results.ok = reason === "done" && results.tests.length > 0 && results.tests.every(t => t.ok);
-	results.allPluginMessages = messages.filter(isPluginMessage).slice(-100);
+	results.allPluginMessages = plain(messages.filter(isPluginMessage).slice(-100));
 	try {
-		await IOUtils.writeUTF8(PathUtils.join(workDir, "results.json"), JSON.stringify(results, null, 2));
+		await IOUtils.writeUTF8(PathUtils.join(workDir, "results.json"), resultsJSON());
 		log(`results written (${results.ok ? "all passed" : "FAILED"}: ${reason})`);
 	}
 	catch (e) {

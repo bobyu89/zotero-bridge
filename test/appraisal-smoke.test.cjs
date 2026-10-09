@@ -234,8 +234,8 @@ const JBI_SECTION = `<h2>嚴格評讀</h2><ul><li>評讀工具：JBI Checklist f
 
 function aiNote(env, parent, sections, data) {
 	let note = new env.MockItem("note");
-	note.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 test-model 於 2026-10-01T00:00:00Z 產生（Zotero Bridge）</em></p>"
-		+ sections + `<h2>📋 結構化資料（Zotero Bridge）</h2><pre>${JSON.stringify(data, null, 2)}</pre>`;
+	note.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 test-model 於 2026-10-01T00:00:00Z 產生（ZotMax）</em></p>"
+		+ sections + `<h2>📋 結構化資料（ZotMax）</h2><pre>${JSON.stringify(data, null, 2)}</pre>`;
 	note.tags = ["zotero-bridge-ai"];
 	env.addChild(parent, note);
 	return note;
@@ -426,9 +426,9 @@ test("文獻評讀表: pane prefilled from the AI note → answers, B reviewer, 
 
 	// ---- Collection summary from the collection menu ----
 	let collection = { id: 7, key: "COLL0001", name: "跌倒實證", libraryID: 1, getChildItems: () => [chen, lee, wu] };
-	// Collection menu → Zotero Bridge ▸ 匯出文獻評讀總表（目前分類） (commands.js)
+	// Collection menu → ZotMax ▸ 匯出文獻評讀總表（目前分類） (commands.js)
 	let menu = env.menus.find(m => m.menuID === "zotero-bridge-collection").menus[0].menus.find(m => m.l10nID === "zotero-bridge-appraisal-tools-summary");
-	assert.ok(menu, "in the collection menu's Zotero Bridge submenu");
+	assert.ok(menu, "in the collection menu's ZotMax submenu");
 	let visible;
 	menu.onShowing({}, { collectionTreeRows: [{ isCollection: () => true, ref: collection }], setVisible: (v) => { visible = v; } });
 	assert.equal(visible, true);
