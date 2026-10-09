@@ -315,3 +315,93 @@
 	-moz-context-properties: fill, fill-opacity;
 	fill: var(--fill-secondary, currentColor);
 }
+
+/* ---------- 統計解釋 (stats-explainer.js): an explanation of a PDF selection ---------- */
+
+.zb-st {
+	display: flex;
+	flex-direction: column;
+	gap: var(--zb-space-3);
+}
+
+.zb-st-entry,
+.zb-st-parts,
+.zb-st-simpler {
+	display: flex;
+	flex-direction: column;
+	gap: var(--zb-space-2);
+}
+
+.zb-st-source {
+	display: flex;
+	flex-direction: column;
+	gap: var(--zb-space-1);
+}
+
+.zb-st-quote {
+	white-space: pre-line;
+}
+
+.zb-st-page {
+	font-size: 0.92em;
+}
+
+.zb-st-part {
+	display: flex;
+	flex-direction: column;
+	gap: var(--zb-space-1);
+}
+
+/* 這是什麼: the term in Label weight, its meaning and 在這段裡 under it */
+.zb-st-terms {
+	margin: 0;
+}
+
+.zb-st-terms dt {
+	font-weight: 600;
+}
+
+.zb-st-terms dd {
+	margin: 0 0 var(--zb-space-1);
+	padding-inline-start: 1em;
+}
+
+.zb-st-here-label {
+	color: var(--zb-text-muted);
+}
+
+/* A number the check took out: words, not colour, say so (the warning line under the part) */
+.zb-st-removed {
+	color: var(--zb-text-muted);
+	white-space: nowrap;
+}
+
+.zb-st-warning {
+	color: var(--zb-text-muted);
+	font-size: 0.92em;
+}
+
+/* Errors are Ink at 600, like the settings pane's live validation: no red text */
+.zb-st-error {
+	font-weight: 600;
+}
+
+/* 簡單版: set apart by a hairline above, no box */
+.zb-st-simpler {
+	padding-top: var(--zb-space-2);
+	border-top: 1px solid var(--zb-line);
+}
+
+.zb-st .zb-sp-more > summary {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.zb-st .zb-sp-more[open] > .zb-st-entry {
+	margin-top: var(--zb-space-2);
+}
+
+.zb-st button[aria-busy="true"] {
+	cursor: progress;
+}

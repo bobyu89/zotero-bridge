@@ -370,6 +370,7 @@ const TESTS = [
 				palette: ["open", "close", "render", "localize", "attach", "detach", "shutdown", "shortcutLabel"],
 				toolbar: ["init", "add", "remove", "shutdown", "update"],
 				sidepanel: ["init", "register", "render", "refreshAll", "addStylesheet", "removeStylesheet", "shutdown", "targetItem"],
+				statsExplainer: ["init", "register", "shutdown", "explain", "explainCurrentSelection", "simplify", "saveToNote", "paneView", "renderPane", "onSelectionPopup", "methodsExcerpt", "checkExplanation", "appendStatsNote"],
 				main: ["init", "shutdown", "run", "readSettings", "renderPane", "noteLinks", "saveQuietly", "renameNotionColumns", "notionClient", "prepareFullText", "batchStatus"],
 			};
 			let missing = [];
@@ -1247,6 +1248,113 @@ const TESTS = [
 					d.closeError = String(e);
 				}
 			}
+		},
+	},
+	{
+		name: "讀懂統計: a selection of text.pdf explained in the reader's panel with a stubbed AI; the invented number is removed",
+		needs: ["the ZotMax panel is in the reader's side pane next to the PDF"],
+		timeout: 90000,
+		async fn(d) {
+			let ZB = zb();
+			let S = ZB.statsExplainer;
+			let win = mainWindow();
+			let doc = win.document;
+			// The selection: a sentence of text.pdf as the PDF worker reads it
+			let full = await Zotero.PDFWorker.getFullText(ctx.textPDF.id, 1);
+			const SENTENCE = "The intervention reduced the rate of falls by thirty percent compared with usual care.";
+			check(String(full.text).replace(/\s+/g, " ").includes(SENTENCE), "text.pdf does not contain the sentence to select");
+			// The stub's answer: no number is in the selection or text.pdf, so 30% and 0.7 are invented
+			const ANSWER = JSON.stringify({
+				terms: [{ term: "rate of falls", what: "跌倒率", here: "下降 30%，相當於 rate ratio 0.7" }],
+				restatement: "介入讓跌倒率下降三成。",
+				clinical: "對社區長者有意義。",
+				cautions: ["這段沒有寫信賴區間。"],
+			});
+			let pluginGlobal = Components.utils.getGlobalForObject(ZB.main.run);
+			let realFetch = pluginGlobal.fetch;
+			let calls = [];
+			let stub = async (url) => {
+				calls.push(String(url));
+				if (!String(url).startsWith("https://api.anthropic.com/")) throw new Error(`unexpected network call to ${url}`);
+				return new pluginGlobal.Response(JSON.stringify({
+					model: "e2e-model", stop_reason: "end_turn",
+					content: [{ type: "text", text: ANSWER }],
+					usage: { input_tokens: 800, output_tokens: 200 },
+				}), { status: 200, headers: { "content-type": "application/json" } });
+			};
+			let before = {
+				on: Zotero.Prefs.get(ZB_PREF + "feature.statsExplainer", true),
+				confirm: Zotero.Prefs.get(ZB_PREF + "statsExplainer.confirm", true),
+			};
+			Object.defineProperty(pluginGlobal, "fetch", { value: stub, writable: true, configurable: true });
+			let retry = ZB.main.runtime.retry;
+			ZB.main.runtime.retry = { maxRetries: 0 };
+			let reader = null;
+			try {
+				await ZB.secrets.set("anthropicKey", "sk-ant-e2e-fake-key");
+				setPref("llm.provider", "anthropic");
+				setPref("feature.statsExplainer", true);
+				setPref("statsExplainer.confirm", "never");
+				d.listening = !!S.listening;
+				check(S.listening, "the reader listener is not registered (Zotero.Reader.registerEventListener)");
+				reader = await Zotero.Reader.open(ctx.textPDF.id);
+				check(reader, "Zotero.Reader.open returned nothing");
+				await waitFor(() => win.Zotero_Tabs && win.Zotero_Tabs.selectedID === reader.tabID, "the reader tab to be selected", 30000);
+				// The popup event as the reader dispatches it, through Zotero's own dispatcher when it has one
+				let holder = doc.createElement("div");
+				let event = {
+					type: "renderTextSelectionPopup", reader, doc,
+					params: { annotation: { text: SENTENCE, pageLabel: "1", position: { pageIndex: 0, rects: [[72, 700, 500, 712]] } } },
+					append: (...nodes) => holder.append(...nodes),
+				};
+				d.dispatch = typeof Zotero.Reader._dispatchEvent === "function" ? "Zotero.Reader._dispatchEvent" : "onSelectionPopup";
+				if (d.dispatch === "Zotero.Reader._dispatchEvent") Zotero.Reader._dispatchEvent(event);
+				else S.onSelectionPopup(event);
+				let button = holder.querySelector("button[data-zb-stats=explain]");
+				check(button, "no 「ZotMax：解釋統計」 button in the popup");
+				d.buttonText = String(button.textContent);
+				button.click();
+				await waitFor(() => S.loadRecord(ctx.english).entries.length > 0, "the explanation saved in the child note", 30000);
+				eq(calls.length, 1, "fetch calls");
+				let entry = S.loadRecord(ctx.english).entries[0];
+				d.removed = entry.removed.terms;
+				d.here = String(entry.explanation.terms[0].here);
+				check(!/30|0\.7/.test(d.here), `the invented numbers stayed: ${d.here}`);
+				check(d.here.includes(S.REMOVED), `no removal marker: ${d.here}`);
+				// The reader's side pane shows it under 統計解釋
+				let pane = doc.getElementById("zotero-context-pane");
+				let section = await waitFor(() => [...pane.querySelectorAll("item-pane-custom-section")].find(e => e.dataset.pane === ctx.paneKey),
+					"the ZotMax section in the reader's side pane", 30000);
+				let part = await waitFor(() => section.querySelector('[data-zb-sub="stats"] [data-zb-entry]') && section.querySelector('[data-zb-sub="stats"]'),
+					"統計解釋 in the reader's side pane", 30000);
+				d.partText = part.textContent.replace(/\s+/g, " ").slice(0, 300);
+				check(part.querySelector("[data-zb-removed]"), "no removed-number marker in the panel");
+				check(part.querySelector("[data-zb-warning]"), "no 「這個數字不在原文裡」 warning in the panel");
+				check(!/30%/.test(part.textContent), "the panel shows the invented 30%");
+				// 存到筆記: the literature note of the earlier sync gets the 「統計筆記」 callout
+				await S.saveToNote(ctx.english, entry.id);
+				let note = await findNote(ctx.noteDir, ctx.english.key);
+				check(note && note.text.includes("[!note]- 統計筆記"), "存到筆記 did not write the 「統計筆記」 callout");
+				check(note.text.indexOf("統計筆記") > note.text.indexOf("%% zotero-bridge:end %%"), "the callout is inside the managed block");
+			}
+			finally {
+				Object.defineProperty(pluginGlobal, "fetch", { value: realFetch, writable: true, configurable: true });
+				ZB.main.runtime.retry = retry;
+				await ZB.secrets.clear("anthropicKey");
+				setPref("feature.statsExplainer", before.on === undefined ? false : before.on);
+				setPref("statsExplainer.confirm", before.confirm || "above");
+				if (reader) {
+					try {
+						win.Zotero_Tabs.close(reader.tabID);
+					}
+					catch (e) {
+						d.closeError = String(e);
+					}
+				}
+			}
+		},
+		get allow() {
+			return ctx.keyStoreUsable ? null : /os-keystore|OSKeyStore|key store|鑰匙圈/i;
 		},
 	},
 	{

@@ -9,6 +9,8 @@
 	const AI_HISTORY_TAG = "zotero-bridge-ai-history";
 	// The 文獻評讀表 child note (appraisal-form.js): synced as its own section, never as a user note
 	const APPRAISAL_TAG = "zotero-bridge-appraisal";
+	// 讀懂統計's explanations (stats-explainer.js): shown in the panel, never synced as a user note or sent to the AI
+	const STATS_TAG = "zotero-bridge-stats";
 
 	function libraryInfo(libraryID) {
 		let lib = Zotero.Libraries.get(libraryID);
@@ -316,7 +318,7 @@
 			if (isAINote(note)) {
 				data.aiNote = { key: note.key, html: note.getNote() };
 			}
-			else if (isAIHistoryNote(note)) {
+			else if (isAIHistoryNote(note) || note.getTags().some(t => t.tag === STATS_TAG)) {
 				continue;
 			}
 			else if (note.getTags().some(t => t.tag === APPRAISAL_TAG)) {

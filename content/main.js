@@ -592,6 +592,30 @@
 		return out;
 	}
 
+	/**
+	 * Where the item's literature note is, for writes outside a sync (讀懂統計's 「存到筆記」): the same
+	 * lookup as noteLinks. Resolves to { path, relPath } when the note exists and belongs to the item,
+	 * else null. Never goes online.
+	 */
+	async function literatureNote(item) {
+		let settings = vaultSettings();
+		if (!item || !settings.vaultPath) return null;
+		let data = ZB.adapter.paneData(item);
+		let session = syncedThisSession.get(itemRef(item));
+		let target;
+		if (session && session.obsidianPath) {
+			let parts = session.obsidianPath.split("/");
+			target = obsidianTarget(settings, parts.slice(0, -1), parts[parts.length - 1].replace(/\.md$/i, ""));
+		}
+		else {
+			let route = ZB.core.resolveRoute(data, settings.rules, settings.defaults);
+			target = await resolveObsidianPath(settings, ZB.core.splitFolder(route.obsidianFolder), ZB.core.noteBasename(data, settings.filenameFormat), data,
+				{ index: obsidianIndexCache(settings) });
+		}
+		if ((await noteOwner(target.path)) !== `${data.libraryPath}/${data.key}`) return null;
+		return { path: target.path, relPath: target.relPath };
+	}
+
 	async function writeObsidian(obsidian, data, opts) {
 		await IOUtils.makeDirectory(obsidian.dir, { createAncestors: true, ignoreExisting: true });
 		let existing = (await IOUtils.exists(obsidian.path)) ? await IOUtils.readUTF8(obsidian.path) : null;
@@ -1645,6 +1669,8 @@
 		ZB.pubmedWatch.init();
 		// Polling of AI batches submitted earlier (ai-batch.js)
 		ZB.aiBatch.init();
+		// 讀懂統計: the button in the PDF reader's text-selection popup (stats-explainer.js)
+		ZB.statsExplainer.init({ pluginID });
 	}
 
 	// A batch still marked running at startup was cut off by Zotero quitting or crashing
@@ -1660,6 +1686,8 @@
 	}
 
 	function shutdown() {
+		// First: the PDF reader's listener (Zotero can still call it while the plugin is disabled)
+		ZB.statsExplainer.shutdown();
 		// The batch loop stops before its next item; its pref already lists what is left
 		if (currentBatch) Object.assign(currentBatch, { cancelled: true, shutdown: true });
 		for (let id of menuIDs) Zotero.MenuManager.unregisterMenu(id);
@@ -1685,6 +1713,8 @@
 		enqueue, notify, buildObsidianIndex, saveQuietly,
 		// for sidepanel.js
 		noteLinks, vaultSettings,
+		// for stats-explainer.js (「存到筆記」)
+		literatureNote,
 		// for the modules whose features can be switched off (features.js)
 		notifyFeatureOff,
 		// for appraisal-form.js

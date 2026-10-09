@@ -488,6 +488,11 @@
 			features: ["conceptsAI"], needs: null, menus: [],
 			keywords: [...KW.ai, "概念", "概念卡片", "concept", "綜整", "synthesis", "summary"],
 			run: () => ZB().concepts.synthesizeFromMenu() },
+		// The text selected in the PDF reader (its selection popup has the same as a button)
+		{ id: "explain-stats", group: "ai", l10n: "zotero-bridge-cmd-explain-stats", label: "解釋所選統計",
+			features: ["statsExplainer"], needs: null, menus: [],
+			keywords: [...KW.ai, "讀懂統計", "統計", "statistics", "解釋", "explain", "odds ratio", "信賴區間", "confidence interval", "p 值", "p value", "效果量", "effect size", "pdf"],
+			run: sel => ZB().statsExplainer.explainCurrentSelection(sel && sel.window) },
 		// Like the Tools entries: only while batches are pending
 		{ id: "ai-batch-check", group: "ai", l10n: "zotero-bridge-menu-ai-batch-check", label: "檢查 AI 批次進度",
 			features: [], needs: null, menus: [], tools: true,

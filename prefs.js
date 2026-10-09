@@ -133,6 +133,7 @@ pref("extensions.zotero-bridge.feature.aiHighlights", false);
 pref("extensions.zotero-bridge.feature.autoClassify", true);
 pref("extensions.zotero-bridge.feature.classifyAI", false);
 pref("extensions.zotero-bridge.feature.toolbarButton", true);
+pref("extensions.zotero-bridge.feature.statsExplainer", false);
 // Settings pane (content/preferences.js): the tab chosen last, and a section (data-zb-section ID, e.g.
 // "notion") to open the next time the pane is on screen; the pane clears it once it has opened it
 pref("extensions.zotero-bridge.prefs.lastTab", "features");
@@ -152,3 +153,7 @@ pref("extensions.zotero-bridge.classify.lastRun", "");
 // The ZotMax panel in the item pane (content/sidepanel.js): which parts are open, JSON { keyPoints: true, … }
 // (empty = 重點 and 動作 open, the others closed)
 pref("extensions.zotero-bridge.pane.open", "{}");
+// 讀懂統計 (content/stats-explainer.js): when to ask before the AI call — "above" (only when the estimate
+// is over statsExplainer.confirmAbove US$; otherwise the estimate shows in the panel), "always" or "never"
+pref("extensions.zotero-bridge.statsExplainer.confirm", "above");
+pref("extensions.zotero-bridge.statsExplainer.confirmAbove", "0.05");

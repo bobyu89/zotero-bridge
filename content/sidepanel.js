@@ -16,6 +16,8 @@
  *   動作       the item commands of the command catalog (commands.js), run with [this item] as the
  *              selection; switched-off commands hide, as in the toolbar and the right-click menus.
  *   延伸搜尋   the search links row (search-links.js).
+ * After 重點, 統計解釋 (stats-explainer.js, switch 讀懂統計) appears once the item has an explanation of
+ * a PDF selection, or one is running.
  * 重點 and 動作 start open; what the user opens or closes is remembered (pref pane.open). Parts whose
  * features are switched off disappear.
  *
@@ -35,6 +37,7 @@
 	const OPEN_PREF = PREF + "pane.open";
 	const SUBSECTIONS = [
 		{ id: "keyPoints", open: true },
+		{ id: "stats", open: true },
 		{ id: "highlights", open: false },
 		{ id: "status", open: false },
 		{ id: "actions", open: true },
@@ -57,6 +60,7 @@
 		status: ["zotero-bridge-pane-status", "狀態"],
 		actions: ["zotero-bridge-pane-actions", "動作"],
 		search: ["zotero-bridge-pane-search", "延伸搜尋"],
+		stats: ["zotero-bridge-pane-stats", "統計解釋"],
 		findings: ["zotero-bridge-pane-findings", "主要發現"],
 		fullNote: ["zotero-bridge-pane-full-note", "完整 AI 筆記"],
 		fullNoteMeta: ["zotero-bridge-pane-full-note-meta", "完整 AI 筆記（{ $name }）"],
@@ -295,6 +299,7 @@
 		let panel = h(doc, "div", { class: "zb-sp", "data-zb-pane": "panel" });
 		body.append(panel);
 		let links = renderKeyPoints(ctx, panel);
+		renderStats(ctx, panel);
 		renderHighlights(ctx, panel);
 		let synced = renderStatus(ctx, panel);
 		renderActions(ctx, panel);
@@ -357,6 +362,22 @@
 		body.append(links);
 		panel.append(details);
 		return links;
+	}
+
+	// 統計解釋 (stats-explainer.js): only while 讀懂統計 is on and there is something to show
+	function renderStats(ctx, panel) {
+		let S = ZB().statsExplainer;
+		if (!S || !featureOn("statsExplainer")) return;
+		try {
+			let view = S.paneView(ctx.item);
+			if (!view) return;
+			let { details, body } = part(ctx.doc, "stats", view.peek);
+			S.renderPane(ctx.doc, body, ctx.item, view);
+			panel.append(details);
+		}
+		catch (e) {
+			log(e);
+		}
 	}
 
 	/** The whole AI note (without its one-sentence summary), folded; its summary names model and date. Null when empty. */

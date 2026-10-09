@@ -311,6 +311,15 @@ The paper at a glance, next to it: one section of Zotero's item pane, so it sits
 - **Multi-select:** Zotero shows its own multi-item view without item pane sections; the panel has nothing to do there.
 - **Keyboard:** summaries, rows and buttons are native and in the Tab order; focus rings are 2px Accent. The swatch is decoration (`aria-hidden`); meanings and counts are words.
 
+### 統計解釋 (`content/stats-explainer.js`, switch 讀懂統計)
+A part of the ZotMax panel, right after 重點, that exists only while the switch is on and the item has an explanation (or one is running); open by default, remembered like the others. Peek: the start of the latest selection.
+- **Entry point:** the PDF reader's text-selection popup gets one button, 「ZotMax：解釋統計」, through `Zotero.Reader.registerEventListener("renderTextSelectionPopup", …)`. It wears the reader's own `toolbar-button wide-button` (the style of 「Add to Note」), so it looks like part of Zotero; no icon. 快速指令 has the same as 「解釋所選統計」 (the last selection in the reader tab on screen).
+- **An explanation:** the selection as a `.zb-sp-quote` (2px Hairline at the inline start, Pencil, italic), 「回到 PDF 第 n 頁」 as a text link under it; then four sections, each a Label (600) and its content: **這是什麼** (a `<dl>`: the term 600, its meaning, 「在這段裡：」 in Pencil before the value), **這段在說什麼**, **臨床上代表什麼**, **要注意的地方** (bullets). A Hint line says the numbers were checked and the text has the last word, with model · date. Then native buttons in the 動作 row style: 「存到筆記」 (「已存到筆記」 and disabled once done) and 「再解釋得簡單一點」 (gone once there is a 簡單版, which follows the four parts after a Hairline, under the Label 「簡單版」).
+- **Removed numbers:** a number the check took out reads 「［數字已移除］」 in Pencil, and the section it was in ends with one Pencil 0.92em line 「⚠ 這個數字不在原文裡，已移除」 (「⚠ 有 n 個數字…」). Words carry it; no colour.
+- **History:** the latest explanation open, the four before it each folded in a `.zb-sp-more` `<details>` named 「date · start of the selection」.
+- **States:** running — the quote and a `role="status"` Hint 「AI 解釋中…（預估約 US$0.01）」 with `aria-busy` (the estimate inline instead of a dialog; a dialog only above the threshold in 設定 → AI → 讀懂統計); 簡單一點 running — the button disabled with `aria-busy` and a Hint 「換個簡單的說法中…」; failed or no API key — one Ink 600 line (`role="alert"`, like live validation: no red) with 「打開設定」 when it helps and 「知道了」 to clear it; after 存到筆記 — a `role="status"` line under the buttons (saved, not synced yet, no vault).
+- **Tone:** explain, don't judge: the copy says what a number means and what to watch for, never whether the paper is good.
+
 ## Literature note (Obsidian and Notion)
 
 The synced literature note is a **Read** surface: the reader came back to a paper to find its point. The column is the user's vault theme; the plugin only decides structure, order and what is said once.
@@ -334,7 +343,8 @@ The synced literature note is a **Read** surface: the reader came back to a pape
    6. `[!info]- 摘要（Abstract）`
    7. `[!search]- 🔎 延伸搜尋`
    8. `[!info]- 書目資訊` (authors, year, publication, DOI, APA 7)
-3. Sections without content are left out; nothing is said twice (the summary and the Zotero/Notion links live only in 重點; the full text is linked, never embedded).
+3. Outside the markers, in the user's part: `> [!note]- 統計筆記`, created by the first 「存到筆記」 of 讀懂統計 at the end of the note and only appended to afterwards (each explanation: date · page with a link back to the PDF, the selection quoted, the four parts, a closing italic line on the number check). Because it is outside the markers, every re-sync keeps it as the user left it.
+4. Sections without content are left out; nothing is said twice (the summary and the Zotero/Notion links live only in 重點; the full text is linked, never embedded).
 
 ### Notion
 The managed container keeps the same order: 重點 as open blocks at its top, each folded section a **toggle**; highlight-group toggles take their colour's background (`yellow_background`…), the others stay default. Toggles go in their own requests (Notion nests two levels per request); 文獻評讀表's real table is inserted inside its toggle.
