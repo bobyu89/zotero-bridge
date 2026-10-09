@@ -137,7 +137,7 @@ zotero-bridge-toolbar-settings =
 
 ## Settings → 功能: presets and feature switches (content/features.js, preferences.js)
 zotero-bridge-features-heading = Features
-zotero-bridge-features-intro = Pick a starting point, then adjust one by one. Switches take effect immediately; when a feature is off, its settings below fold away too.
+zotero-bridge-features-intro = Pick a starting point, then adjust one by one. Switches take effect immediately; when a feature is off, its settings on the other tabs fold away too.
 zotero-bridge-preset-group =
     .aria-label = Mode
 zotero-bridge-preset-guided = Guided (for graduate students)
@@ -219,6 +219,29 @@ zotero-bridge-feature-concepts-ai = AI synthesis for concept cards
 zotero-bridge-feature-concepts-ai-desc = Let an AI draft a synthesis for one concept card, with a checklist of numbers to verify.
 zotero-bridge-feature-classify-ai = AI topic classification
 zotero-bridge-feature-classify-ai-desc = Lets an AI decide which of your topics each item belongs to, from title and abstract; you see the item count and estimated cost first.
+
+## Settings → tabs, search and showSection (preferences.xhtml, preferences.js)
+zotero-bridge-prefs-search-label = Find a setting
+zotero-bridge-prefs-tabs =
+    .aria-label = Settings tabs
+zotero-bridge-prefs-tab-features = Features
+zotero-bridge-prefs-tab-sync = Sync
+zotero-bridge-prefs-tab-organize = Organize
+zotero-bridge-prefs-tab-search = Find literature
+zotero-bridge-prefs-tab-appraise = Screening and appraisal
+zotero-bridge-prefs-tab-ai = AI
+zotero-bridge-prefs-tab-empty = Every feature on this tab is off: { $features }. Turn one on under Features and its settings appear here.
+zotero-bridge-prefs-tab-empty-go = Go to Features
+zotero-bridge-prefs-search-found =
+    { $count ->
+        [one] 1 section found. Press Esc to go back to the tabs.
+       *[other] { $count } sections found. Press Esc to go back to the tabs.
+    }
+zotero-bridge-prefs-search-none = No settings match “{ $query }”. Try other words, such as Notion, PubMed or API key.
+zotero-bridge-prefs-search-off = Also in features that are off:
+zotero-bridge-prefs-section-off = The “{ $section }” settings are on the { $tab } tab and appear once this feature is on.
+zotero-bridge-prefs-section-ready = On. The “{ $section }” settings are on the { $tab } tab.
+zotero-bridge-prefs-section-go = Go to the settings
 
 ## Settings → highlight colours, full-text notes, Notion columns (preferences.xhtml, preferences.js)
 zotero-bridge-colors-heading = Highlight colours and their meaning

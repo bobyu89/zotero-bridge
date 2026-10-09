@@ -137,7 +137,7 @@ zotero-bridge-toolbar-settings =
 
 ## Settings → 功能: presets and feature switches (content/features.js, preferences.js)
 zotero-bridge-features-heading = 功能
-zotero-bridge-features-intro = 先選一個起點，再逐項調整。開關馬上生效；關掉的功能，下面的設定也會收起來。
+zotero-bridge-features-intro = 先選一個起點，再逐項調整。開關馬上生效；關掉的功能，其他分頁裡它的設定也會收起來。
 zotero-bridge-preset-group =
     .aria-label = 模式
 zotero-bridge-preset-guided = 研究生引導
@@ -219,6 +219,25 @@ zotero-bridge-feature-concepts-ai = 概念卡片 AI 綜整
 zotero-bridge-feature-concepts-ai-desc = 讓 AI 為一張概念卡片寫綜整草稿，附數字查核清單。
 zotero-bridge-feature-classify-ai = AI 主題分類
 zotero-bridge-feature-classify-ai-desc = 自動分類時讓 AI 依標題和摘要判斷文獻屬於你列的哪些主題；執行前先告訴你篇數和預估費用。
+
+## Settings → tabs, search and showSection (preferences.xhtml, preferences.js)
+zotero-bridge-prefs-search-label = 找設定
+zotero-bridge-prefs-tabs =
+    .aria-label = 設定分頁
+zotero-bridge-prefs-tab-features = 功能
+zotero-bridge-prefs-tab-sync = 同步
+zotero-bridge-prefs-tab-organize = 整理
+zotero-bridge-prefs-tab-search = 找文獻
+zotero-bridge-prefs-tab-appraise = 篩選與評讀
+zotero-bridge-prefs-tab-ai = AI
+zotero-bridge-prefs-tab-empty = 這一頁的功能都關著：{ $features }。到「功能」打開其中一個，它的設定就會出現在這裡。
+zotero-bridge-prefs-tab-empty-go = 前往「功能」
+zotero-bridge-prefs-search-found = 找到 { $count } 個設定區塊。按 Esc 回到分頁。
+zotero-bridge-prefs-search-none = 沒有符合「{ $query }」的設定。換個說法試試，例如英文名稱：Notion、PubMed、API key。
+zotero-bridge-prefs-search-off = 關著的功能裡也有：
+zotero-bridge-prefs-section-off = 「{ $section }」的設定在「{ $tab }」分頁，打開這個功能後才會出現。
+zotero-bridge-prefs-section-ready = 已打開。「{ $section }」的設定在「{ $tab }」分頁。
+zotero-bridge-prefs-section-go = 前往設定
 
 ## Settings → 劃線顏色與意義, 全文筆記, Notion columns (preferences.xhtml, preferences.js)
 zotero-bridge-colors-heading = 劃線顏色與意義
