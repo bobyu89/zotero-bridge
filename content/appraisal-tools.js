@@ -690,6 +690,7 @@
 	// ---------- JSON ----------
 
 	const FORMAT = "zotero-bridge-appraisal";
+	const MAX_COACH_RUNS = 5;
 
 	function isoDate(v) {
 		let m = /^(\d{4}-\d{2}-\d{2})/.exec(String(v || ""));
@@ -699,12 +700,12 @@
 	/**
 	 * A complete appraisal record (what the Zotero child note and the web page store):
 	 * { format, version, tool, answers, overall, overallNote, verified, verifiedAt, reviewer,
-	 *   dual, answersB, overallB, reviewerB, aiTool, updatedAt }
+	 *   dual, answersB, overallB, reviewerB, aiTool, updatedAt, coach? }
 	 */
 	function normalizeRecord(obj) {
 		let r = obj && typeof obj === "object" ? obj : {};
 		let tool = getTool(r.tool || r.toolId);
-		return {
+		let out = {
 			format: FORMAT,
 			version: 1,
 			tool: tool ? tool.id : (r.tool ? String(r.tool) : null),
@@ -721,6 +722,10 @@
 			aiTool: String(r.aiTool || "").trim(),
 			updatedAt: String(r.updatedAt || ""),
 		};
+		// 評讀陪練 runs (appraisal-coach.js), kept as plain JSON; only present when there are any
+		let coach = Array.isArray(r.coach) ? r.coach.filter(x => x && typeof x === "object" && !Array.isArray(x)) : [];
+		if (coach.length) out.coach = JSON.parse(JSON.stringify(coach.slice(-MAX_COACH_RUNS)));
+		return out;
 	}
 
 	function looksLikeRecord(obj) {

@@ -45,14 +45,14 @@ test("catalog: unique IDs, known groups and requirements, both presets on every 
 
 test("presets: 研究生引導 leaves finding literature and writing to the user; 進階 turns everything on", () => {
 	let offInGuided = F.FEATURES.filter(f => !f.presets.guided).map(f => f.id).sort();
-	assert.deepEqual(offInGuided, ["aiBatch", "aiHighlights", "citationChase", "classifyAI", "conceptsAI", "ebhcReport", "progressReport", "pubmedWatch", "reviewDraft", "statsExplainer", "synthesis"]);
+	assert.deepEqual(offInGuided, ["aiBatch", "aiHighlights", "appraisalCoach", "citationChase", "classifyAI", "conceptsAI", "ebhcReport", "progressReport", "pubmedWatch", "reviewDraft", "statsExplainer", "synthesis"]);
 	assert.ok(F.FEATURES.every(f => f.presets.advanced), "advanced: all on");
 	// The features that help the user do it themselves stay on
 	for (let id of ["sync", "aiNotes", "status", "apaZh", "dashboard", "concepts", "autoClassify", "toolbarButton", "bibliography", "screening", "searchLinks", "appraisalForm", "annotationImages", "fullTextMarkdown"]) {
 		assert.equal(F.get(id).presets.guided, true, id);
 	}
 	// Every AI feature is marked, and so is every feature that goes online on its own
-	for (let id of ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "ebhcReport", "conceptsAI", "classifyAI", "aiHighlights", "statsExplainer"]) {
+	for (let id of ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "ebhcReport", "conceptsAI", "classifyAI", "aiHighlights", "appraisalCoach", "statsExplainer"]) {
 		assert.equal(F.get(id).usesAI, true, id);
 		assert.equal(F.get(id).usesNetwork, true, id);
 	}
@@ -76,6 +76,9 @@ test("presets: 研究生引導 leaves finding literature and writing to the user
 	assert.equal(F.get("fullTextMarkdown").usesAI, undefined, "the full-text note needs no AI");
 	assert.deepEqual(F.get("fullTextMarkdown").requires, ["sync"]);
 	assert.deepEqual(F.get("aiHighlights").requires, ["aiNotes"], "AI key sentences come with the AI note");
+	// 評讀陪練: an AI feature (grouped with the other AI switches), on top of the form and the AI service
+	assert.equal(F.get("appraisalCoach").group, "ai");
+	assert.deepEqual(F.get("appraisalCoach").requires, ["appraisalForm", "aiNotes"]);
 });
 
 test("reused enable prefs stay the single source of truth", () => {
@@ -145,8 +148,7 @@ test("applyPreset, currentPreset (自訂 when mixed) and restore for undo", () =
 test("migrate: a fresh profile stays guided; earlier use turns the new switches on once, reused prefs keep the user's values", () => {
 	// Fresh install
 	let s = store();
-	// Every step runs; `added` names the switches of the last one
-	assert.deepEqual(F.migrate(), { preset: "guided", evidence: [], steps: F.MIGRATIONS.map(m => m.version), added: F.FEATURES.filter(f => f.since === F.MIGRATION_VERSION).map(f => f.id), newSwitches: false });
+	assert.deepEqual(F.migrate(), { preset: "guided", evidence: [], steps: [1, 2, 3], added: F.FEATURES.filter(f => f.since === 3).map(f => f.id), newSwitches: false });
 	assert.equal(s.data[F.MIGRATION_PREF], F.MIGRATION_VERSION);
 	assert.equal(F.currentPreset(), "guided");
 	assert.equal(F.migrate(), null, "runs once");
@@ -191,11 +193,11 @@ test("migrate: a fresh profile stays guided; earlier use turns the new switches 
 });
 
 test("migrate to version 2: profiles already on 進階 get the new switches on, others keep the defaults", () => {
-	assert.ok(F.MIGRATION_VERSION >= 2);
+	assert.equal(F.MIGRATION_VERSION, 3);
 	// One version-2 step for every switch v0.10.0 adds
 	let added = F.FEATURES.filter(f => f.since === 2).map(f => f.id).sort();
 	assert.deepEqual(added, ["aiHighlights", "autoClassify", "classifyAI", "fullTextMarkdown", "toolbarButton"]);
-	assert.ok(F.FEATURES.filter(f => !added.includes(f.id)).every(f => f.since === 1 || f.since > 2));
+	assert.ok(F.FEATURES.filter(f => !added.includes(f.id)).every(f => f.since === 1 || f.since === 3));
 	let v1Advanced = () => {
 		let values = { "features.version": 1, "obsidian.vaultPath": "/vault" };
 		for (let f of F.FEATURES.filter(x => x.since === 1)) values[f.pref] = f.presets.advanced;
@@ -207,11 +209,13 @@ test("migrate to version 2: profiles already on 進階 get the new switches on, 
 	assert.equal(F.currentPreset(), "custom", "AI 主題分類 is still at its default before the migration");
 	let result = F.migrate();
 	assert.equal(result.preset, "advanced");
-	assert.ok(result.steps.includes(2));
+	assert.deepEqual(result.steps, [2, 3]);
+	assert.deepEqual(result.added.sort(), ["appraisalCoach", "statsExplainer"], "the last step's switches");
+	assert.equal(s.data["feature.aiHighlights"], true);
 	assert.equal(s.data["feature.classifyAI"], true);
 	assert.equal(s.data["feature.autoClassify"], true);
 	assert.equal(s.data["feature.toolbarButton"], true, "written, so a later default change can't hide it");
-	assert.equal(s.data[F.MIGRATION_PREF], F.MIGRATION_VERSION);
+	assert.equal(s.data[F.MIGRATION_PREF], 3);
 	assert.equal(F.currentPreset(), "advanced");
 	assert.equal(F.migrate(), null, "runs once");
 
@@ -220,7 +224,7 @@ test("migrate to version 2: profiles already on 進階 get the new switches on, 
 	s.writes.length = 0;
 	result = F.migrate();
 	assert.equal(result.preset, "guided");
-	assert.deepEqual([...new Set(s.writes)], [F.MIGRATION_PREF]);
+	assert.deepEqual(s.writes, [F.MIGRATION_PREF, F.MIGRATION_PREF], "steps 2 and 3");
 	assert.equal(F.isEnabled("classifyAI"), false);
 	assert.equal(F.isEnabled("autoClassify"), true);
 	assert.equal(F.isEnabled("toolbarButton"), true, "the toolbar button is on by default");
@@ -255,12 +259,11 @@ test("migrate to version 2: profiles already on 進階 get the new switches on, 
 	assert.equal(F.migrate().preset, "guided");
 	assert.equal(F.isEnabled("classifyAI"), false);
 	assert.equal(F.isEnabled("toolbarButton"), true);
-	assert.equal(s.data[F.MIGRATION_PREF], F.MIGRATION_VERSION);
+	assert.equal(s.data[F.MIGRATION_PREF], 3);
 });
 
 test("migrate step 2: a 進階 profile gets 全文筆記 and AI 標重點 at their advanced values; others keep the guided defaults", () => {
-	assert.ok(F.MIGRATION_VERSION >= 2);
-	assert.deepEqual(F.MIGRATIONS.map(m => m.version), Array.from({ length: F.MIGRATION_VERSION }, (x, i) => i + 1), "one entry per step, in order");
+	assert.deepEqual(F.MIGRATIONS.map(m => m.version), [1, 2, 3], "one entry per step, in order");
 	let newOnes = F.FEATURES.filter(f => f.since === 2).map(f => f.id);
 	assert.deepEqual(newOnes.sort(), ["aiHighlights", "autoClassify", "classifyAI", "fullTextMarkdown", "toolbarButton"]);
 	let advancedBefore = Object.fromEntries(F.FEATURES.filter(f => f.since === 1).map(f => [f.pref, f.presets.advanced]));
@@ -268,13 +271,13 @@ test("migrate step 2: a 進階 profile gets 全文筆記 and AI 標重點 at the
 	// Migrated to 進階 by version 1 (everything from then on), AI 標重點 still at its default
 	let s = store(Object.assign({ [F.MIGRATION_PREF]: 1 }, advancedBefore));
 	let result = F.migrate();
-	assert.deepEqual(result.steps, F.MIGRATIONS.map(m => m.version).filter(v => v >= 2), "only the steps after 1 run");
+	assert.deepEqual(result.steps, [2, 3], "only the new steps run");
 	assert.equal(result.newSwitches, true);
 	assert.equal(s.data["feature.aiHighlights"], true);
 	assert.equal(F.isEnabled("fullTextMarkdown"), true);
 	assert.equal(result.preset, "advanced");
 	assert.equal(F.currentPreset(), "advanced", "still 進階 with the new switches");
-	assert.equal(s.data[F.MIGRATION_PREF], F.MIGRATION_VERSION);
+	assert.equal(s.data[F.MIGRATION_PREF], 3);
 	assert.equal(F.migrate(), null, "runs once");
 
 	// A 研究生引導 profile at version 1: the new switches keep their guided values
@@ -292,8 +295,56 @@ test("migrate step 2: a 進階 profile gets 全文筆記 and AI 標重點 at the
 	// 進階, but the user already turned AI 標重點 off themselves: kept off
 	s = store(Object.assign({ [F.MIGRATION_PREF]: 1 }, advancedBefore, { "feature.aiHighlights": false }));
 	s.hasUserValue = key => key in s.data;
-	assert.ok(F.migrate().steps.includes(2));
+	// Step 2 still moves it along; step 3 then finds a 自訂 profile (AI 標重點 off) and leaves 評讀陪練 alone
+	assert.equal(F.migrate().newSwitches, false);
 	assert.equal(s.data["feature.aiHighlights"], false);
+	assert.equal(s.data["feature.appraisalCoach"], undefined);
+});
+
+test("migrate step 3: a 進階 profile gets 評讀陪練 at its advanced value unless the user set it; others keep the guided default", () => {
+	assert.equal(F.MIGRATION_VERSION, 3);
+	assert.deepEqual(F.FEATURES.filter(f => f.since === 3).map(f => f.id), ["appraisalCoach", "statsExplainer"]);
+	let advancedBefore = Object.fromEntries(F.FEATURES.filter(f => f.since < 3).map(f => [f.pref, f.presets.advanced]));
+
+	// 進階 at version 2: only step 3 runs, and the profile stays 進階
+	let s = store(Object.assign({ [F.MIGRATION_PREF]: 2 }, advancedBefore));
+	assert.equal(F.currentPreset(), "custom", "評讀陪練 is still at its guided default");
+	let result = F.migrate();
+	assert.deepEqual(result.steps, [3]);
+	assert.deepEqual(result.added, ["appraisalCoach", "statsExplainer"]);
+	assert.equal(result.newSwitches, true);
+	assert.equal(s.data["feature.appraisalCoach"], true, "written, so a later default change can't switch it off");
+	assert.equal(F.isEnabled("appraisalCoach"), true);
+	assert.equal(F.currentPreset(), "advanced");
+	assert.equal(s.data[F.MIGRATION_PREF], 3);
+	assert.equal(F.migrate(), null, "runs once");
+
+	// 研究生引導 at version 2: nothing but the marker; 評讀陪練 stays off
+	s = store({ [F.MIGRATION_PREF]: 2 });
+	s.writes.length = 0;
+	result = F.migrate();
+	assert.equal(result.newSwitches, false);
+	assert.deepEqual(s.writes, [F.MIGRATION_PREF]);
+	assert.equal(F.isEnabled("appraisalCoach"), false);
+	assert.equal(F.currentPreset(), "guided");
+
+	// 自訂 at version 2 (one switch off): left alone
+	s = store(Object.assign({ [F.MIGRATION_PREF]: 2 }, advancedBefore, { "feature.synthesis": false }));
+	assert.equal(F.migrate().newSwitches, false);
+	assert.equal(s.data["feature.appraisalCoach"], undefined);
+	assert.equal(F.isEnabled("appraisalCoach"), false);
+
+	// 進階, but the user already set 評讀陪練 off: kept off
+	s = store(Object.assign({ [F.MIGRATION_PREF]: 2 }, advancedBefore, { "feature.appraisalCoach": false }));
+	s.hasUserValue = key => key in s.data;
+	assert.equal(F.migrate().newSwitches, true);
+	assert.equal(s.data["feature.appraisalCoach"], false);
+
+	// Off while the form or the AI service is off, whatever its own switch says
+	s = store(Object.assign({}, advancedBefore, { "feature.appraisalCoach": true, "feature.appraisalForm": false }));
+	assert.equal(F.isEnabled("appraisalCoach"), false);
+	s = store(Object.assign({}, advancedBefore, { "feature.appraisalCoach": true, "llm.enabled": false }));
+	assert.equal(F.isEnabled("appraisalCoach"), false);
 });
 
 test("migrate step 3: 讀懂統計 follows a 進階 profile, stays off in 研究生引導 and 自訂", () => {

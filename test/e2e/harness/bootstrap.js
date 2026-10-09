@@ -362,7 +362,8 @@ const TESTS = [
 				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "menuTargets", "relatedFor", "showMore", "openTarget"],
 				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "batchParams", "parseResults"],
 				ebhcReport: ["run", "askOptions", "processReport", "buildReportNote"],
-				appraisalForm: ["renderPaneRow", "syncInfo", "saveRecord", "exportSummary", "exportCollections"],
+				appraisalForm: ["renderPaneRow", "syncInfo", "saveRecord", "stateFor", "exportSummary", "exportCollections"],
+				appraisalCoach: ["readiness", "buildPrompt", "parseResponse", "verifyItems", "compare", "decide", "summaryLine", "run", "runFromCommand", "renderRowButton", "renderFormSection", "blockedReason"],
 				progressReport: ["run", "askOptions", "logStatusChange", "latestReport"],
 				features: ["isEnabled", "rawValue", "applyPreset", "currentPreset", "snapshot", "restore", "migrate", "gateMenus"],
 				commands: ["get", "execute", "fromWindow", "fromContext", "isVisible", "availability", "paletteEntries", "search", "normalize", "openSettings"],
@@ -1251,6 +1252,109 @@ const TESTS = [
 		},
 	},
 	{
+		name: "評讀陪練: the coach compares an AI's answers from text.pdf with the form and records 保留我的判斷 (stubbed Claude API)",
+		needs: ["AI note through the plugin's fetch with a stubbed Claude API (no network)"],
+		async fn(d) {
+			let ZB = zb();
+			let AF = ZB.appraisalForm;
+			let T = ZB.appraisalTools;
+			let pluginGlobal = Components.utils.getGlobalForObject(ZB.main.run);
+			let realFetch = pluginGlobal.fetch;
+			let calls = [];
+			const KEY = "sk-ant-e2e-fake-key";
+			// The user's own appraisal: every closed CASP RCT item, item 7 answered 否
+			let answers = {};
+			for (let item of ZB.appraisalCoach.closedItems("casp-rct")) answers[item.id] = { answer: "是", note: "", source: "human" };
+			answers["7"] = { answer: "否", note: "E2E own note", source: "human" };
+			// The AI: the same except item 7, with a sentence that is in text.pdf (make-fixtures.mjs)
+			const QUOTE = "The intervention reduced the rate of falls by thirty percent compared with usual care.";
+			let aiItems = Object.keys(answers).map(id => ({ id, answer: "是", reason: `E2E reason ${id}`, quotes: [] }));
+			aiItems.find(i => i.id === "7").quotes = [{ text: QUOTE, page: "1" }];
+			let stub = async (url, init) => {
+				let body = JSON.parse(init.body);
+				calls.push({ url: String(url), system: body.system ? body.system.length : 0, user: String(body.messages[0].content) });
+				if (!String(url).startsWith("https://api.anthropic.com/")) throw new Error(`unexpected network call to ${url}`);
+				return new pluginGlobal.Response(JSON.stringify({
+					model: "e2e-model", stop_reason: "end_turn",
+					content: [{ type: "text", text: JSON.stringify({ items: aiItems }) }],
+					usage: { input_tokens: 2000, output_tokens: 400 },
+				}), { status: 200, headers: { "content-type": "application/json" } });
+			};
+			let retry = ZB.main.runtime.retry;
+			let formNote = null;
+			try {
+				setPref("feature.appraisalCoach", true);
+				check(ZB.appraisalCoach.enabled(), "評讀陪練 should be on (it needs 文獻評讀表 and AI 文獻筆記)");
+				let saved = await AF.saveRecord(ctx.english, T.normalizeRecord({ tool: "casp-rct", answers, overall: "納入" }));
+				formNote = saved.note;
+				AF._paneState.delete(ctx.english.id);
+				d.blocked = String(ZB.appraisalCoach.blockedReason(ctx.english));
+				eq(d.blocked, "", "blockedReason with every item answered");
+				Object.defineProperty(pluginGlobal, "fetch", { value: stub, writable: true, configurable: true });
+				ZB.main.runtime.retry = { maxRetries: 0 };
+				await ZB.secrets.set("anthropicKey", KEY);
+				setPref("llm.provider", "anthropic");
+				let confirmText = "";
+				let run = await ZB.appraisalCoach.run(ctx.english, { confirm: (text) => {
+					confirmText = String(text);
+					return true;
+				} });
+				d.confirm = confirmText.slice(0, 200);
+				check(run, "run() returned nothing (cancelled or failed; see the plugin errors)");
+				d.summary = String(ZB.appraisalCoach.summaryText(run));
+			}
+			finally {
+				Object.defineProperty(pluginGlobal, "fetch", { value: realFetch, writable: true, configurable: true });
+				ZB.main.runtime.retry = retry;
+				await ZB.secrets.clear("anthropicKey");
+			}
+			d.calls = calls.map(c => ({ url: c.url, system: c.system, userChars: c.user.length }));
+			eq(calls.length, 1, "fetch calls");
+			check(calls[0].system === 2, `system blocks: ${calls[0].system}, expected the instructions and the checklist`);
+			check(calls[0].user.includes("falls by thirty percent"), "the request lacks text.pdf's full text");
+			check(!calls[0].user.includes("E2E own note"), "the user's note went into the request");
+			eq(d.summary, "13 題中 12 題一致，1 題不同（一致 92%）", "summary");
+			let stored = () => AF.readNoteHTML(AF.getFormNote(ctx.english).getNote());
+			let item7 = stored().coach[0].items.find(i => i.id === "7");
+			d.item7 = { user: String(item7.user), ai: String(item7.ai), quotes: item7.quotes.length, page: Number(item7.quotes[0] && item7.quotes[0].page) || 0 };
+			eq(d.item7.quotes, 1, "the quote from text.pdf is verified");
+			eq(d.item7.page, 1, "the quote's PDF page");
+
+			// The form in the real item pane document: exactly item 7 listed, then 「保留我的判斷」
+			let doc = mainWindow().document;
+			let body = doc.createElement("div");
+			ZB.main.renderPane({ doc, body, item: ctx.english, setSectionSummary: () => {} });
+			let section = body.querySelector("[data-zb-coach]");
+			check(section, "no 評讀陪練 results in the open form");
+			let listed = [...section.children].filter(e => e.hasAttribute("data-zb-coach-item")).map(e => String(e.getAttribute("data-zb-coach-item")));
+			d.listed = listed;
+			eq(JSON.stringify(listed), JSON.stringify(["7"]), "items listed as different");
+			let keep = section.querySelector('[data-zb-coach-item="7"] [data-zb-coach-decide="kept"]');
+			check(keep, "no 保留我的判斷 button");
+			keep.click();
+			await waitFor(() => {
+				let it = stored().coach[0].items.find(i => i.id === "7");
+				return it && it.decision === "kept";
+			}, "the decision in the note JSON", 10000);
+			let after = stored();
+			d.decision = { decision: String(after.coach[0].items.find(i => i.id === "7").decision), answer: String(after.answers["7"].answer) };
+			eq(d.decision.answer, "否", "保留我的判斷 keeps the user's answer");
+			d.line = String(ZB.appraisalCoach.summaryLine(after));
+			eq(d.line, "評讀陪練：一致 12/13，修改 0 題", "synced line");
+			let ledger = JSON.parse(Zotero.Prefs.get(ZB_PREF + "usage.ledger", true) || "{}");
+			let month = ledger[ZB.usage.monthKey()];
+			d.ledgerModels = month ? Object.keys(month.byModel || {}) : [];
+			check(d.ledgerModels.includes("e2e-model"), `no usage ledger entry for e2e-model (${JSON.stringify(d.ledgerModels)})`);
+			// Leave the item as it was for the tests after this one
+			AF._paneState.delete(ctx.english.id);
+			if (formNote) await formNote.eraseTx();
+			Zotero.Prefs.clear(ZB_PREF + "feature.appraisalCoach", true);
+		},
+		get allow() {
+			return ctx.keyStoreUsable ? null : /os-keystore|OSKeyStore|key store|鑰匙圈/i;
+		},
+	},
+	{
 		name: "讀懂統計: a selection of text.pdf explained in the reader's panel with a stubbed AI; the invented number is removed",
 		needs: ["the ZotMax panel is in the reader's side pane next to the PDF"],
 		timeout: 90000,
@@ -1798,6 +1902,7 @@ const TESTS = [
 			const GATED = [
 				"zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-menu-ebhc-report",
 				"zotero-bridge-toolbar-chase-items", "zotero-bridge-chase-tools-included", "zotero-bridge-chase-tools-import",
+				"zotero-bridge-cmd-appraisal-coach",
 			];
 			// On in both presets
 			const ALWAYS = ["zotero-bridge-menu-sync", "zotero-bridge-menu-regenerate", "zotero-bridge-classify-tools", "zotero-bridge-toolbar-screen",
@@ -1816,7 +1921,7 @@ const TESTS = [
 			};
 			// The toolbar menu's entries (content/toolbar.js), off in 研究生引導 / on in both
 			const TOOLBAR_GATED = ["pubmed-watch", "chase-items", "chase-included", "chase-import", "synthesis", "review-draft",
-				"ebhc-report", "progress-report", "concepts-ai"];
+				"ebhc-report", "progress-report", "concepts-ai", "appraisal-coach"];
 			const TOOLBAR_ALWAYS = ["palette", "sync", "sync-no-ai", "sync-obsidian", "sync-notion", "status", "classify", "dashboard", "concepts",
 				"bibliography", "export-collection", "quick-search", "search-item", "screen", "dedup", "prisma", "appraisal-summary", "regenerate", "settings"];
 			let button = mainWindow().document.getElementById(ZB.toolbar.BUTTON_ID);

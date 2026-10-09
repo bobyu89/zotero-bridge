@@ -393,9 +393,15 @@ test("an item with everything: 重點, 我的劃線, 狀態, 動作 and 延伸�
 	assert.doesNotMatch(st.textContent, /碩論/, "only the 自動分類 sub-collections");
 
 	// 動作: the catalog's item commands (進階: all on), then 快速指令…
-	assert.deepEqual(commands(body), ["sync", "sync-no-ai", "regenerate", "classify", "search-item", "chase-items", "palette"]);
+	assert.deepEqual(commands(body), ["sync", "sync-no-ai", "regenerate", "classify", "search-item", "chase-items", "appraisal-coach", "palette"]);
 	assert.deepEqual([...sub(body, "actions").querySelectorAll("button")].map(b => b.textContent),
-		["同步", "同步，不呼叫 AI", "重新產生 AI 筆記", "自動分類…", "搜尋資料庫…", "引文追蹤", "快速指令…"]);
+		["同步", "同步，不呼叫 AI", "重新產生 AI 筆記", "自動分類…", "搜尋資料庫…", "引文追蹤", "對照 AI", "快速指令…"]);
+	// 評讀陪練 waits for the user's own answers (here only the AI's 初評): disabled, the reason as its tooltip
+	let coach = sub(body, "actions").querySelector("button[data-zb-command=appraisal-coach]");
+	assert.equal(coach.disabled, true);
+	assert.match(coach.title, /^先自己答完每一題，才能對照 AI：/);
+	assert.equal(coach.getAttribute("data-l10n-id"), "zotero-bridge-pane-cmd-appraisal-coach-blocked");
+	assert.equal(JSON.parse(coach.getAttribute("data-l10n-args")).reason, coach.title);
 	for (let b of sub(body, "actions").querySelectorAll("button")) assert.ok(b.getAttribute("data-l10n-id").startsWith("zotero-bridge-pane-cmd-"));
 
 	// 延伸搜尋: the search links row
@@ -466,7 +472,7 @@ test("switches hide rows and commands live: the panel renders again when a switc
 	assert.equal(refreshes, 1, "one refresh for several switches");
 	assert.ok(![...sub(body, "status").querySelectorAll("span")].some(s => /^篩選：/.test(s.textContent)), "screening row gone");
 	assert.doesNotMatch(sub(body, "status").querySelector(".zb-sp-peek").textContent, /標題摘要/);
-	assert.deepEqual(commands(body), ["sync", "sync-no-ai", "regenerate", "classify", "palette"]);
+	assert.deepEqual(commands(body), ["sync", "sync-no-ai", "regenerate", "classify", "appraisal-coach", "palette"]);
 	assert.equal(sub(body, "search"), null);
 
 	F.setEnabled("autoClassify", false);

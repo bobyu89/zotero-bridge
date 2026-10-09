@@ -696,7 +696,7 @@ test("item pane shows the AI note; synthesis from a collection writes Obsidian, 
 	assert.doesNotMatch(full.textContent, /衛教降低跌倒/);
 	// The catalog's item commands (進階: all on) and 快速指令…; 「開啟評讀表」 on the 文獻評讀表 row (appraisal-form.js)
 	assert.deepEqual([...body.querySelectorAll('[data-zb-sub="actions"] button')].map(b => b.dataset.zbCommand),
-		["sync", "sync-no-ai", "regenerate", "classify", "search-item", "chase-items", "palette"]);
+		["sync", "sync-no-ai", "regenerate", "classify", "search-item", "chase-items", "appraisal-coach", "palette"]);
 	assert.ok(body.querySelector('[data-zb-appraisal] [data-zb-action="toggle"]'));
 	assert.match(body.textContent, /文獻評讀表：尚未評讀/);
 	// The literature note in the vault: its link appears once the note has been read
