@@ -52,11 +52,14 @@ test("presets: 研究生引導 leaves finding literature and writing to the user
 		assert.equal(F.get(id).presets.guided, true, id);
 	}
 	// Every AI feature is marked, and so is every feature that goes online on its own
-	for (let id of ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "ebhcReport", "progressReport", "conceptsAI", "classifyAI", "aiHighlights"]) {
+	for (let id of ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "ebhcReport", "conceptsAI", "classifyAI", "aiHighlights"]) {
 		assert.equal(F.get(id).usesAI, true, id);
 		assert.equal(F.get(id).usesNetwork, true, id);
 	}
 	for (let id of ["pubmedWatch", "citationChase", "searchLinks", "sync"]) assert.equal(F.get(id).usesNetwork, true, id);
+	// The progress report itself uses no AI; only its optional summary does (its own tick-box, with a cost confirm)
+	assert.equal(F.get("progressReport").usesAI, undefined, "progress report without AI");
+	assert.equal(F.get("progressReport").usesNetwork, true, "it can write a Notion page");
 	assert.equal(F.get("dashboard").usesAI, undefined);
 	assert.equal(F.get("concepts").usesAI, undefined, "concept cards without AI");
 	// 文獻自動分類 itself calls no AI and goes nowhere; its AI topic dimension is a switch of its own
