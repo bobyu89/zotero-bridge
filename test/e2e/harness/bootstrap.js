@@ -493,9 +493,13 @@ const TESTS = [
 		async fn(d) {
 			let pane = (Zotero.PreferencePanes.pluginPanes || []).find(p => p.id === PANE_ID);
 			check(pane, `Zotero.PreferencePanes has no pane "${PANE_ID}" (register() in bootstrap startup failed)`);
-			Object.assign(d, { pluginID: pane.pluginID, src: pane.src, scripts: Array.from(pane.scripts || [], String), label: pane.label });
+			// Zotero keeps a plain-text label as rawLabel (label is for Fluent IDs); accept either
+			// (older/newer Zotero versions differ in the property name, so fall back to any field holding it)
+			let label = pane.rawLabel || pane.label || Object.values(pane).find(v => typeof v == "string" && v == "ZotMax");
+			d.paneKeys = Object.keys(pane).map(String);
+			Object.assign(d, { pluginID: pane.pluginID, src: pane.src, scripts: Array.from(pane.scripts || [], String), label: String(label), rawLabel: String(pane.rawLabel), l10nLabel: String(pane.label) });
 			eq(pane.pluginID, PLUGIN_ID, "pane pluginID");
-			eq(pane.label, "ZotMax", "pane label (the settings sidebar entry)");
+			eq(label, "ZotMax", "pane label (the settings sidebar entry)");
 			check(/content\/preferences\.xhtml$/.test(pane.src), `pane src is ${pane.src}`);
 			check((pane.scripts || []).some(s => /content\/preferences\.js$/.test(s)), "pane scripts do not include content/preferences.js");
 		},
