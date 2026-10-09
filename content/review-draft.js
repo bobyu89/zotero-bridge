@@ -440,7 +440,7 @@ end
 			paths.command,
 			"```",
 			"",
-			`- \`${paths.referencesRel}\`：Zotero → 工具 → 匯出參考文獻到 Obsidian 產生；產生草稿時插件已檢查過，缺少引用的文獻會自動重新匯出。`,
+			`- \`${paths.referencesRel}\`：Zotero Bridge 按鈕或快速指令 → 匯出參考文獻到 Obsidian 產生；產生草稿時插件已檢查過，缺少引用的文獻會自動重新匯出。`,
 			`- \`${paths.cslRel}\`：APA 7 樣式檔，放在 vault 根目錄（見 README「在 Obsidian 寫論文並用 Pandoc 產生 APA Word」）。`,
 			`- \`${FILTER_FILE}\`：插件放在同一資料夾，轉檔時略過 %% 標記、提示框、查核清單、本節與「我的筆記」；不加 \`--lua-filter\` 也能轉，只是 Word 會多出這些內容。`,
 		].join("\n");
@@ -874,7 +874,7 @@ end
 					}
 					catch (e) {
 						Zotero.logError(e);
-						notes.push(`⚠️ 無法更新 ${REFERENCES_FILE}：${e.message || e}；請手動執行 工具 → 匯出參考文獻到 Obsidian`);
+						notes.push(`⚠️ 無法更新 ${REFERENCES_FILE}：${e.message || e}；請手動執行 Zotero Bridge 按鈕或快速指令 → 匯出參考文獻到 Obsidian`);
 					}
 				}
 				catch (e) {

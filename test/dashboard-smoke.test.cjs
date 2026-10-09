@@ -1,5 +1,5 @@
 // Research dashboard through the real plugin in a mocked Zotero: rebuilt after a manual sync and
-// from the Tools menu, user content and .base files kept, never failing a sync.
+// from the toolbar button or 快速指令, user content and .base files kept, never failing a sync.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -242,10 +242,12 @@ function dashboardPath(env) {
 	return path.join(env.vault, "Zotero", "研究儀表板.md");
 }
 
+/** 更新研究儀表板 as the toolbar button and 快速指令 run it (commands.js). */
 function toolsEntry(env) {
-	let menu = env.menus.find(m => m.menuID === "zotero-bridge-dashboard-tools");
-	assert.equal(menu.target, "main/menubar/tools");
-	return menu.menus[0];
+	let C = env.context.ZB.commands;
+	assert.equal(C.get("dashboard").l10n, "zotero-bridge-menu-dashboard");
+	assert.equal(C.get("dashboard").group, "organize");
+	return { onCommand: () => C.execute("dashboard") };
 }
 
 async function settle(check) {
@@ -253,7 +255,7 @@ async function settle(check) {
 	assert.ok(check(), "timed out");
 }
 
-test("a manual sync writes the dashboard and its .base; the Tools menu rebuilds it keeping the user's content", async () => {
+test("a manual sync writes the dashboard and its .base; 快速指令 or the toolbar rebuilds it keeping the user's content", async () => {
 	let env = await setup();
 	let ZB = env.context.ZB;
 	let items = library(env);
@@ -361,7 +363,7 @@ test("only manual runs with the setting on rebuild it, and a failing dashboard n
 	assert.deepEqual(env.requests, []);
 });
 
-test("Tools menu without a vault asks for the vault path", async () => {
+test("更新研究儀表板 without a vault asks for the vault path", async () => {
 	let env = await setup({ vault: null });
 	let before = env.descriptions.length;
 	toolsEntry(env).onCommand();

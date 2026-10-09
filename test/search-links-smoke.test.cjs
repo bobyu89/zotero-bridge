@@ -347,12 +347,12 @@ test("item context menu: find this paper per database, similar articles, more da
 		selects: [list => list.indexOf("PubMed 相似文獻"), list => list.indexOf("Europe PMC"), null],
 	});
 	let item = paper(env);
-	let reg = env.menus.find(m => m.menuID === "zotero-bridge-search-item");
+	// Item menu → Zotero Bridge ▸ 在醫學資料庫搜尋 ▸ (commands.js, menus.js)
+	let reg = env.menus.find(m => m.menuID === "zotero-bridge-item");
 	assert.equal(reg.target, "main/library/item");
-	let sub = reg.menus[0];
+	assert.ok(reg.menus[0].icon.endsWith("content/icons/bridge.svg"));
+	let sub = reg.menus[0].menus.find(m => m.l10nID === "zotero-bridge-search-menu");
 	assert.equal(sub.menuType, "submenu");
-	assert.equal(sub.l10nID, "zotero-bridge-search-menu");
-	assert.ok(sub.icon.endsWith("content/icons/bridge.svg"));
 	assert.equal(showing(sub, [item]).visible, true);
 	let note = new env.MockItem("note");
 	assert.equal(showing(sub, [note]).visible, false);
@@ -486,7 +486,7 @@ function ncbiMock(opts = {}) {
 	};
 }
 
-test("Tools → 醫學文獻快速搜尋…: MeSH suggestions, open PubMed, save the query as a PubMed watch", async () => {
+test("醫學文獻快速搜尋… (toolbar, 快速指令): MeSH suggestions, open PubMed, save the query as a PubMed watch", async () => {
 	let MESH_QUERY = '("Accidental Falls"[Mesh] OR "fall prevention"[tiab]) AND ("Aged"[Mesh] OR "older adults"[tiab])';
 	let env = await setup({
 		fetch: ncbiMock(),
@@ -494,9 +494,9 @@ test("Tools → 醫學文獻快速搜尋…: MeSH suggestions, open PubMed, save
 		prompts: ["fall prevention, older adults", "跌倒預防（長者）"],
 		selects: [0, list => list.indexOf("📋 複製 PubMed 檢索式（MeSH）"), list => list.indexOf("💾 存成 PubMed 新文獻追蹤…"), null],
 	});
-	let tools = env.menus.find(m => m.menuID === "zotero-bridge-search-tools");
-	assert.equal(tools.target, "main/menubar/tools");
-	assert.equal(tools.menus[0].l10nID, "zotero-bridge-search-tools");
+	let cmd = env.context.ZB.commands.get("quick-search");
+	assert.equal(cmd.l10n, "zotero-bridge-search-tools");
+	assert.equal(cmd.group, "search");
 	let r = await env.context.ZB.searchLinks.quickSearch();
 	assert.equal(r.query, "fall prevention, older adults");
 	assert.equal(r.mesh.query, MESH_QUERY);
@@ -530,7 +530,7 @@ test("Tools → 醫學文獻快速搜尋…: MeSH suggestions, open PubMed, save
 test("quick search: Chinese keywords, NCBI down, MeSH helper off, cancelled", async () => {
 	// Chinese: no MeSH lookup; 華藝 first (start page + clipboard)
 	let env = await setup({ fetch: ncbiMock(), prompts: ["壓力性損傷"], selects: [0, list => list.indexOf("PubMed"), null] });
-	env.menus.find(m => m.menuID === "zotero-bridge-search-tools").menus[0].onCommand();
+	env.context.ZB.commands.execute("quick-search");
 	for (let i = 0; i < 100 && env.dialogs.filter(d => d.type === "select").length < 3; i++) await new Promise(r => setTimeout(r, 5));
 	let select = env.dialogs.find(d => d.type === "select");
 	assert.match(select.text, /^中文關鍵字：中文資料庫排在前面/);

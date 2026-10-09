@@ -1018,66 +1018,15 @@
 		}
 	}
 
-	// ---------- menus ----------
+	// ---------- 評讀總表 for collections (commands.js) ----------
 
-	function selectedCollections(context) {
-		return ((context && context.collectionTreeRows) || []).filter(r => r.isCollection && r.isCollection()).map(r => r.ref);
-	}
-
-	function activeCollection() {
-		try {
-			let pane = Zotero.getActiveZoteroPane();
-			return (pane && pane.getSelectedCollections()[0]) || null;
-		}
-		catch (e) {
-			return null;
-		}
-	}
-
+	/** The summary of each collection; with none, says which to select. */
 	async function exportCollections(collections) {
 		if (!collections.length) {
 			ZB().main.notify("Zotero Bridge", "請先在左側選取分類。");
 			return;
 		}
 		for (let c of collections) await exportSummary(c);
-	}
-
-	/** Menu entries that hide while the feature is off (features.js gateMenus; as is without it: Node tests). */
-	function gated(id, menus) {
-		let f = scope.ZB && scope.ZB.features;
-		return f ? f.gateMenus(id, menus) : menus;
-	}
-
-	/** Collection and Tools menu entries; returns the menu IDs to unregister. */
-	function registerMenus({ pluginID, icon }) {
-		let ids = [];
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-appraisal-collection",
-			pluginID,
-			target: "main/library/collection",
-			menus: gated("appraisalForm", [{
-				menuType: "menuitem",
-				l10nID: "zotero-bridge-appraisal-summary",
-				icon,
-				onShowing: (ev, context) => context.setVisible(selectedCollections(context).length > 0),
-				onCommand: (ev, context) => {
-					exportCollections(selectedCollections(context)).catch(e => Zotero.logError(e));
-				},
-			}]),
-		}));
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-appraisal-tools",
-			pluginID,
-			target: "main/menubar/tools",
-			menus: gated("appraisalForm", [{
-				menuType: "menuitem",
-				l10nID: "zotero-bridge-appraisal-tools-summary",
-				onCommand: () => {
-					exportCollections([activeCollection()].filter(Boolean)).catch(e => Zotero.logError(e));
-				},
-			}]),
-		}));
-		return ids.filter(Boolean);
 	}
 
 	return {
@@ -1088,7 +1037,7 @@
 		summaryPaths, counts, agreement, summaryBody, summaryCSV, summaryFrontmatter, buildSummaryNote, wordDocument,
 		// Zotero
 		getFormNote, loadRecord, initialRecord, saveRecord, renderPaneRow, insertNotionTable, overrideStudyForItem,
-		exportSummary, registerMenus,
+		exportSummary, exportCollections,
 		_paneState: paneState,
 	};
 });

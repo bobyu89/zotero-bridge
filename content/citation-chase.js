@@ -455,7 +455,7 @@
 			"## 查詢結果",
 			seedTable(run.reports),
 			`## 候選文獻（${fresh.length} 篇不在文獻庫中）`,
-			"勾選要加入的文獻（`- [x]`），再到 Zotero 選取分類 → 右鍵 **Zotero Bridge：引文追蹤 → 匯入引文追蹤勾選的文獻**。匯入的文獻會加上標籤 `來源/引文追蹤`，請照常篩選；PRISMA 流程圖會把它們算在右側「其他方法」欄。←：該研究引用的文獻；→：引用該研究的文獻。",
+			"勾選要加入的文獻（`- [x]`），再到 Zotero 的分類上按右鍵 → **Zotero Bridge → 匯入引文追蹤勾選的文獻**。匯入的文獻會加上標籤 `來源/引文追蹤`，請照常篩選；PRISMA 流程圖會把它們算在右側「其他方法」欄。←：該研究引用的文獻；→：引用該研究的文獻。",
 			list,
 			`## 總表（${run.candidates.length} 篇，其中 ${known} 篇已在文獻庫）`,
 			candidateTable(run.candidates),
@@ -620,17 +620,6 @@
 		return target;
 	}
 
-	// The collection selected in the main window
-	function activeCollection() {
-		try {
-			let pane = Zotero.getActiveZoteroPane();
-			return (pane && pane.getSelectedCollections()[0]) || null;
-		}
-		catch (e) {
-			return null;
-		}
-	}
-
 	let busy = false;
 
 	async function readVaultSettings(headline) {
@@ -665,7 +654,7 @@
 		let seeds = items.filter(i => screening.readState(i.getTags().map(t => t.tag), cfg).ft === "include");
 		if (!seeds.length) {
 			ZB.main.notify("Zotero Bridge：引文追蹤", `「${collection.name}」還沒有全文納入的研究（標籤「${screening.stageTag(cfg, "ft", "include")}」）。`
-				+ "\n也可以選取文獻後按右鍵 → Zotero Bridge：引文追蹤所選文獻。");
+				+ "\n也可以選取文獻後按右鍵 → Zotero Bridge → 引文追蹤所選文獻（OpenAlex）。");
 			return null;
 		}
 		return runChase(seeds, collection, items);
@@ -866,102 +855,10 @@
 		return { imported: count, skipped, failed };
 	}
 
-	// ---------- menus ----------
-
-	function selectedCollections(context) {
-		return (context.collectionTreeRows || []).filter(r => r.isCollection && r.isCollection()).map(r => r.ref);
-	}
-
-	function needCollection(fn) {
-		return async (collection) => {
-			if (!collection) {
-				scope.ZB.main.notify("Zotero Bridge：引文追蹤", "請先在左側選取系統性回顧的分類（回顧專案）。");
-				return null;
-			}
-			return fn(collection);
-		};
-	}
-
 	// Feature switches (features.js): checked live; always on when this file runs without them (Node tests)
 	function featureOn(id) {
 		let f = scope.ZB && scope.ZB.features;
 		return !f || f.isEnabled(id);
-	}
-
-	/** Menu entries that hide while the feature is off (features.js gateMenus). */
-	function gated(id, menus) {
-		let f = scope.ZB && scope.ZB.features;
-		return f ? f.gateMenus(id, menus) : menus;
-	}
-
-	/** Item, collection and Tools menu entries; returns the menu IDs to unregister. */
-	function registerMenus({ pluginID, icon }) {
-		let log = e => Zotero.logError(e);
-		let chaseOne = needCollection(chaseCollection);
-		let ids = [];
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-chase-item",
-			pluginID,
-			target: "main/library/item",
-			menus: gated("citationChase", [{
-				menuType: "menuitem",
-				l10nID: "zotero-bridge-chase-items",
-				icon,
-				onCommand: (ev, context) => {
-					chaseItems(context.items || [], activeCollection()).catch(log);
-				},
-			}]),
-		}));
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-chase-collection",
-			pluginID,
-			target: "main/library/collection",
-			menus: gated("citationChase", [{
-				menuType: "submenu",
-				l10nID: "zotero-bridge-chase-collection-menu",
-				icon,
-				onShowing: (ev, context) => context.setVisible(selectedCollections(context).length > 0),
-				menus: [
-					{
-						menuType: "menuitem",
-						l10nID: "zotero-bridge-chase-included",
-						onCommand: (ev, context) => {
-							chaseOne(selectedCollections(context)[0]).catch(log);
-						},
-					},
-					{
-						menuType: "menuitem",
-						l10nID: "zotero-bridge-chase-import",
-						onCommand: (ev, context) => {
-							needCollection(importChecked)(selectedCollections(context)[0]).catch(log);
-						},
-					},
-				],
-			}]),
-		}));
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-chase-tools",
-			pluginID,
-			target: "main/menubar/tools",
-			menus: gated("citationChase", [
-				{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-chase-tools-included",
-					onCommand: () => {
-						chaseOne(activeCollection()).catch(log);
-					},
-				},
-				{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-chase-tools-import",
-					// Without a selected collection: the 「所選文獻」 note, imported into My Library
-					onCommand: () => {
-						importChecked(activeCollection()).catch(log);
-					},
-				},
-			]),
-		}));
-		return ids.filter(Boolean);
 	}
 
 	return {
@@ -970,6 +867,6 @@
 		RequestCapError, makeThrottle, OpenAlexClient, listWorks, chase,
 		libraryIndex, buildCandidates, candidateKey, doiURL, candidateLine, candidateTable, buildChaseSection, buildChaseCSV, frontmatterFor,
 		parseChecked, markImported,
-		config, chaseCollection, chaseItems, importChecked, registerMenus,
+		config, chaseCollection, chaseItems, importChecked,
 	};
 });

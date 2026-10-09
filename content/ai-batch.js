@@ -656,30 +656,7 @@
 		return canceled;
 	}
 
-	// ---------- menu, lifecycle ----------
-
-	function registerMenus({ pluginID }) {
-		let id = Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-ai-batch-tools",
-			pluginID,
-			target: "main/menubar/tools",
-			menus: [
-				{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-menu-ai-batch-check",
-					onShowing: (ev, context) => context.setVisible(readState().batches.length > 0),
-					onCommand: () => check({ manual: true }).catch(e => Zotero.logError(e)),
-				},
-				{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-menu-ai-batch-cancel",
-					onShowing: (ev, context) => context.setVisible(readState().batches.some(b => b.status !== "ended")),
-					onCommand: () => cancelAll().catch(e => Zotero.logError(e)),
-				},
-			],
-		});
-		return [id].filter(Boolean);
-	}
+	// ---------- lifecycle ----------
 
 	function init() {
 		stopped = false;
@@ -698,7 +675,7 @@
 		API, CUSTOM_ID_RE, MAX_REQUESTS, MAX_BATCH_BYTES, STARTUP_DELAY_MS, POLL_MIN_MS, POLL_MAX_MS, STATE_PREF,
 		encodeCustomId, decodeCustomId, assignCustomIds, batchParams, chunkRequests, parseResults, interpretResult,
 		pollDelay, parseState, describeBatch,
-		runtime, applies, submit, check, cancelAll, readState, registerMenus, init, shutdown,
+		runtime, applies, submit, check, cancelAll, readState, init, shutdown,
 		get timerActive() { return !!timer; },
 	};
 });

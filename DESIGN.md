@@ -71,6 +71,19 @@ components:
   toolbar-menu-caption:
     textColor: "{colors.text-muted}"
     fontWeight: 600
+  palette-input:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.md}"
+    padding: "0.5em 0.75em"
+  palette-result:
+    textColor: "{colors.text}"
+    rounded: "{rounded.md}"
+    padding: "0.5em 0.75em"
+  palette-result-active:
+    backgroundColor: "{colors.tint}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.md}"
 ---
 
 # Design System: Zotero Bridge
@@ -87,7 +100,8 @@ The surface is **Operate** mode. A nursing graduate student opens settings to ge
 - Zotero's own CSS variables for every color, so light and dark themes and high contrast follow automatically.
 - Sizes in `em`, so Zotero's font-size setting scales the whole pane.
 - Progressive disclosure twice over: sections of a switched-off feature disappear, and expert options sit behind a closed `<details>`.
-- Standard controls only: native checkboxes, radios, buttons, XUL menulists. No custom switches, no modals; the only window of the plugin's own is the 文獻自動分類 review, opened on request.
+- Standard controls only: native checkboxes, radios, buttons, XUL menulists. No custom switches, no modals; the plugin's own windows are the 文獻自動分類 review and 快速指令, both opened on request.
+- One command catalog: the toolbar menu, the right-click menus and 快速指令 show the same commands, in the same groups, with the same words.
 - Traditional Chinese copy; method terms (PICO, MeSH, CASP, JBI, PRISMA) stay in English.
 
 ## Colors
@@ -196,14 +210,35 @@ The one place the plugin opens a window of its own: a non-modal Zotero dialog, b
 - **Focus:** the first checkbox gets focus; 2px Accent outlines on checkboxes, buttons and the folded list's summary.
 
 ### Toolbar button (`content/toolbar.js`, `toolbar.css`)
-The one way into every command without hunting through context and Tools menus. It is a guest in Zotero's own toolbar, so it borrows everything and adds only its icon.
+The mouse way into every command, next to the items it acts on. It is a guest in Zotero's own toolbar, so it borrows everything and adds only its icon.
 - **Place:** the items toolbar (`#zotero-items-toolbar`, above the item list), right after Zotero's 「新增筆記」: that row holds the buttons that act on the selected items, before the search box. Not the tab bar (window-level: tabs, sync) and not the collections toolbar.
 - **Shape and states:** a XUL `toolbarbutton` with Zotero's `zotero-tb-button` class, `type="menu"` and a dropmarker, so size (40 × 28px), 5px radius, hover (Hairline fill), active and open (`--fill-quarternary`), disabled and the focus ring are Zotero's own rules. `toolbar.css` sets only the icon: `bridge.svg` as `list-style-image`, filled with `currentColor` through `-moz-context-properties`, drawn at Zotero's 20px. No colors of its own, so light, dark and high-contrast themes follow the neighbouring buttons.
 - **Name:** tooltip and `aria-label` 「Zotero Bridge」 (the product name, the same in every language); no visible text, like its neighbours.
 - **Keyboard:** Zotero's toolbar is one arrow-key row (`tabindex="-1"` on every button); the button joins it: ArrowRight from 「新增筆記」 reaches it, ArrowLeft goes back, Tab goes on to the search box. Enter, Space and ArrowDown open the menu.
-- **Menu:** groups in the order of the research workflow, each under a caption (Label weight 600, Pencil; a XUL `menucaption`, never clickable): 同步 → 整理 → 找文獻 → 篩選與評讀 → AI 輔助與寫作, separated by native separators, then 「設定…」 always last. Entry labels reuse the context and Tools menu strings where they fit, so a command reads the same everywhere. No icons in the menu: the button carries the only one.
-- **Live:** checked each time the menu opens: entries of switched-off features hide, conditional entries (繼續／停止同步, 復原上次分類, 檢查 AI 批次進度) appear only when there is something to do, and a group with nothing left hides with its caption. The switch 「工具列按鈕」 hides the button itself without a restart.
-- **Selection:** commands act on the items selected in the list; collection commands (找重複, PRISMA, 評讀總表, 引文追蹤納入研究) on the collection selected on the left; with nothing suitable selected they say so in the same words as the existing commands (「請先選取文獻。」).
+- **Menu:** 「快速指令…」 first (with its shortcut as accelerator text) and a separator, then the catalog's groups in the order of the research workflow, each under a caption (Label weight 600, Pencil; a XUL `menucaption`, never clickable): 同步 → 整理 → 找文獻 → 篩選與評讀 → AI 輔助與寫作, separated by native separators, then 「設定…」 always last. Commands with variants (篩選所選文獻, 在醫學資料庫搜尋) are a submenu, filled each time it opens; nothing goes deeper than that. No icons in the menu: the button carries the only one.
+- **Live:** checked each time the menu opens: entries of switched-off features hide, conditional entries (繼續／停止／放棄同步, 復原上次分類, 檢查／取消 AI 批次) appear only when there is something to do, and a group with nothing left hides with its caption. The switch 「工具列按鈕」 hides the button itself without a restart; 快速指令 stays available.
+- **Selection:** commands act on the items selected in the list; collection commands (找重複, PRISMA, 評讀總表, 引文追蹤納入研究, 匯出此分類的參考文獻) on the collection selected on the left; with nothing suitable selected they say so in the same words as everywhere else (「請先選取文獻。」).
+
+### Command catalog (`content/commands.js`)
+The single list of everything the plugin can be asked to do; every surface is generated from it, so a command reads and acts the same wherever it is found.
+- **Entry:** id, l10n ID and its zh-TW label (identical to the FTL), workflow group, the feature switches that show it (any of them), what it acts on (selected items, the selected collection, either, or nothing), the right-click surfaces it belongs to, an extra live condition (a batch to resume, a run to undo), Chinese and English search keywords, and the function it runs, or variants (decisions, databases, exclusion reasons).
+- **Surfaces:** the toolbar menu and 快速指令 offer every command; the item menu the ones that act on items; the collection menu the ones that act on a collection; the Tools menu only 「Zotero Bridge 設定…」, 「Zotero Bridge 快速指令…」 and the batch entries while they apply.
+- **Settings destinations:** the sections of the settings pane by their stable IDs (`features, sync, obsidian, notion, routing, autosync, status, apaZh, bibliography, concepts, fulltext, colors, classify, searchLinks, ncbi, pubmedWatch, citationChase, screening, ai, usage`), opened through `prefs.pendingSection`, which the pane reads.
+
+### Right-click menus (`content/menus.js`)
+- **One entry each:** the item menu and the collection menu hold exactly one 「Zotero Bridge ▸」 submenu (the plugin's icon), never a row of separate plugin entries.
+- **Inside:** the same groups as the toolbar menu: a caption per group (a disabled item with the caption's class, so `toolbar.css` gives it the Label weight in Pencil), a native separator between groups, none above the first. Variants are one submenu deep, so nothing is more than two levels below 「Zotero Bridge」.
+- **Live:** decided in each entry's `onShowing`: switched-off commands, empty groups and an empty submenu hide; the collection submenu needs a real collection (not My Library, a saved search or the trash).
+
+### Command palette (快速指令, `palette.xhtml`, `palette.css`, `content/palette.js`)
+The keyboard way to everything, and the way to find a feature by name. A non-modal Zotero window (about 560 × 460) with the same borrowed palette, spacing and flat surfaces as the review window. Always available: it is core navigation, not a feature with a switch.
+- **Open:** the toolbar menu's first entry, Tools → 「Zotero Bridge 快速指令…」, and Ctrl+Shift+P (⇧⌘P on macOS) in the main window. Neither Zotero 10 nor Firefox 140 binds it (Firefox's private-window key is a browser shortcut Zotero doesn't load); the plugin leaves the key alone when one of Zotero's configurable Ctrl/Cmd+Shift shortcuts or a `<key>` in the window uses P. A second open brings the open palette to the front.
+- **Head** (sidepane material, Hairline below): the label 「快速指令」 (600) above the search field (Page background, Hairline border, 6px radius, 1.1em text; the Accent border and 2px outline when focused). The field is a `combobox` controlling the result `listbox`, with `aria-activedescendant` on the active result.
+- **Results:** with an empty query, every command under its group title (600, Pencil, 0.92em; more space above than below), 「設定」 destinations last; while typing, one ranked list with each result's group on its right (Pencil, 0.85em). The active result has the Wash background and a 2px Accent outline inset; no shadows. Hover moves the active result; a click chooses it.
+- **Can't run now:** the name turns Pencil and a Hint line says why: switched off → 「到 設定 → 功能 打開『X』」 with a 「打開設定」 button (Enter does the same; the settings open at that switch), nothing selected → 「先選取文獻」／「先選取分類」／「先選取文獻或分類」 (Enter repeats it in the status line). Switched-off commands are listed so they can be found, never run.
+- **Search:** label and keywords in Chinese and English; case-, width- (full-width letters) and space-insensitive; every word must match; substring first, then letters in order (prsma → PRISMA); a label the query covers more of ranks higher; settings destinations a little below commands.
+- **Bottom** (sidepane material, Hairline above): a `role="status"` line (result count, 「沒有符合「…」的指令。…」, why a choice can't run) and the keys in Pencil: 「上下鍵選擇 · Enter 執行 · Esc 關閉」 and the shortcut.
+- **Keys:** ArrowUp/ArrowDown move (wrapping), PageUp/PageDown by five, Enter chooses, Esc closes. Choosing closes the palette first; the command then runs on the main window's selection at that moment.
 
 ### Item pane section
 - **Tools block:** status, screening, search links and appraisal rows, each only when its feature is on, inside a `<section>` with a Hairline below.

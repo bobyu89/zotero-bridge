@@ -1,5 +1,5 @@
 /*
- * Zotero Bridge — orchestration: settings, sync pipeline, menus, auto-sync.
+ * Zotero Bridge — orchestration: settings, sync pipeline, menus (menus.js), auto-sync.
  */
 (function (root) {
 	const ZB = root.ZB;
@@ -1444,182 +1444,27 @@
 
 	// ---------- menus ----------
 
-	// feature: the switch that hides the entry (features.js); "regenerate" also needs AI notes
-	const ITEM_ACTIONS = [
-		{ l10nID: "zotero-bridge-menu-sync", action: { targets: ["notion", "obsidian"], ai: "missing" }, feature: "sync" },
-		{ l10nID: "zotero-bridge-menu-regenerate", action: { targets: ["notion", "obsidian"], ai: "regenerate" }, feature: "aiNotes" },
-		{ l10nID: "zotero-bridge-menu-no-ai", action: { targets: ["notion", "obsidian"], ai: "reuse" }, feature: "sync" },
-		{ separator: true, feature: "sync" },
-		{ l10nID: "zotero-bridge-menu-obsidian", action: { targets: ["obsidian"], ai: "reuse" }, feature: "sync" },
-		{ l10nID: "zotero-bridge-menu-notion", action: { targets: ["notion"], ai: "reuse" }, feature: "sync" },
-	];
-
-	// The AI writing entries below the sync entries, each with its own switch
-	const WRITING_FEATURES = ["synthesis", "reviewDraft", "ebhcReport"];
-
-	/** Features with an entry in the Zotero Bridge item/collection submenu: the submenu hides when all are off. */
-	const SUBMENU_FEATURES = ["sync", ...WRITING_FEATURES];
-
-	function buildMenus(getItems, getScope) {
-		let gate = ZB.features.gateMenus;
-		let menus = ITEM_ACTIONS.flatMap((entry) => {
-			if (entry.separator) return gate(entry.feature, [{ menuType: "separator" }]);
-			return gate(entry.feature, [{
-				menuType: "menuitem",
-				l10nID: entry.l10nID,
-				onCommand: (ev, context) => {
-					run(getItems(context), entry.action).catch(e => Zotero.logError(e));
-				},
-			}]);
-		});
-		menus.push({
-			// Between the sync entries and the AI writing entries, only when both groups show something
-			menuType: "separator",
-			onShowing: (ev, context) => context.setVisible(featureOn("sync") && WRITING_FEATURES.some(featureOn)),
-		},
-		...gate("synthesis", [{
-			menuType: "menuitem",
-			l10nID: "zotero-bridge-menu-synthesis",
-			onCommand: (ev, context) => {
-				runSynthesis(getItems(context), getScope(context)).catch(e => Zotero.logError(e));
-			},
-		}]),
-		...gate("reviewDraft", [{
-			// Literature review draft (review-draft.js)
-			menuType: "menuitem",
-			l10nID: "zotero-bridge-menu-review-draft",
-			onCommand: (ev, context) => {
-				ZB.reviewDraft.run(getItems(context), getScope(context), context).catch(e => Zotero.logError(e));
-			},
-		}]),
-		...gate("ebhcReport", [{
-			// Evidence-based health care report draft (ebhc-report.js)
-			menuType: "menuitem",
-			l10nID: "zotero-bridge-menu-ebhc-report",
-			onCommand: (ev, context) => {
-				ZB.ebhcReport.run(getItems(context), getScope(context), context).catch(e => Zotero.logError(e));
-			},
-		}]));
-		return menus;
-	}
-
-	function selectedCollections(context) {
-		return (context.collectionTreeRows || []).filter(r => r.isCollection && r.isCollection()).map(r => r.ref);
-	}
-
-	function itemScope(context) {
-		let rows = selectedCollections(context);
-		return { label: rows.length ? rows.map(c => c.name).join("、") + "（選取）" : "選取的文獻", collection: null };
-	}
-
-	function collectionScope(context) {
-		let cols = selectedCollections(context);
-		return { label: cols.map(c => c.name).join("、") || "分類", collection: cols[0] || null };
-	}
-
-	function collectionItems(context) {
-		let rows = context.collectionTreeRows || [];
-		let items = [];
-		for (let row of rows) {
-			if (row.isCollection && row.isCollection()) {
-				items.push(...ZB.adapter.itemsInCollection(row.ref, true));
-			}
-		}
-		return items;
-	}
-
+	/**
+	 * The right-click and Tools menus come from the command catalog (commands.js, menus.js); the
+	 * toolbar button (toolbar.js) and 快速指令 (palette.js) from the same catalog.
+	 */
 	function registerMenus() {
 		let icon = rootURI + "content/icons/bridge.svg";
-		let itemMenu = Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-item",
-			pluginID,
-			target: "main/library/item",
-			menus: [{
-				menuType: "submenu",
-				l10nID: "zotero-bridge-menu",
-				icon,
-				onShowing: (ev, context) => context.setVisible(SUBMENU_FEATURES.some(featureOn)),
-				menus: buildMenus(context => context.items || [], itemScope),
-			}],
-		});
-		let collectionMenu = Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-collection",
-			pluginID,
-			target: "main/library/collection",
-			menus: [{
-				menuType: "submenu",
-				l10nID: "zotero-bridge-menu-collection",
-				icon,
-				onShowing: (ev, context) => {
-					let rows = context.collectionTreeRows || [];
-					context.setVisible(rows.some(r => r.isCollection && r.isCollection()) && SUBMENU_FEATURES.some(featureOn));
-				},
-				menus: buildMenus(collectionItems, collectionScope),
-			}],
-		});
-		let toolsMenu = Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-tools",
-			pluginID,
-			target: "main/menubar/tools",
-			menus: [
-				{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-menu-settings",
-					onCommand: () => Zotero.Utilities.Internal.openPreferences("zotero-bridge-prefs"),
-				},
-				...ZB.features.gateMenus("status", [{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-menu-status",
-					onCommand: () => ZB.status.runPass().catch(e => Zotero.logError(e)),
-				}]),
-				{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-menu-stop",
-					onShowing: (ev, context) => context.setVisible(!!currentBatch && !currentBatch.cancelled),
-					onCommand: () => cancelBatch(),
-				},
-				{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-menu-resume",
-					// Resuming syncs: hidden while 「同步到 Obsidian／Notion」 is off (discarding stays possible)
-					onShowing: (ev, context) => {
-						let count = currentBatch || !featureOn("sync") ? 0 : pendingCount(readPendingBatch());
-						context.setVisible(count > 0);
-						if (count) context.setL10nArgs(JSON.stringify({ count }));
-					},
-					onCommand: () => resumeBatch().catch(e => Zotero.logError(e)),
-				},
-				{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-menu-discard",
-					onShowing: (ev, context) => context.setVisible(!currentBatch && !!readPendingBatch()),
-					onCommand: () => discardBatch(),
-				},
-			],
-		});
-		menuIDs = [itemMenu, collectionMenu, toolsMenu].filter(Boolean);
-		// Bibliography export (export.js): Tools menu + collection context menu
-		menuIDs.push(...ZB.bibliography.registerMenus({ pluginID, icon }));
-		// Systematic/scoping review screening (screening.js): item, collection and Tools menus
-		menuIDs.push(...ZB.screening.registerMenus({ pluginID, icon }));
-		// PubMed new-literature watch (pubmed-watch.js): Tools menu
-		menuIDs.push(...ZB.pubmedWatch.registerMenus({ pluginID, icon }));
-		// Research dashboard (dashboard.js): Tools menu
-		menuIDs.push(...ZB.dashboard.registerMenus({ pluginID, icon }));
-		// Citation searching for reviews (citation-chase.js): item, collection and Tools menus
-		menuIDs.push(...ZB.citationChase.registerMenus({ pluginID, icon }));
-		// Medical-literature search links (search-links.js): item and Tools menus
-		menuIDs.push(...ZB.searchLinks.registerMenus({ pluginID, icon }));
-		// 文獻評讀總表 (appraisal-form.js): collection and Tools menus
-		menuIDs.push(...ZB.appraisalForm.registerMenus({ pluginID, icon }));
-		// 進度報告 for advisor meetings (progress-report.js): Tools menu
-		menuIDs.push(...ZB.progressReport.registerMenus({ pluginID, icon }));
-		// Concept hub notes (concepts.js): Tools menu
-		menuIDs.push(...ZB.concepts.registerMenus({ pluginID, icon }));
-		// 文獻自動分類 into Zotero sub-collections (classify.js): item, collection and Tools menus
-		menuIDs.push(...ZB.classify.registerMenus({ pluginID, icon }));
-		// Claude Message Batches for bulk AI notes (ai-batch.js): Tools menu
-		menuIDs.push(...ZB.aiBatch.registerMenus({ pluginID, icon }));
+		menuIDs = ZB.menus.register({ pluginID, icon });
+	}
+
+	/**
+	 * The sync batch for the menus: running (stoppable), active (a batch runs, cancelled or not),
+	 * pending (the stopped or interrupted batch record) and count (items it has left).
+	 */
+	function batchStatus() {
+		let pending = readPendingBatch();
+		return {
+			running: !!currentBatch && !currentBatch.cancelled,
+			active: !!currentBatch,
+			pending,
+			count: pendingCount(pending),
+		};
 	}
 
 	// ---------- item pane: AI note section ----------
@@ -1870,7 +1715,7 @@
 		ZB.aiBatch.shutdown();
 	}
 
-	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime,
+	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, batchStatus, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime,
 		// Notion columns: clients that remember column IDs, and 「把 Notion 欄位改成中文」
 		notionClient, renameNotionColumns,
 		// for ai-batch.js: the full text as Markdown for the AI (fulltext.js)

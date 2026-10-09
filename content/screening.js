@@ -1198,126 +1198,6 @@
 		return result ? { result, outputs, errors } : null;
 	}
 
-	// ---------- menus ----------
-
-	function selectedCollections(context) {
-		return (context.collectionTreeRows || []).filter(r => r.isCollection && r.isCollection()).map(r => r.ref);
-	}
-
-	// The collection selected in the main window (Tools menu)
-	function activeCollection() {
-		try {
-			let pane = Zotero.getActiveZoteroPane();
-			return (pane && pane.getSelectedCollections()[0]) || null;
-		}
-		catch (e) {
-			return null;
-		}
-	}
-
-	function forCollections(fn) {
-		return async (collections) => {
-			if (!collections.length) {
-				scope.ZB.main.notify("Zotero Bridge", "請先在左側選取系統性回顧的分類（回顧專案）。");
-				return;
-			}
-			for (let c of collections) await fn(c);
-		};
-	}
-
-	/** Menu entries that hide while the feature is off (features.js gateMenus; as is without it: Node tests). */
-	function gated(id, menus) {
-		let f = scope.ZB && scope.ZB.features;
-		return f ? f.gateMenus(id, menus) : menus;
-	}
-
-	/** Item, collection and Tools menu entries; returns the menu IDs to unregister. */
-	function registerMenus({ pluginID, icon }) {
-		let decide = change => (ev, context) => {
-			setDecision(context.items || [], change).catch(e => Zotero.logError(e));
-		};
-		let item = (l10nID, change) => ({ menuType: "menuitem", l10nID, onCommand: decide(change) });
-		let reasons = Array.from({ length: MAX_MENU_REASONS }, (_, i) => ({
-			menuType: "menuitem",
-			l10nID: "zotero-bridge-screen-reason",
-			onShowing: (ev, context) => {
-				let reason = config().reasons[i];
-				context.setVisible(!!reason);
-				if (reason) context.setL10nArgs(JSON.stringify({ reason }));
-			},
-			onCommand: (ev, context) => {
-				let reason = config().reasons[i];
-				if (reason) decide({ stage: "ft", decision: "exclude", reason })(ev, context);
-			},
-		}));
-		let dedup = forCollections(dedupCollection);
-		let report = forCollections(generateReport);
-		let ids = [];
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-screening-item",
-			pluginID,
-			target: "main/library/item",
-			menus: gated("screening", [{
-				menuType: "submenu",
-				l10nID: "zotero-bridge-screen-menu",
-				icon,
-				menus: [
-					item("zotero-bridge-screen-ta-include", { stage: "ta", decision: "include" }),
-					item("zotero-bridge-screen-ta-exclude", { stage: "ta", decision: "exclude" }),
-					item("zotero-bridge-screen-ta-maybe", { stage: "ta", decision: "maybe" }),
-					{ menuType: "separator" },
-					item("zotero-bridge-screen-ft-include", { stage: "ft", decision: "include" }),
-					{ menuType: "submenu", l10nID: "zotero-bridge-screen-ft-exclude", menus: reasons },
-					item("zotero-bridge-screen-ft-not-retrieved", { stage: "ft", decision: "notRetrieved" }),
-					{ menuType: "separator" },
-					item("zotero-bridge-screen-duplicate", { duplicate: true }),
-					item("zotero-bridge-screen-clear", { clear: true }),
-				],
-			}]),
-		}));
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-screening-collection",
-			pluginID,
-			target: "main/library/collection",
-			menus: gated("screening", [{
-				menuType: "submenu",
-				l10nID: "zotero-bridge-screen-collection-menu",
-				icon,
-				onShowing: (ev, context) => context.setVisible(selectedCollections(context).length > 0),
-				menus: [
-					{
-						menuType: "menuitem",
-						l10nID: "zotero-bridge-screen-dedup",
-						onCommand: (ev, context) => dedup(selectedCollections(context)).catch(e => Zotero.logError(e)),
-					},
-					{
-						menuType: "menuitem",
-						l10nID: "zotero-bridge-screen-prisma",
-						onCommand: (ev, context) => report(selectedCollections(context)).catch(e => Zotero.logError(e)),
-					},
-				],
-			}]),
-		}));
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-screening-tools",
-			pluginID,
-			target: "main/menubar/tools",
-			menus: gated("screening", [
-				{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-screen-tools-dedup",
-					onCommand: () => dedup([activeCollection()].filter(Boolean)).catch(e => Zotero.logError(e)),
-				},
-				{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-screen-tools-prisma",
-					onCommand: () => report([activeCollection()].filter(Boolean)).catch(e => Zotero.logError(e)),
-				},
-			]),
-		}));
-		return ids.filter(Boolean);
-	}
-
 	return {
 		DEFAULT_PREFIX, DEFAULT_REASON_PREFIX, DEFAULT_SOURCE_PREFIX, DEFAULT_REASONS, MAX_MENU_REASONS, NO_REASON, NO_SOURCE,
 		NOTION_ANCHOR, REVIEW_FOLDER, DEFAULT_OTHER_SOURCES,
@@ -1326,6 +1206,6 @@
 		normalizeDOI, normalizeTitle, yearOf, findDuplicates,
 		computePrisma, checkCounts, buildMermaid, countsTable, issuesMarkdown, evidenceRow, sortRows, evidenceTable,
 		csvCell, buildCSV, buildReviewSection, frontmatterFor, buildReviewNote, notionBlocks,
-		config, itemRecord, setDecision, renderPaneRow, dedupCollection, generateReport, registerMenus,
+		config, itemRecord, setDecision, renderPaneRow, dedupCollection, generateReport,
 	};
 });

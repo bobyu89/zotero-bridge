@@ -288,7 +288,7 @@ test("the dashboard's 熱門概念 section", () => {
 		"[[Zotero/概念/Self-efficacy|Self-efficacy]]（3） · [[Zotero/概念/跌倒|跌倒]]（2）",
 	].join("\n\n"));
 	let none = c.buildDashboardSection([]);
-	assert.match(none, /還沒有概念卡片：Zotero 工具 → 更新概念卡片/);
+	assert.match(none, /還沒有概念卡片：Zotero Bridge 按鈕或快速指令 → 更新概念卡片/);
 	assert.doesNotMatch(none, /\[\[/);
 });
 

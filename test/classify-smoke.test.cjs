@@ -273,18 +273,22 @@ async function setup(opts = {}) {
 	return Object.assign(env, { ZB, requests, papers: { aiPaper, rct, zh }, review });
 }
 
-function menuEntry(env, l10nID) {
-	let found = null;
-	let walk = (list) => {
-		for (let m of list || []) {
-			if (found) return;
-			if (m.l10nID === l10nID) found = m;
-			else walk(m.menus);
-		}
-	};
-	for (let o of env.menus) walk(o.menus);
-	assert.ok(found, `no menu entry ${l10nID}`);
+/** The 「Zotero Bridge ▸」 submenu of the item or collection menu (commands.js, menus.js). */
+function zbMenu(env, menuID) {
+	return env.menus.find(o => o.menuID === menuID).menus[0];
+}
+
+/** An entry of that submenu. */
+function menuEntry(env, menuID, l10nID) {
+	let found = zbMenu(env, menuID).menus.find(m => m.l10nID === l10nID);
+	assert.ok(found, `no ${l10nID} in ${menuID}`);
 	return found;
+}
+
+/** Whether the toolbar button's menu and 快速指令 offer a command right now. */
+function offered(env, id) {
+	let C = env.ZB.commands;
+	return C.isVisible(C.get(id));
 }
 
 function visible(menu, context = {}) {
@@ -321,17 +325,19 @@ function tree(env) {
 test("menus follow the switches; 復原上次分類 shows only while there is a run to undo", async () => {
 	let env = await setup();
 	let F = env.ZB.features;
-	let ids = env.menus.map(o => o.menuID);
-	for (let id of ["zotero-bridge-classify-item", "zotero-bridge-classify-collection", "zotero-bridge-classify-tools"]) assert.ok(ids.includes(id), id);
 	let row = { collectionTreeRows: [{ isCollection: () => true, ref: env.review }] };
-	assert.equal(visible(menuEntry(env, "zotero-bridge-classify-items")), true, "on in 研究生引導");
-	assert.equal(visible(menuEntry(env, "zotero-bridge-classify-tools")), true);
-	assert.equal(visible(menuEntry(env, "zotero-bridge-classify-collection")), false, "no collection selected");
-	assert.equal(visible(menuEntry(env, "zotero-bridge-classify-collection"), row), true);
-	assert.equal(visible(menuEntry(env, "zotero-bridge-classify-undo")), false, "nothing to undo yet");
+	let items = { items: [env.papers.aiPaper] };
+	// Item menu, collection menu (Zotero Bridge ▸ 整理), toolbar and 快速指令: one command
+	assert.equal(visible(menuEntry(env, "zotero-bridge-item", "zotero-bridge-classify-tools"), items), true, "on in 研究生引導");
+	assert.equal(offered(env, "classify"), true);
+	assert.equal(visible(zbMenu(env, "zotero-bridge-collection")), false, "no collection selected");
+	assert.equal(visible(zbMenu(env, "zotero-bridge-collection"), row), true);
+	assert.equal(visible(menuEntry(env, "zotero-bridge-collection", "zotero-bridge-classify-tools"), row), true);
+	assert.equal(offered(env, "classify-undo"), false, "nothing to undo yet");
 	F.setEnabled("autoClassify", false);
-	for (let id of ["zotero-bridge-classify-items", "zotero-bridge-classify-tools"]) assert.equal(visible(menuEntry(env, id)), false, id);
-	assert.equal(visible(menuEntry(env, "zotero-bridge-classify-collection"), row), false);
+	assert.equal(visible(menuEntry(env, "zotero-bridge-item", "zotero-bridge-classify-tools"), items), false);
+	assert.equal(offered(env, "classify"), false);
+	assert.equal(visible(menuEntry(env, "zotero-bridge-collection", "zotero-bridge-classify-tools"), row), false);
 	// Reached anyway: the usual message, nothing opened or written
 	let before = env.descriptions.length;
 	assert.equal(await env.ZB.classify.run([env.papers.aiPaper]), null);
@@ -339,7 +345,7 @@ test("menus follow the switches; 復原上次分類 shows only while there is a 
 	assert.equal(env.dialogs.length, 0);
 	// A run to undo: the entry shows even with the switch off, so a run can always be taken back
 	env.prefStore[P + "classify.lastRun"] = JSON.stringify({ at: "2026-10-08T00:00:00Z", libraries: [{ libraryID: 1, created: [], added: [] }] });
-	assert.equal(visible(menuEntry(env, "zotero-bridge-classify-undo")), true);
+	assert.equal(offered(env, "classify-undo"), true);
 	assert.deepEqual(env.requests, []);
 	assert.deepEqual(env.errors, []);
 });
@@ -348,7 +354,7 @@ test("collection menu → review → 套用 creates the tree and memberships; un
 	let env = await setup();
 	let { aiPaper, rct, zh } = env.papers;
 	// From the collection menu, as Zotero calls it (the command itself doesn't wait)
-	menuEntry(env, "zotero-bridge-classify-collection").onCommand({}, { collectionTreeRows: [{ isCollection: () => true, ref: env.review }] });
+	menuEntry(env, "zotero-bridge-collection", "zotero-bridge-classify-tools").onCommand({}, { collectionTreeRows: [{ isCollection: () => true, ref: env.review }] });
 	let root = await openedDialog(env);
 	let $$ = sel => [...root.querySelectorAll(sel)];
 	assert.equal(root.querySelector(".zb-cl-target").textContent, "放在：我的文獻庫 › 自動分類");
@@ -383,9 +389,9 @@ test("collection menu → review → 套用 creates the tree and memberships; un
 	]);
 	// PICO values only one paper uses were offered unticked (Accidental Falls joined the 跌倒 alias group: ticked)
 	let done = env.descriptions.find(d => /已加入/.test(d));
-	assert.equal(done, "已加入 8 筆分類，新建 9 個子分類。\n想反悔：工具 → 復原上次分類。");
+	assert.equal(done, "已加入 8 筆分類，新建 9 個子分類。\n想反悔：Zotero Bridge 按鈕或快速指令 → 復原上次分類。");
 	assert.ok(env.prefStore[P + "classify.lastRun"]);
-	assert.equal(visible(menuEntry(env, "zotero-bridge-classify-undo")), true);
+	assert.equal(offered(env, "classify-undo"), true);
 
 	// The same again: reuses everything, adds nothing, keeps the undo record of the first run
 	let last = env.prefStore[P + "classify.lastRun"];
@@ -398,16 +404,16 @@ test("collection menu → review → 套用 creates the tree and memberships; un
 	assert.deepEqual([r2.created, r2.added, r2.already], [0, 0, 8]);
 	assert.equal(env.prefStore[P + "classify.lastRun"], last);
 
-	// 復原上次分類 from the Tools menu
+	// 復原上次分類 from the toolbar button or 快速指令
 	env.confirms.length = 0;
-	menuEntry(env, "zotero-bridge-classify-undo").onCommand();
+	env.ZB.commands.execute("classify-undo");
 	for (let i = 0; i < 200 && !env.descriptions.some(d => /已復原/.test(d)); i++) await new Promise(r => setTimeout(r, 5));
 	assert.match(env.confirms[0], /會把那次加入的 8 筆分類收回/);
 	assert.match(env.confirms[0], /文獻本身和你原本的分類都不會動/);
 	assert.deepEqual(tree(env), ["E2E Review [AIPAPER,RCTPAPER,ZHPAPER]"]);
 	assert.match(env.descriptions.find(d => /已復原/.test(d)), /已復原：收回 8 筆分類，刪除 9 個空的子分類。/);
 	assert.equal(env.prefStore[P + "classify.lastRun"], "");
-	assert.equal(visible(menuEntry(env, "zotero-bridge-classify-undo")), false);
+	assert.equal(offered(env, "classify-undo"), false);
 	assert.deepEqual(env.requests, [], "no network without the AI dimension");
 	assert.deepEqual(env.errors, []);
 });
@@ -552,10 +558,10 @@ test("a review window that can't open is reported and nothing is written", async
 	assert.equal(env.errors.length, 1, "logged for the debug output");
 });
 
-test("Tools menu classifies the selected items, else the selected collection; nothing selected says so", async () => {
+test("the toolbar and 快速指令 classify the selected items, else the selected collection; nothing selected says so", async () => {
 	let env = await setup();
 	env.setSelectedItems([env.papers.zh]);
-	menuEntry(env, "zotero-bridge-classify-tools").onCommand();
+	env.ZB.commands.execute("classify");
 	let root = await openedDialog(env);
 	assert.deepEqual([...root.querySelectorAll(".zb-cl-item-title")].map(h => h.textContent), ["護理人員跌倒預防衛教之成效"]);
 	root.querySelector(".zb-cl-cancel").click();
@@ -563,7 +569,7 @@ test("Tools menu classifies the selected items, else the selected collection; no
 	await new Promise(r => setTimeout(r, 30));
 	env.setSelectedItems([]);
 	env.setActiveCollection(env.review);
-	menuEntry(env, "zotero-bridge-classify-tools").onCommand();
+	env.ZB.commands.execute("classify");
 	root = await openedDialog(env, 2);
 	assert.equal(root.querySelectorAll(".zb-cl-item-title").length, 3);
 	root.querySelector(".zb-cl-cancel").click();

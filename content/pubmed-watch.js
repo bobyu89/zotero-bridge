@@ -973,32 +973,10 @@
 		if (errors.length) container.append(el("pre", { class: "zb-status" }, errors.map(e => `⚠️ ${e}`).join("\n")));
 	}
 
-	// ---------- menu ----------
-
 	// Feature switches (features.js): checked live; always on when this file runs without them (Node tests)
 	function featureOn(id) {
 		let f = scope.ZB && scope.ZB.features;
 		return !f || f.isEnabled(id);
-	}
-
-	/** Menu entries that hide while the feature is off (features.js gateMenus). */
-	function gated(id, menus) {
-		let f = scope.ZB && scope.ZB.features;
-		return f ? f.gateMenus(id, menus) : menus;
-	}
-
-	function registerMenus({ pluginID }) {
-		let id = Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-pubmed-watch-tools",
-			pluginID,
-			target: "main/menubar/tools",
-			menus: gated("pubmedWatch", [{
-				menuType: "menuitem",
-				l10nID: "zotero-bridge-menu-pubmed-watch",
-				onCommand: () => runAll().catch(e => Zotero.logError(e)),
-			}]),
-		});
-		return [id].filter(Boolean);
 	}
 
 	return {
@@ -1008,7 +986,7 @@
 		eutilsURL, esearchURL, esummaryURL, parseESearch, parseESummary, createThrottle, planCandidates, pmidFromExtra, normalizeDOI,
 		describeResult, digestLine, buildDigestNote, localDate,
 		runtime, config, readWatches, readState, ncbiSettings, getJSON, findExisting, ensureCollection, checkWatch, runAll, dueWatches,
-		init, shutdown, testQuery, addWatch, renderPrefs, registerMenus,
+		init, shutdown, testQuery, addWatch, renderPrefs,
 		get timerActive() { return !!timer; },
 	};
 });

@@ -345,27 +345,15 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 		},
 	});
 	await vm.runInContext(`startup({ id: "zotero-bridge@bobyu89.github.io", version: "0.1.0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
-	assert.deepEqual(env.menus.map(m => m.target), ["main/library/item", "main/library/collection", "main/menubar/tools", "main/menubar/tools", "main/library/collection",
-		"main/library/item", "main/library/collection", "main/menubar/tools", "main/menubar/tools", "main/menubar/tools",
-		// citation-chase.js
-		"main/library/item", "main/library/collection", "main/menubar/tools",
-		// search-links.js
-		"main/library/item", "main/menubar/tools",
-		// appraisal-form.js
-		"main/library/collection", "main/menubar/tools",
-		// progress-report.js
-		"main/menubar/tools",
-		// concepts.js
-		"main/menubar/tools",
-		// classify.js
-		"main/library/item", "main/library/collection", "main/menubar/tools",
-		// ai-batch.js
-		"main/menubar/tools"]);
+	// One registration per menu: the item and collection menus' 「Zotero Bridge ▸」 and the Tools menu (menus.js)
+	assert.deepEqual(env.menus.map(m => [m.menuID, m.target]), [["zotero-bridge-item", "main/library/item"],
+		["zotero-bridge-collection", "main/library/collection"], ["zotero-bridge-tools", "main/menubar/tools"]]);
 	assert.equal(env.panes[0].paneID, "zotero-bridge-ai-note");
-	// The Zotero Bridge submenus (items and collections): the drafts at the end (review-draft.js, ebhc-report.js)
+	// The Zotero Bridge submenus (items and collections) end with the AI group: AI notes, then the drafts
+	// (review-draft.js, ebhc-report.js)
 	for (let i of [0, 1]) {
-		assert.deepEqual([...env.menus[i].menus[0].menus.slice(-4).map(m => m.l10nID || m.menuType)],
-			["separator", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-menu-ebhc-report"]);
+		assert.deepEqual([...env.menus[i].menus[0].menus.slice(-6).map(m => m.l10nID || m.menuType)],
+			["separator", "zotero-bridge-toolbar-group-ai", "zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-menu-ebhc-report"]);
 	}
 
 	let { MockItem, addChild } = env;
@@ -892,7 +880,7 @@ test("settings pane loads and saves secrets through the login manager, never pre
 	window.dispatchEvent(new window.Event("unload"));
 });
 
-test("bibliography export: Tools menu writes references.json whose ids match the notes' citekeys", async () => {
+test("bibliography export: the 匯出參考文獻 command writes references.json whose ids match the notes' citekeys", async () => {
 	let vault = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-vault-"));
 	let env = makeEnv({
 		fetch: async () => { throw new Error("no network expected"); },
@@ -923,9 +911,10 @@ test("bibliography export: Tools menu writes references.json whose ids match the
 	await env.context.ZB.main.run([keyed], { targets: ["obsidian"], ai: "none" });
 	assert.match(fs.readFileSync(path.join(vault, "Zotero", "chen2024.md"), "utf8"), /^citekey: "chen2024"$/m);
 
-	// Tools → 匯出參考文獻到 Obsidian
-	let toolsEntry = env.menus.find(m => m.menuID === "zotero-bridge-export-tools").menus[0];
-	assert.equal(toolsEntry.l10nID, "zotero-bridge-menu-export-library");
+	// 匯出參考文獻到 Obsidian from the toolbar button or 快速指令 (commands.js)
+	let C = env.context.ZB.commands;
+	assert.equal(C.get("bibliography").l10n, "zotero-bridge-menu-export-library");
+	let toolsEntry = { onCommand: () => C.execute("bibliography") };
 	toolsEntry.onCommand({}, {});
 	await env.context.ZB.bibliography.whenIdle();
 	assert.deepEqual(env.errors, []);
@@ -948,8 +937,8 @@ test("bibliography export: Tools menu writes references.json whose ids match the
 	await env.context.ZB.bibliography.whenIdle();
 	assert.equal(fs.statSync(file).mtimeMs, mtime);
 
-	// Collection menu: same keys as the main file, only that collection's items
-	let collEntry = env.menus.find(m => m.menuID === "zotero-bridge-export-collection").menus[0];
+	// Collection menu → Zotero Bridge ▸ 匯出目前分類的參考文獻: same keys as the main file, only that collection's items
+	let collEntry = env.menus.find(m => m.menuID === "zotero-bridge-collection").menus[0].menus.find(m => m.l10nID === "zotero-bridge-cmd-export-collection");
 	let collection = { id: 7, name: "碩論", libraryID: 1, getChildItems: () => [newer] };
 	let context = { collectionTreeRows: [{ isCollection: () => true, ref: collection }] };
 	let visible;
@@ -1507,7 +1496,7 @@ test("reading status: a change in Zotero, Notion or Obsidian reaches the other t
 	assert.deepEqual(env.errors, []);
 });
 
-test("reading status: Tools → 同步閱讀狀態 updates only the status of synced items and leaves trashed ones alone", async () => {
+test("reading status: 同步閱讀狀態 updates only the status of synced items and leaves trashed ones alone", async () => {
 	let vault = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-vault-"));
 	let log = [];
 	let pages = new Map();
@@ -1534,9 +1523,8 @@ test("reading status: Tools → 同步閱讀狀態 updates only the status of sy
 	let before = new Map([a, b, c].map(i => [i, fs.readFileSync(file(i), "utf8")]));
 	log.length = 0;
 
-	let tools = env.menus.find(m => m.menuID === "zotero-bridge-tools").menus;
-	let entry = tools.find(m => m.l10nID === "zotero-bridge-menu-status");
-	entry.onCommand();
+	// 同步閱讀狀態 from the toolbar button or 快速指令 (commands.js)
+	env.context.ZB.commands.execute("status");
 	await ZB.main.run([], {}); // runs after the pass
 	assert.deepEqual(env.errors, []);
 
@@ -1576,7 +1564,7 @@ test("reading status: Tools → 同步閱讀狀態 updates only the status of sy
 
 	// Run again: nothing left to do
 	log.length = 0;
-	entry.onCommand();
+	env.context.ZB.commands.execute("status");
 	await ZB.main.run([], {});
 	assert.equal(log.filter(l => l.method === "PATCH").length, 0);
 	assert.equal(env.descriptions.at(-1), "閱讀狀態：檢查 3 筆，三邊都一致");
@@ -1584,7 +1572,7 @@ test("reading status: Tools → 同步閱讀狀態 updates only the status of sy
 	// A conflict is listed on its own progress line
 	setNoteStatus(file(a), "閱讀中");
 	page(a).properties.Status = { select: { name: "已引用" } };
-	entry.onCommand();
+	env.context.ZB.commands.execute("status");
 	await ZB.main.run([], {});
 	assert.ok(env.progressLines.some(l => l.text === "Paper a — ⚠️ 閱讀狀態衝突：Obsidian「閱讀中」、Notion「已引用」 → 採用 Obsidian「閱讀中」"));
 	assert.equal(page(a).properties.Status.select.name, "閱讀中");

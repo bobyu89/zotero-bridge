@@ -264,8 +264,14 @@ function addAINote(env, item, study) {
 	return note;
 }
 
+/** The 「Zotero Bridge ▸」 submenu of the item or collection menu (commands.js, menus.js). */
+function zbMenu(env, menuID) {
+	return env.menus.find(m => m.menuID === menuID).menus[0];
+}
+
+/** Item menu → Zotero Bridge ▸ 篩選所選文獻 ▸ */
 function itemMenu(env) {
-	return env.menus.find(m => m.menuID === "zotero-bridge-screening-item").menus[0];
+	return entry(zbMenu(env, "zotero-bridge-item"), "zotero-bridge-toolbar-screen");
 }
 
 function entry(menu, l10nID) {
@@ -283,8 +289,8 @@ test("item menu and item pane set screening decisions as tags; batch selections 
 	let [a, b, c] = [1, 2, 3].map(n => paper(env, n));
 	let menu = itemMenu(env);
 	assert.equal(menu.menuType, "submenu");
-	assert.equal(menu.l10nID, "zotero-bridge-screen-menu");
-	assert.ok(menu.icon.endsWith("content/icons/bridge.svg"));
+	assert.equal(menu.l10nID, "zotero-bridge-toolbar-screen");
+	assert.ok(zbMenu(env, "zotero-bridge-item").icon.endsWith("content/icons/bridge.svg"));
 
 	// Batch: three items → title/abstract include
 	entry(menu, "zotero-bridge-screen-ta-include").onCommand({}, { items: [a, b, c] });
@@ -292,9 +298,11 @@ test("item menu and item pane set screening decisions as tags; batch selections 
 	assert.deepEqual([a, b, c].map(i => i.tags), [["篩選/標題摘要/納入"], ["篩選/標題摘要/納入"], ["篩選/標題摘要/納入"]]);
 	assert.match(env.descriptions.at(-1), /標題摘要：納入：已更新 3 篇/);
 
-	// Full-text exclusion: the reason slots follow the settings
+	// Full-text exclusion: one slot per reason in the same submenu (two levels below the right-click
+	// entry); the slots follow the settings
 	env.prefStore["extensions.zotero-bridge.screening.reasons"] = "族群不符\n研究設計不符";
-	let reasons = entry(menu, "zotero-bridge-screen-ft-exclude").menus;
+	let reasons = menu.menus.filter(m => m.l10nID === "zotero-bridge-cmd-screen-ft-exclude-reason");
+	assert.ok(menu.menus.every(m => m.menuType !== "submenu"), "no third level");
 	assert.equal(reasons.length, env.context.ZB.screening.MAX_MENU_REASONS);
 	let shown = Array.from(reasons, (r) => {
 		let state = {};
@@ -400,12 +408,12 @@ test("PRISMA note, CSV and Notion page for a collection; a rerun keeps the user'
 	fs.writeFileSync(path.join(litDir, "author12024.md"), `---\ntitle: "x"\nzotero_key: "library/${inc1.key}"\n---\n# x\n`);
 	let collection = env.addCollection(1, "跌倒預防 SR", [inc1, inc2, exc, taEx, dup, pending, noReason]);
 
-	// Collection menu → 產生 PRISMA 流程圖與證據表
-	let collMenu = env.menus.find(m => m.menuID === "zotero-bridge-screening-collection").menus[0];
+	// Collection menu → Zotero Bridge ▸ 產生 PRISMA 流程圖與證據表（目前分類）
+	let collMenu = zbMenu(env, "zotero-bridge-collection");
 	let visible;
 	collMenu.onShowing({}, { collectionTreeRows: [], setVisible: v => (visible = v) });
 	assert.equal(visible, false);
-	entry(collMenu, "zotero-bridge-screen-prisma").onCommand({}, { collectionTreeRows: [{ isCollection: () => true, ref: collection }] });
+	entry(collMenu, "zotero-bridge-screen-tools-prisma").onCommand({}, { collectionTreeRows: [{ isCollection: () => true, ref: collection }] });
 	await ZB.main.enqueue(() => {});
 	assert.deepEqual(env.errors, []);
 	let line = env.progressLines.at(-1);
@@ -451,8 +459,8 @@ test("PRISMA note, CSV and Notion page for a collection; a rerun keeps the user'
 	pending.tags.push("篩選/標題摘要/排除");
 	noReason.tags.push("篩選/標題摘要/納入", "排除原因/語言不符（language）");
 	env.setActiveCollection(collection);
-	let tools = env.menus.find(m => m.menuID === "zotero-bridge-screening-tools").menus;
-	tools.find(m => m.l10nID === "zotero-bridge-screen-tools-prisma").onCommand({}, {});
+	// Again from the toolbar button or 快速指令: the selected collection
+	ZB.commands.execute("prisma");
 	await ZB.main.enqueue(() => {});
 	assert.deepEqual(env.errors, []);
 	let note2 = fs.readFileSync(notePath, "utf8");
@@ -489,8 +497,7 @@ test("PRISMA note, CSV and Notion page for a collection; a rerun keeps the user'
 
 test("PRISMA without a selected collection or settings explains what is missing", async () => {
 	let env = await setup({ prefs: { "extensions.zotero-bridge.obsidian.vaultPath": "", "extensions.zotero-bridge.screening.notionParent": "" } });
-	let tools = env.menus.find(m => m.menuID === "zotero-bridge-screening-tools").menus;
-	await tools.find(m => m.l10nID === "zotero-bridge-screen-tools-prisma").onCommand({}, {});
+	await env.context.ZB.commands.execute("prisma");
 	assert.match(env.descriptions.at(-1), /請先在左側選取系統性回顧的分類/);
 	let collection = env.addCollection(1, "R", [paper(env, 1)]);
 	assert.equal(await env.context.ZB.screening.generateReport(collection), null);

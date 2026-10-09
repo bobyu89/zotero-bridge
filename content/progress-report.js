@@ -480,7 +480,7 @@
 	function reviewsSection(rows, hasSnapshot) {
 		let parts = ["## 系統性回顧進度"];
 		if (!rows.length) {
-			parts.push("還沒有回顧專案（Zotero 分類右鍵 → Zotero Bridge：系統性回顧篩選 → 產生 PRISMA 流程圖與證據表）。");
+			parts.push("還沒有回顧專案（Zotero 分類右鍵 → Zotero Bridge → 產生 PRISMA 流程圖與證據表（目前分類））。");
 			return parts.join("\n\n");
 		}
 		parts.push(rows.map(r => prismaLine(r, hasSnapshot)).join("\n"));
@@ -1479,29 +1479,6 @@ end
 		return !f || f.isEnabled(id);
 	}
 
-	/** Menu entries that hide while the feature is off (features.js gateMenus). */
-	function gated(id, menus) {
-		let f = scope.ZB && scope.ZB.features;
-		return f ? f.gateMenus(id, menus) : menus;
-	}
-
-	/** Tools menu entry; returns the menu IDs to unregister. */
-	function registerMenus({ pluginID }) {
-		return [Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-progress-report-tools",
-			pluginID,
-			target: "main/menubar/tools",
-			menus: gated("progressReport", [{
-				menuType: "menuitem",
-				l10nID: "zotero-bridge-menu-progress-report",
-				onCommand: () => {
-					// Through the exported object, so tests can wait for the run
-					api.run().catch(e => Zotero.logError(e));
-				},
-			}]),
-		})].filter(Boolean);
-	}
-
 	const api = {
 		STATUS_LOG_PREF, HISTORY_PREF, OPTIONS_PREF, REPORT_FOLDER, FILTER_FILE, PANDOC_FILTER, SECTIONS, LOG_LIMITS, SUMMARY_PROMPT,
 		// pure
@@ -1513,7 +1490,7 @@ end
 		buildSections, toPlainText, stripWikilinks, buildSummaryPrompt, estimateSummaryCost, processSummary,
 		reportPaths, pickReferenceDoc, buildRegion, buildReportNote, buildPlainReport, buildNotionMarkdown,
 		// Zotero
-		runtime, logStatusChange, latestReport, collectFacts, askOptions, askWithPrompts, run, registerMenus,
+		runtime, logStatusChange, latestReport, collectFacts, askOptions, askWithPrompts, run,
 	};
 	return api;
 });

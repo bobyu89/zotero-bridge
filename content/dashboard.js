@@ -427,7 +427,7 @@
 		let parts = ["## 🗂️ 回顧專案"];
 		parts.push("### 系統性／範圍回顧（PRISMA）");
 		if (!reviews.length) {
-			parts.push("還沒有回顧專案：在 Zotero 的分類上按右鍵 → Zotero Bridge：系統性回顧篩選 → 產生 PRISMA 流程圖與證據表。");
+			parts.push("還沒有回顧專案：在 Zotero 的分類上按右鍵 → Zotero Bridge → 產生 PRISMA 流程圖與證據表（目前分類）。");
 		}
 		else {
 			parts.push(reviews.map((r) => {
@@ -448,7 +448,7 @@
 		}
 		parts.push("### 文獻探討草稿");
 		if (!drafts.length) {
-			parts.push("還沒有草稿：選取文獻或分類 → 右鍵 → 產生文獻探討草稿（AI）。");
+			parts.push("還沒有草稿：選取文獻或分類 → 右鍵 → Zotero Bridge → 產生文獻探討草稿（AI）。");
 		}
 		else {
 			parts.push(drafts.map((d) => {
@@ -501,7 +501,7 @@
 	function buildDashboardSection(stats, meta = {}) {
 		let info = [
 			`> [!info] 由 Zotero Bridge 於 ${stamp(meta.now || new Date())} 依 vault 中的文獻筆記 frontmatter 產生；`
-				+ "重新整理：Zotero 工具 → 更新研究儀表板（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。",
+				+ "重新整理：Zotero Bridge 按鈕或快速指令 → 更新研究儀表板（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。",
 		];
 		if (meta.baseLink) info.push(`> Bases 檢視：[[${meta.baseLink}|${BASE_NAME}]]（證據等級表、掃描檔待 OCR、待讀（依分類））`);
 		if (meta.latestReport) info.push(`> 最新進度報告（給指導教授）：[[${meta.latestReport.link}|${meta.latestReport.date}]]`);
@@ -784,32 +784,10 @@
 		return !f || f.isEnabled(id);
 	}
 
-	/** Menu entries that hide while the feature is off (features.js gateMenus). */
-	function gated(id, menus) {
-		let f = scope.ZB && scope.ZB.features;
-		return f ? f.gateMenus(id, menus) : menus;
-	}
-
-	/** Tools menu entry; returns the menu IDs to unregister. */
-	function registerMenus({ pluginID }) {
-		return [Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-dashboard-tools",
-			pluginID,
-			target: "main/menubar/tools",
-			menus: gated("dashboard", [{
-				menuType: "menuitem",
-				l10nID: "zotero-bridge-menu-dashboard",
-				onCommand: () => {
-					runFromMenu().catch(e => Zotero.logError(e));
-				},
-			}]),
-		})].filter(Boolean);
-	}
-
 	return {
 		NOTE_NAME, BASE_NAME, ISSUE_LABELS,
 		parseFrontmatter, suspectChineseNames, noteRecord, projectRecord, aggregate, usageReport,
 		buildStatusPie, buildDashboardSection, buildDashboardNote, buildDashboardBase,
-		update, afterSync, runFromMenu, registerMenus,
+		update, afterSync, runFromMenu,
 	};
 });

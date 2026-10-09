@@ -145,3 +145,5 @@ pref("extensions.zotero-bridge.classify.pico", true);
 pref("extensions.zotero-bridge.classify.topicList", "");
 pref("extensions.zotero-bridge.classify.ruleList", "");
 pref("extensions.zotero-bridge.classify.lastRun", "");
+// Settings section to open next (content/preferences.js)
+pref("extensions.zotero-bridge.prefs.pendingSection", "");

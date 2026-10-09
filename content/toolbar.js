@@ -6,10 +6,11 @@
  * Zotero's own toolbar button classes, so size, hover, active, focus ring and dropmarker match the
  * buttons next to it (content/toolbar.css only adds the icon).
  *
- * Clicking it opens the plugin's commands grouped by research workflow (同步／整理／找文獻／篩選與評讀／
- * AI 輔助與寫作), then 設定…. Every entry calls the function the existing right-click or Tools menu
- * entry calls, on the main window's current selection (and the selected collection where the
- * collection commands expect one). Visibility is decided each time the menu opens: entries of
+ * Clicking it opens 快速指令… first, then every command of the command catalog (commands.js) grouped
+ * by research workflow (同步／整理／找文獻／篩選與評讀／AI 輔助與寫作), then 設定…. The right-click menus
+ * (menus.js) and the palette (palette.js) come from the same catalog, so an entry reads and acts the
+ * same everywhere; here it acts on the main window's current selection (and the selected collection
+ * where a collection command expects one). Visibility is decided each time the menu opens: entries of
  * switched-off features (features.js) and entries that are conditional (a batch to resume, a run to
  * undo) hide, and a group with nothing left hides with its label.
  *
@@ -27,9 +28,6 @@
 	const AFTER_ID = "zotero-tb-note-add";
 	const TOOLBAR_ID = "zotero-items-toolbar";
 
-	const NEED_ITEMS = "請先選取文獻。";
-	const NEED_REVIEW_COLLECTION = "請先在左側選取系統性回顧的分類（回顧專案）。";
-
 	let rootURI = "";
 	let chromeRegistered = false;
 	// window → { observer, onKeyDown, toolbar }
@@ -37,6 +35,10 @@
 
 	function ZB() {
 		return root.ZB;
+	}
+
+	function C() {
+		return root.ZB.commands;
 	}
 
 	function log(e) {
@@ -47,224 +49,13 @@
 		return ZB().features.isEnabled(id);
 	}
 
-	function notify(text, headline = "Zotero Bridge") {
-		ZB().main.notify(headline, text);
-	}
-
-	// ---------- the selection in the window the button lives in ----------
-
+	/** The selection in the window the button lives in (commands.js fromWindow). */
 	function selection(win) {
-		let pane = (win && win.ZoteroPane) || Zotero.getActiveZoteroPane();
-		let items = [];
-		let collection = null;
-		try {
-			items = (pane && pane.getSelectedItems && pane.getSelectedItems()) || [];
-		}
-		catch (e) {
-			items = [];
-		}
-		try {
-			collection = (pane && pane.getSelectedCollections && pane.getSelectedCollections()[0]) || null;
-		}
-		catch (e) {
-			collection = null;
-		}
-		// The shape MenuManager hands the context-menu entries, for the functions that read it
-		let collectionTreeRows = collection ? [{ isCollection: () => true, ref: collection }] : [];
-		return { items, collection, collectionTreeRows };
-	}
-
-	/** The selected items, or the message the plugin shows when there are none. */
-	function selectedItems(sel) {
-		let items = ZB().adapter.toRegularItems(sel.items);
-		if (!items.length) notify(NEED_ITEMS);
-		return items;
-	}
-
-	function needCollection(sel, fn, text = NEED_REVIEW_COLLECTION, headline) {
-		if (!sel.collection) {
-			notify(text, headline);
-			return null;
-		}
-		return fn(sel.collection);
-	}
-
-	/**
-	 * The AI writing commands: the selected items as from the item menu (main.js itemScope), or with no
-	 * item selected the selected collection as from the collection menu (main.js collectionScope).
-	 */
-	function writingTarget(sel) {
-		let regular = ZB().adapter.toRegularItems(sel.items);
-		if (!regular.length && sel.collection) {
-			return {
-				items: ZB().adapter.itemsInCollection(sel.collection, true),
-				scope: { label: sel.collection.name || "分類", collection: sel.collection },
-				context: { items: [], collectionTreeRows: sel.collectionTreeRows },
-			};
-		}
-		return {
-			items: sel.items,
-			scope: { label: sel.collection ? `${sel.collection.name}（選取）` : "選取的文獻", collection: null },
-			context: { items: sel.items, collectionTreeRows: sel.collectionTreeRows },
-		};
-	}
-
-	function sync(action) {
-		return (sel) => {
-			let items = selectedItems(sel);
-			return items.length ? ZB().main.run(items, action) : null;
-		};
-	}
-
-	function screen(change) {
-		return (sel) => {
-			let items = selectedItems(sel);
-			return items.length ? ZB().screening.setDecision(items, change) : null;
-		};
-	}
-
-	function pendingBatch() {
-		try {
-			return ZB().main.readPendingBatch();
-		}
-		catch (e) {
-			return null;
-		}
-	}
-
-	// ---------- the menu ----------
-
-	const BOTH = ["notion", "obsidian"];
-
-	/**
-	 * Groups in research-workflow order. Entry: id, l10nID (existing menu IDs where they fit), feature
-	 * (hidden while off; none: always), when (an extra live condition), args (Fluent arguments),
-	 * command(selection) or submenu (entries of the same shape).
-	 */
-	const GROUPS = [
-		{ id: "sync", l10nID: "zotero-bridge-toolbar-group-sync", entries: [
-			{ id: "sync", l10nID: "zotero-bridge-toolbar-sync", feature: "sync", command: sync({ targets: BOTH, ai: "missing" }) },
-			{ id: "sync-no-ai", l10nID: "zotero-bridge-menu-no-ai", feature: "sync", command: sync({ targets: BOTH, ai: "reuse" }) },
-			{ id: "sync-obsidian", l10nID: "zotero-bridge-menu-obsidian", feature: "sync", command: sync({ targets: ["obsidian"], ai: "reuse" }) },
-			{ id: "sync-notion", l10nID: "zotero-bridge-menu-notion", feature: "sync", command: sync({ targets: ["notion"], ai: "reuse" }) },
-			{ id: "status", l10nID: "zotero-bridge-menu-status", feature: "status", command: () => ZB().status.runPass() },
-			// Like the Tools menu: resume while a stopped or failed batch is left and none runs, stop while one runs
-			{ id: "resume", l10nID: "zotero-bridge-menu-resume", feature: "sync",
-				when: () => {
-					let b = pendingBatch();
-					return !!b && !b.running;
-				},
-				args: () => {
-					let b = pendingBatch();
-					return { count: b ? b.remaining.length + b.failed.length : 0 };
-				},
-				command: () => ZB().main.resumeBatch() },
-			{ id: "stop", l10nID: "zotero-bridge-menu-stop",
-				when: () => {
-					let b = pendingBatch();
-					return !!b && !!b.running;
-				},
-				command: () => ZB().main.cancelBatch() },
-		] },
-		{ id: "organize", l10nID: "zotero-bridge-toolbar-group-organize", entries: [
-			{ id: "classify", l10nID: "zotero-bridge-classify-tools", feature: "autoClassify",
-				// Like the Tools entry: the selected items, else the selected collection
-				command: (sel) => {
-					let items = sel.items.length ? sel.items : sel.collection ? ZB().adapter.itemsInCollection(sel.collection, true) : [];
-					return ZB().classify.run(items);
-				} },
-			// Not gated, like the Tools entry: what was applied can always be taken back
-			{ id: "classify-undo", l10nID: "zotero-bridge-classify-undo", when: () => !!ZB().classify.readLastRun(), command: () => ZB().classify.undoLast() },
-			{ id: "dashboard", l10nID: "zotero-bridge-menu-dashboard", feature: "dashboard", command: () => ZB().dashboard.runFromMenu() },
-			{ id: "concepts", l10nID: "zotero-bridge-menu-concepts-update", feature: "concepts", command: () => ZB().concepts.runFromMenu() },
-			{ id: "bibliography", l10nID: "zotero-bridge-menu-export-library", feature: "bibliography", command: () => ZB().bibliography.exportLibrary() },
-		] },
-		{ id: "search", l10nID: "zotero-bridge-toolbar-group-search", entries: [
-			{ id: "quick-search", l10nID: "zotero-bridge-search-tools", feature: "searchLinks", command: () => ZB().searchLinks.quickSearch() },
-			{ id: "pubmed-watch", l10nID: "zotero-bridge-menu-pubmed-watch", feature: "pubmedWatch", command: () => ZB().pubmedWatch.runAll() },
-			// chaseItems shows its own message when nothing is selected
-			{ id: "chase-items", l10nID: "zotero-bridge-toolbar-chase-items", feature: "citationChase",
-				command: sel => ZB().citationChase.chaseItems(sel.items, sel.collection) },
-			{ id: "chase-included", l10nID: "zotero-bridge-chase-tools-included", feature: "citationChase",
-				command: sel => needCollection(sel, c => ZB().citationChase.chaseCollection(c), NEED_REVIEW_COLLECTION, "Zotero Bridge：引文追蹤") },
-			// Without a selected collection: the 「所選文獻」 note, imported into My Library (as from the Tools menu)
-			{ id: "chase-import", l10nID: "zotero-bridge-chase-tools-import", feature: "citationChase",
-				command: sel => ZB().citationChase.importChecked(sel.collection) },
-		] },
-		{ id: "appraise", l10nID: "zotero-bridge-toolbar-group-appraise", entries: [
-			{ id: "screen", l10nID: "zotero-bridge-toolbar-screen", feature: "screening", submenu: [
-				{ id: "screen-ta-include", l10nID: "zotero-bridge-screen-ta-include", command: screen({ stage: "ta", decision: "include" }) },
-				{ id: "screen-ta-exclude", l10nID: "zotero-bridge-screen-ta-exclude", command: screen({ stage: "ta", decision: "exclude" }) },
-				{ id: "screen-ta-maybe", l10nID: "zotero-bridge-screen-ta-maybe", command: screen({ stage: "ta", decision: "maybe" }) },
-				{ separator: true },
-				{ id: "screen-ft-include", l10nID: "zotero-bridge-screen-ft-include", command: screen({ stage: "ft", decision: "include" }) },
-				// Filled with the exclusion reasons from the settings each time it opens
-				{ id: "screen-ft-exclude", l10nID: "zotero-bridge-screen-ft-exclude", reasons: true },
-				{ id: "screen-ft-not-retrieved", l10nID: "zotero-bridge-screen-ft-not-retrieved", command: screen({ stage: "ft", decision: "notRetrieved" }) },
-				{ separator: true },
-				{ id: "screen-duplicate", l10nID: "zotero-bridge-screen-duplicate", command: screen({ duplicate: true }) },
-				{ id: "screen-clear", l10nID: "zotero-bridge-screen-clear", command: screen({ clear: true }) },
-			] },
-			{ id: "dedup", l10nID: "zotero-bridge-screen-tools-dedup", feature: "screening",
-				command: sel => needCollection(sel, c => ZB().screening.dedupCollection(c)) },
-			{ id: "prisma", l10nID: "zotero-bridge-screen-tools-prisma", feature: "screening",
-				command: sel => needCollection(sel, c => ZB().screening.generateReport(c)) },
-			{ id: "appraisal-summary", l10nID: "zotero-bridge-appraisal-tools-summary", feature: "appraisalForm",
-				command: sel => needCollection(sel, c => ZB().appraisalForm.exportSummary(c), "請先在左側選取分類。") },
-		] },
-		{ id: "ai", l10nID: "zotero-bridge-toolbar-group-ai", entries: [
-			{ id: "regenerate", l10nID: "zotero-bridge-menu-regenerate", feature: "aiNotes", command: sync({ targets: BOTH, ai: "regenerate" }) },
-			// The writing commands bring their own messages (「…至少需要 2 篇文獻。」)
-			{ id: "synthesis", l10nID: "zotero-bridge-menu-synthesis", feature: "synthesis",
-				command: (sel) => {
-					let t = writingTarget(sel);
-					return ZB().main.runSynthesis(t.items, t.scope);
-				} },
-			{ id: "review-draft", l10nID: "zotero-bridge-menu-review-draft", feature: "reviewDraft",
-				command: (sel) => {
-					let t = writingTarget(sel);
-					return ZB().reviewDraft.run(t.items, t.scope, t.context);
-				} },
-			{ id: "ebhc-report", l10nID: "zotero-bridge-menu-ebhc-report", feature: "ebhcReport",
-				command: (sel) => {
-					let t = writingTarget(sel);
-					return ZB().ebhcReport.run(t.items, t.scope, t.context);
-				} },
-			{ id: "progress-report", l10nID: "zotero-bridge-menu-progress-report", feature: "progressReport", command: () => ZB().progressReport.run() },
-			{ id: "concepts-ai", l10nID: "zotero-bridge-menu-concepts-ai", feature: "conceptsAI", command: () => ZB().concepts.synthesizeFromMenu() },
-			// Like the Tools entry: only while batches are pending
-			{ id: "ai-batch-check", l10nID: "zotero-bridge-menu-ai-batch-check",
-				when: () => ZB().aiBatch.readState().batches.length > 0,
-				command: () => ZB().aiBatch.check({ manual: true }) },
-		] },
-	];
-
-	const SETTINGS = { id: "settings", l10nID: "zotero-bridge-toolbar-settings",
-		command: () => Zotero.Utilities.Internal.openPreferences("zotero-bridge-prefs") };
-
-	function entryVisible(entry) {
-		try {
-			return (!entry.feature || featureOn(entry.feature)) && (!entry.when || !!entry.when());
-		}
-		catch (e) {
-			log(e);
-			return false;
-		}
-	}
-
-	function allEntries() {
-		return [...GROUPS.flatMap(g => g.entries), SETTINGS];
-	}
-
-	function findEntry(id) {
-		let walk = list => list.reduce((found, e) => found || (e.id === id ? e : e.submenu ? walk(e.submenu) : null), null);
-		return walk(allEntries());
+		return C().fromWindow(win, "toolbar");
 	}
 
 	function run(win, entry) {
-		Promise.resolve()
-			.then(() => entry.command(selection(win)))
-			.catch(log);
+		C().execute(entry, selection(win));
 	}
 
 	// ---------- DOM ----------
@@ -282,10 +73,10 @@
 		}
 	}
 
-	function menuitem(doc, win, entry) {
+	function menuitem(doc, win, entry, l10nID = entry.l10n, args = null) {
 		let el = xul(doc, "menuitem");
 		el.setAttribute("data-zb-entry", entry.id);
-		setL10n(el, entry.l10nID);
+		setL10n(el, l10nID, args);
 		el.addEventListener("command", () => run(win, entry));
 		return el;
 	}
@@ -295,67 +86,63 @@
 		let hasCaption = !!(win.customElements && win.customElements.get && win.customElements.get("menucaption"));
 		let el = xul(doc, hasCaption ? "menucaption" : "menuitem");
 		if (!hasCaption) el.setAttribute("disabled", "true");
-		el.classList.add("zotero-bridge-tb-caption");
+		el.classList.add("zotero-bridge-tb-caption", "zotero-bridge-caption");
 		el.setAttribute("data-zb-group", group.id);
-		setL10n(el, group.l10nID);
+		setL10n(el, group.l10n);
 		return el;
 	}
 
-	function buildEntry(doc, win, entry) {
-		if (entry.separator) return xul(doc, "menuseparator");
-		if (entry.reasons) {
-			let menu = xul(doc, "menu");
-			menu.setAttribute("data-zb-entry", entry.id);
-			setL10n(menu, entry.l10nID);
-			let popup = xul(doc, "menupopup");
-			popup.addEventListener("popupshowing", (ev) => {
-				if (ev.target === popup) fillReasons(doc, win, popup);
-			});
-			menu.append(popup);
-			return menu;
-		}
-		if (entry.submenu) {
-			let menu = xul(doc, "menu");
-			menu.setAttribute("data-zb-entry", entry.id);
-			setL10n(menu, entry.l10nID);
-			let popup = xul(doc, "menupopup");
-			for (let child of entry.submenu) popup.append(buildEntry(doc, win, child));
-			menu.append(popup);
-			return menu;
-		}
-		return menuitem(doc, win, entry);
-	}
-
-	/** 全文：排除 › one item per exclusion reason from the screening settings (as in the item menu). */
-	function fillReasons(doc, win, popup) {
-		popup.replaceChildren();
-		let screening = ZB().screening;
-		let reasons = screening.config().reasons.slice(0, screening.MAX_MENU_REASONS);
-		for (let reason of reasons) {
-			let el = xul(doc, "menuitem");
-			el.setAttribute("data-zb-reason", reason);
-			setL10n(el, "zotero-bridge-screen-reason", { reason });
-			el.addEventListener("command", () => run(win, { command: screen({ stage: "ft", decision: "exclude", reason }) }));
-			popup.append(el);
-		}
+	/**
+	 * A command with variants (篩選 decisions, databases): a submenu, filled again each time it opens
+	 * so the list variants (exclusion reasons, the item's databases) follow the settings and selection.
+	 */
+	function variantMenu(doc, win, cmd) {
+		let menu = xul(doc, "menu");
+		menu.setAttribute("data-zb-entry", cmd.id);
+		setL10n(menu, cmd.l10n);
+		let popup = xul(doc, "menupopup");
+		let fill = () => {
+			popup.replaceChildren();
+			for (let v of C().variantEntries(cmd, selection(win))) {
+				if (v.separator) {
+					popup.append(xul(doc, "menuseparator"));
+					continue;
+				}
+				let el = menuitem(doc, win, v, v.l10n, v.args);
+				if (v.args) el.setAttribute("data-zb-variant", v.variant.id);
+				popup.append(el);
+			}
+		};
+		fill();
+		popup.addEventListener("popupshowing", (ev) => {
+			if (ev.target === popup) fill();
+		});
+		menu.append(popup);
+		return menu;
 	}
 
 	function buildPopup(doc, win) {
 		let popup = xul(doc, "menupopup");
 		popup.id = POPUP_ID;
-		for (let group of GROUPS) {
+		// 快速指令… first: the way to everything below by typing
+		let palette = menuitem(doc, win, C().PALETTE);
+		popup.append(palette);
+		let paletteSep = xul(doc, "menuseparator");
+		paletteSep.setAttribute("data-zb-palette-separator", "true");
+		popup.append(paletteSep);
+		for (let group of C().GROUPS) {
 			let sep = xul(doc, "menuseparator");
 			sep.setAttribute("data-zb-group-separator", group.id);
 			popup.append(sep, caption(doc, win, group));
-			for (let entry of group.entries) {
-				let el = buildEntry(doc, win, entry);
+			for (let cmd of C().groupCommands(group.id, "toolbar")) {
+				let el = cmd.variants ? variantMenu(doc, win, cmd) : menuitem(doc, win, cmd);
 				el.setAttribute("data-zb-group-entry", group.id);
 				popup.append(el);
 			}
 		}
 		let sep = xul(doc, "menuseparator");
 		sep.setAttribute("data-zb-group-separator", "settings");
-		popup.append(sep, menuitem(doc, win, SETTINGS));
+		popup.append(sep, menuitem(doc, win, C().SETTINGS));
 		popup.addEventListener("popupshowing", (ev) => {
 			if (ev.target === popup) update(popup);
 		});
@@ -364,26 +151,39 @@
 
 	/**
 	 * Show what applies right now: entries whose feature is on and whose condition holds; a group
-	 * without any (label and separator) hides; the first visible group has no separator above it.
-	 * Returns the visible group IDs.
+	 * without any (label and separator) hides; the first visible group has no separator above it (快速指令…
+	 * has its own). Returns the visible group IDs.
 	 */
 	function update(popup) {
 		let shown = [];
-		for (let group of GROUPS) {
+		for (let group of C().GROUPS) {
 			let any = false;
-			for (let entry of group.entries) {
-				let el = popup.querySelector(`[data-zb-entry="${entry.id}"]`);
+			for (let cmd of C().groupCommands(group.id, "toolbar")) {
+				let el = popup.querySelector(`[data-zb-entry="${cmd.id}"]`);
 				if (!el) continue;
-				let visible = entryVisible(entry);
+				let visible = C().isVisible(cmd);
 				el.hidden = !visible;
-				if (visible && entry.args) setL10n(el, entry.l10nID, entry.args());
+				if (visible && cmd.args) {
+					try {
+						setL10n(el, cmd.l10n, cmd.args());
+					}
+					catch (e) {
+						log(e);
+					}
+				}
 				any = any || visible;
 			}
 			popup.querySelector(`[data-zb-group="${group.id}"]`).hidden = !any;
 			popup.querySelector(`[data-zb-group-separator="${group.id}"]`).hidden = !any || !shown.length;
 			if (any) shown.push(group.id);
 		}
-		popup.querySelector('[data-zb-group-separator="settings"]').hidden = !shown.length;
+		// The shortcut next to 快速指令… (palette.js), when it is registered
+		let palette = popup.querySelector('[data-zb-entry="palette"]');
+		let accel = ZB().palette && ZB().palette.shortcutLabel();
+		if (palette) {
+			if (accel) palette.setAttribute("acceltext", accel);
+			else palette.removeAttribute("acceltext");
+		}
 		return shown;
 	}
 
@@ -501,8 +301,8 @@
 	}
 
 	(root.ZB = root.ZB || {}).toolbar = {
-		BUTTON_ID, POPUP_ID, STYLE_ID, SWITCH_PREF, GROUPS, SETTINGS,
-		init, add, remove, shutdown, update, selection, writingTarget, findEntry, entryVisible,
+		BUTTON_ID, POPUP_ID, STYLE_ID, SWITCH_PREF,
+		init, add, remove, shutdown, update, selection,
 		get windowCount() { return windows.size; },
 	};
 })(this);

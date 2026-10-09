@@ -403,7 +403,7 @@
 		let parts = [];
 		parts.push("> [!info] 概念卡片：由 Zotero Bridge 依文獻筆記「關鍵概念」的連結"
 			+ (concept.types.some(t => t !== TYPES.concept) ? "與研讀資料（測量工具／結果指標）" : "")
-			+ "整理；重新整理：Zotero 工具 → 更新概念卡片（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。");
+			+ "整理；重新整理：Zotero Bridge 按鈕或快速指令 → 更新概念卡片（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。");
 		let facts = [
 			`**類型**：${concept.types.join("、") || TYPES.concept}`,
 			`**文獻數**：${concept.papers.length}`,
@@ -535,7 +535,7 @@
 	function buildIndexSection(result, meta = {}) {
 		let { concepts, papers } = result;
 		let parts = ["> [!info] 由 Zotero Bridge 依文獻筆記的「關鍵概念」連結（與研讀資料的測量工具／結果指標）整理；"
-			+ "重新整理：Zotero 工具 → 更新概念卡片（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。"];
+			+ "重新整理：Zotero Bridge 按鈕或快速指令 → 更新概念卡片（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。"];
 		if (meta.aliasErrors && meta.aliasErrors.length) {
 			parts.push("> [!warning] 別名設定有問題\n" + meta.aliasErrors.map(e => `> - ${e}`).join("\n"));
 		}
@@ -565,7 +565,7 @@
 	function buildDashboardSection(top, meta = {}) {
 		let parts = ["## 🧠 熱門概念"];
 		if (!top.length) {
-			parts.push("還沒有概念卡片：Zotero 工具 → 更新概念卡片（AI 文獻筆記「關鍵概念」中的雙中括號連結會整理成概念卡片）。");
+			parts.push("還沒有概念卡片：Zotero Bridge 按鈕或快速指令 → 更新概念卡片（AI 文獻筆記「關鍵概念」中的雙中括號連結會整理成概念卡片）。");
 			return parts.join("\n\n");
 		}
 		parts.push(`${meta.indexLink ? wikilink(meta.indexLink, INDEX_NAME) + "：" : ""}共 ${meta.total || top.length} 個概念；文獻數最多的 ${Math.min(DASHBOARD_TOP, top.length)} 個：`);
@@ -998,41 +998,12 @@
 		return !f || f.isEnabled(id);
 	}
 
-	/** Menu entries that hide while the feature is off (features.js gateMenus). */
-	function gated(id, menus) {
-		let f = scope.ZB && scope.ZB.features;
-		return f ? f.gateMenus(id, menus) : menus;
-	}
-
-	/** Tools menu entries; returns the menu IDs to unregister. */
-	function registerMenus({ pluginID }) {
-		return [Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-concepts-tools",
-			pluginID,
-			target: "main/menubar/tools",
-			menus: [...gated("concepts", [{
-				menuType: "menuitem",
-				l10nID: "zotero-bridge-menu-concepts-update",
-				onCommand: () => {
-					runFromMenu().catch(e => Zotero.logError(e));
-				},
-			}]), ...gated("conceptsAI", [{
-				// The AI part has its own switch (off in the 研究生引導 preset)
-				menuType: "menuitem",
-				l10nID: "zotero-bridge-menu-concepts-ai",
-				onCommand: () => {
-					synthesizeFromMenu().catch(e => Zotero.logError(e));
-				},
-			}])],
-		})].filter(Boolean);
-	}
-
 	return {
 		DEFAULT_CONCEPT_PROMPT, INDEX_NAME, TYPES, AI_HEADING,
 		cleanName, conceptKey, parseAliases, managedRegion, headingSection, wikilinkTargets, keyConcepts, oneLineSummary,
 		splitOutcomes, paperRecord, collectConcepts, assignFiles, searchLine, buildConceptSection, buildOrphanSection,
 		buildManagedNote, buildConceptNote, buildMermaid, buildIndexSection, buildIndexNote, buildDashboardSection,
 		buildConceptPrompt, processConceptDraft, buildAIBlock, insertAIBlock,
-		readOptions, update, afterSync, dashboardSection, runFromMenu, synthesizeFromMenu, registerMenus,
+		readOptions, update, afterSync, dashboardSection, runFromMenu, synthesizeFromMenu,
 	};
 });

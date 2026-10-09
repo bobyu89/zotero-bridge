@@ -192,76 +192,93 @@ async function setup(prefs = {}) {
 }
 
 /** The registered menu entry with this l10n ID (first match, any depth). */
-function menuEntry(env, l10nID) {
-	let found = null;
-	let walk = (list) => {
-		for (let m of list || []) {
-			if (found) return;
-			if (m.l10nID === l10nID) found = m;
-			else walk(m.menus);
-		}
-	};
-	for (let o of env.menus) walk(o.menus);
-	assert.ok(found, `no menu entry ${l10nID}`);
-	return found;
-}
-
 function visible(menu, context = {}) {
 	let v = null;
-	menu.onShowing({}, Object.assign({ items: [], collectionTreeRows: [], setVisible: (x) => { v = x; }, setL10nArgs() {} }, context));
+	menu.onShowing({}, Object.assign({ items: [], collectionTreeRows: [], setVisible: (x) => { v = x; }, setL10nArgs() {}, setEnabled() {} }, context));
 	return v;
 }
 
+/** The 「Zotero Bridge ▸」 submenu of the item or collection menu (commands.js, menus.js). */
+function zbMenu(env, menuID) {
+	return env.menus.find(o => o.menuID === menuID).menus[0];
+}
+
+/**
+ * Where a catalog command shows right now: the toolbar button and 快速指令 (the catalog), and the
+ * item and collection submenus it belongs to. Returns one boolean per surface.
+ */
+function shownOn(env, id, context) {
+	let C = env.ZB.commands;
+	let cmd = C.get(id);
+	let out = { toolbar: C.isVisible(cmd) };
+	for (let [surface, menuID] of [["item", "zotero-bridge-item"], ["collection", "zotero-bridge-collection"]]) {
+		if (!cmd.menus.includes(surface)) continue;
+		let entry = zbMenu(env, menuID).menus.find(m => m.l10nID === cmd.l10n);
+		assert.ok(entry, `${id} in ${menuID}`);
+		out[surface] = visible(entry, context);
+	}
+	return out;
+}
+
+function allShown(env, id, context) {
+	return Object.values(shownOn(env, id, context)).every(Boolean);
+}
+
+function noneShown(env, id, context) {
+	return Object.values(shownOn(env, id, context)).every(v => !v);
+}
+
+// Off in 研究生引導, on in 進階: command → its switch
 const GATED_IN_GUIDED = {
-	"zotero-bridge-menu-synthesis": "synthesis",
-	"zotero-bridge-menu-review-draft": "reviewDraft",
-	"zotero-bridge-menu-ebhc-report": "ebhcReport",
-	"zotero-bridge-menu-pubmed-watch": "pubmedWatch",
-	"zotero-bridge-chase-items": "citationChase",
-	"zotero-bridge-chase-tools-included": "citationChase",
-	"zotero-bridge-menu-progress-report": "progressReport",
-	"zotero-bridge-menu-concepts-ai": "conceptsAI",
+	"synthesis": "synthesis",
+	"review-draft": "reviewDraft",
+	"ebhc-report": "ebhcReport",
+	"pubmed-watch": "pubmedWatch",
+	"chase-items": "citationChase",
+	"chase-included": "citationChase",
+	"chase-import": "citationChase",
+	"progress-report": "progressReport",
+	"concepts-ai": "conceptsAI",
 };
 
-test("a fresh profile starts in 研究生引導: the gated menus hide, and come back with 進階 without a restart", async () => {
+// On in both
+const ON_IN_GUIDED = ["sync", "sync-no-ai", "regenerate", "quick-search", "search-item", "dedup", "prisma", "dashboard", "concepts", "bibliography",
+	"export-collection", "appraisal-summary", "status", "classify", "screen"];
+
+test("a fresh profile starts in 研究生引導: the gated commands hide everywhere, and come back with 進階 without a restart", async () => {
 	let env = await setup();
 	let F = env.ZB.features;
 	assert.equal(env.prefStore[P + "features.version"], F.MIGRATION_VERSION, "the migrations ran once at startup");
 	assert.equal(F.currentPreset(), "guided");
 	let registered = env.menus.map(o => o.menuID);
-	for (let [id, feature] of Object.entries(GATED_IN_GUIDED)) {
-		assert.equal(visible(menuEntry(env, id)), false, `${id} (${feature}) in guided`);
-	}
-	for (let id of ["zotero-bridge-menu-sync", "zotero-bridge-menu-regenerate", "zotero-bridge-search-tools", "zotero-bridge-screen-tools-dedup",
-		"zotero-bridge-menu-dashboard", "zotero-bridge-menu-concepts-update", "zotero-bridge-menu-export-library", "zotero-bridge-appraisal-tools-summary",
-		"zotero-bridge-menu-status", "zotero-bridge-classify-items", "zotero-bridge-classify-tools"]) {
-		assert.equal(visible(menuEntry(env, id)), true, `${id} in guided`);
-	}
-	// The item submenu shows (sync is on); the separator before the AI writing entries does not
-	let itemMenu = env.menus.find(o => o.menuID === "zotero-bridge-item").menus[0];
-	assert.equal(visible(itemMenu), true);
-	let separator = itemMenu.menus.find(m => m.menuType === "separator" && m.onShowing && !m.l10nID && itemMenu.menus.indexOf(m) > 5);
-	assert.equal(visible(separator), false);
+	let paper = new env.MockItem("journalArticle", { title: "A" });
+	let ctx = { items: [paper], collectionTreeRows: [{ isCollection: () => true, ref: {} }] };
+	for (let [id, feature] of Object.entries(GATED_IN_GUIDED)) assert.ok(noneShown(env, id, ctx), `${id} (${feature}) in guided`);
+	for (let id of ON_IN_GUIDED) assert.ok(allShown(env, id, ctx), `${id} in guided`);
+	// The item submenu shows; the collection submenu needs a selected collection
+	let itemMenu = zbMenu(env, "zotero-bridge-item");
+	let collMenu = zbMenu(env, "zotero-bridge-collection");
+	assert.equal(visible(itemMenu, ctx), true);
+	assert.equal(visible(collMenu), false);
+	assert.equal(visible(collMenu, ctx), true);
 
 	F.applyPreset("advanced");
-	for (let id of Object.keys(GATED_IN_GUIDED)) assert.equal(visible(menuEntry(env, id)), true, `${id} in advanced`);
-	assert.equal(visible(separator), true);
-	// An entry's own condition still applies: the collection submenu needs a selected collection
-	let collMenu = env.menus.find(o => o.menuID === "zotero-bridge-collection").menus[0];
-	assert.equal(visible(collMenu), false);
-	assert.equal(visible(collMenu, { collectionTreeRows: [{ isCollection: () => true, ref: {} }] }), true);
-	let chaseColl = menuEntry(env, "zotero-bridge-chase-collection-menu");
-	assert.equal(visible(chaseColl), false, "no collection selected");
+	for (let id of Object.keys(GATED_IN_GUIDED)) assert.ok(allShown(env, id, ctx), `${id} in advanced`);
+	for (let id of ON_IN_GUIDED) assert.ok(allShown(env, id, ctx), `${id} in advanced`);
 
-	// Everything the item and collection submenus offer switched off: the submenu itself hides
+	// Everything the item submenu offers switched off: the submenu itself hides
 	F.applyPreset("guided");
-	F.setEnabled("sync", false);
-	assert.equal(visible(itemMenu), false);
-	assert.equal(visible(collMenu, { collectionTreeRows: [{ isCollection: () => true, ref: {} }] }), false);
-	assert.equal(visible(menuEntry(env, "zotero-bridge-menu-regenerate")), false, "AI notes need the sync");
+	for (let id of ["sync", "autoClassify", "searchLinks", "screening"]) F.setEnabled(id, false);
+	assert.equal(visible(itemMenu, ctx), false);
+	assert.ok(noneShown(env, "regenerate", ctx), "AI notes need the sync");
 	F.setEnabled("synthesis", true);
-	assert.equal(visible(itemMenu), true);
-	assert.equal(visible(separator), false, "no sync entries above it");
+	assert.equal(visible(itemMenu, ctx), true);
+	// The collection submenu still has 評讀總表 and 參考文獻
+	assert.equal(visible(collMenu, ctx), true);
+	F.setEnabled("appraisalForm", false);
+	F.setEnabled("bibliography", false);
+	F.setEnabled("synthesis", false);
+	assert.equal(visible(collMenu, ctx), false);
 	// Registration never changed
 	assert.deepEqual(env.menus.map(o => o.menuID), registered);
 	assert.deepEqual(env.errors, []);
@@ -272,7 +289,7 @@ test("an install used before the switches keeps everything: migrated to 進階 f
 	let env = await setup({ [P + "obsidian.vaultPath"]: vault, [P + "llm.batchAPI"]: true });
 	let F = env.ZB.features;
 	assert.equal(F.currentPreset(), "advanced");
-	for (let id of Object.keys(GATED_IN_GUIDED)) assert.equal(visible(menuEntry(env, id)), true, id);
+	for (let id of Object.keys(GATED_IN_GUIDED)) assert.ok(allShown(env, id, { items: [new env.MockItem("journalArticle")], collectionTreeRows: [{ isCollection: () => true, ref: {} }] }), id);
 	// The user goes back to 研究生引導; the next start keeps it
 	F.applyPreset("guided");
 	let next = await setup(env.prefStore);

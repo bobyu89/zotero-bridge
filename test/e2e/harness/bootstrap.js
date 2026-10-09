@@ -287,20 +287,23 @@ const TESTS = [
 				images: ["collect"],
 				status: ["runPass", "prepare", "setItemStatus"],
 				reviewDraft: ["run"],
-				screening: ["setDecision", "generateReport", "registerMenus"],
-				pubmedWatch: ["init", "shutdown", "runAll", "registerMenus"],
-				dashboard: ["update", "afterSync", "registerMenus"],
-				concepts: ["update", "afterSync", "dashboardSection", "synthesizeFromMenu", "registerMenus"],
-				classify: ["parseRules", "evaluate", "parseTopics", "suggest", "defaultPicks", "planApply", "apply", "undoLast", "readLastRun", "review", "renderReview", "run", "registerMenus"],
-				citationChase: ["chaseCollection", "chaseItems", "importChecked", "registerMenus"],
-				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "registerMenus"],
-				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "registerMenus", "batchParams", "parseResults"],
+				screening: ["setDecision", "generateReport", "dedupCollection"],
+				pubmedWatch: ["init", "shutdown", "runAll"],
+				dashboard: ["update", "afterSync", "runFromMenu"],
+				concepts: ["update", "afterSync", "dashboardSection", "runFromMenu", "synthesizeFromMenu"],
+				classify: ["parseRules", "evaluate", "parseTopics", "suggest", "defaultPicks", "planApply", "apply", "undoLast", "readLastRun", "review", "renderReview", "run"],
+				citationChase: ["chaseCollection", "chaseItems", "importChecked"],
+				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "menuTargets", "relatedFor", "showMore", "openTarget"],
+				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "batchParams", "parseResults"],
 				ebhcReport: ["run", "askOptions", "processReport", "buildReportNote"],
-				appraisalForm: ["renderPaneRow", "syncInfo", "saveRecord", "exportSummary", "registerMenus"],
-				progressReport: ["run", "askOptions", "logStatusChange", "latestReport", "registerMenus"],
+				appraisalForm: ["renderPaneRow", "syncInfo", "saveRecord", "exportSummary", "exportCollections"],
+				progressReport: ["run", "askOptions", "logStatusChange", "latestReport"],
 				features: ["isEnabled", "rawValue", "applyPreset", "currentPreset", "snapshot", "restore", "migrate", "gateMenus"],
+				commands: ["get", "execute", "fromWindow", "fromContext", "isVisible", "availability", "paletteEntries", "search", "normalize", "openSettings"],
+				menus: ["register", "buildEntries", "toolsEntries"],
+				palette: ["open", "close", "render", "localize", "attach", "detach", "shutdown", "shortcutLabel"],
 				toolbar: ["init", "add", "remove", "shutdown", "update"],
-				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly", "renameNotionColumns", "notionClient", "prepareFullText"],
+				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly", "renameNotionColumns", "notionClient", "prepareFullText", "batchStatus"],
 			};
 			let missing = [];
 			for (let [mod, fns] of Object.entries(MODULES)) {
@@ -371,30 +374,11 @@ const TESTS = [
 			let manager = Zotero.MenuManager && Zotero.MenuManager._menuManager;
 			check(manager && Array.isArray(manager.options), "cannot read Zotero.MenuManager registrations (_menuManager.options) — MenuManager API changed?");
 			let mine = manager.options.filter(o => o.pluginID === PLUGIN_ID);
+			// One registration per menu, generated from the command catalog (content/commands.js, menus.js)
 			const EXPECTED = {
 				"zotero-bridge-item": "main/library/item",
 				"zotero-bridge-collection": "main/library/collection",
 				"zotero-bridge-tools": "main/menubar/tools",
-				"zotero-bridge-export-tools": "main/menubar/tools",
-				"zotero-bridge-export-collection": "main/library/collection",
-				"zotero-bridge-screening-item": "main/library/item",
-				"zotero-bridge-screening-collection": "main/library/collection",
-				"zotero-bridge-screening-tools": "main/menubar/tools",
-				"zotero-bridge-pubmed-watch-tools": "main/menubar/tools",
-				"zotero-bridge-dashboard-tools": "main/menubar/tools",
-				"zotero-bridge-concepts-tools": "main/menubar/tools",
-				"zotero-bridge-chase-item": "main/library/item",
-				"zotero-bridge-chase-collection": "main/library/collection",
-				"zotero-bridge-chase-tools": "main/menubar/tools",
-				"zotero-bridge-search-item": "main/library/item",
-				"zotero-bridge-search-tools": "main/menubar/tools",
-				"zotero-bridge-ai-batch-tools": "main/menubar/tools",
-				"zotero-bridge-appraisal-collection": "main/library/collection",
-				"zotero-bridge-appraisal-tools": "main/menubar/tools",
-				"zotero-bridge-progress-report-tools": "main/menubar/tools",
-				"zotero-bridge-classify-item": "main/library/item",
-				"zotero-bridge-classify-collection": "main/library/collection",
-				"zotero-bridge-classify-tools": "main/menubar/tools",
 			};
 			d.registered = mine.map(o => `${o.menuID} → ${o.target}`);
 			let problems = [];
@@ -404,6 +388,26 @@ const TESTS = [
 				if (!opt) problems.push(`${id} not registered (registerMenu() returned false — see "MenuAPI:" warnings in zotero.log)`);
 				else if (opt.target !== target) problems.push(`${id} has target ${opt.target}, expected ${target}`);
 			}
+			let unexpected = mine.filter(o => !Object.keys(EXPECTED).some(id => o.menuID === id || o.menuID === CSS.escape(`${PLUGIN_ID}-${id}`)));
+			if (unexpected.length) problems.push(`registrations besides the three menus: ${unexpected.map(o => o.menuID).join(", ")}`);
+			// The right-click menus: one 「Zotero Bridge ▸」 submenu each; at most two levels below it
+			for (let id of ["zotero-bridge-item", "zotero-bridge-collection"]) {
+				let opt = mine.find(o => o.menuID === id || o.menuID === CSS.escape(`${PLUGIN_ID}-${id}`));
+				if (!opt) continue;
+				if (opt.menus.length !== 1 || opt.menus[0].menuType !== "submenu" || opt.menus[0].l10nID !== "zotero-bridge-menu") {
+					problems.push(`${id}: not one Zotero Bridge submenu (${opt.menus.map(m => m.l10nID || m.menuType).join(", ")})`);
+					continue;
+				}
+				for (let child of opt.menus[0].menus) {
+					if ((child.menus || []).some(m => m.menuType === "submenu")) problems.push(`${id}: ${child.l10nID} has a third level`);
+				}
+			}
+			// The Tools menu: settings, 快速指令, and the batch entries (shown only while they apply)
+			let tools = mine.find(o => o.target === "main/menubar/tools");
+			d.tools = tools ? tools.menus.map(m => m.l10nID) : [];
+			let toolsWant = ["zotero-bridge-menu-settings", "zotero-bridge-menu-palette", "zotero-bridge-menu-resume", "zotero-bridge-menu-stop",
+				"zotero-bridge-menu-discard", "zotero-bridge-menu-ai-batch-check", "zotero-bridge-menu-ai-batch-cancel"];
+			if (JSON.stringify(d.tools) !== JSON.stringify(toolsWant)) problems.push(`Tools menu entries ${JSON.stringify(d.tools)}, expected ${JSON.stringify(toolsWant)}`);
 			check(!problems.length, problems.join("; "));
 			// Every l10n ID used by the menus, for the Fluent check
 			ctx.l10n = ctx.l10n || new Map();
@@ -459,7 +463,7 @@ const TESTS = [
 				if (!ctx.l10n.has(m[1])) ctx.l10n.set(m[1], null);
 			}
 			let ids = [...ctx.l10n.keys()];
-			let args = { count: 3, reason: "E2E", name: "E2E", preset: "guided", req: "sync", color: "yellow" };
+			let args = { count: 3, reason: "E2E", name: "E2E", preset: "guided", req: "sync", color: "yellow", feature: "E2E", query: "E2E", shortcut: "E2E", error: "E2E" };
 			let report = {};
 			let problems = [];
 			for (let locale of ["en-US", "zh-TW"]) {
@@ -513,6 +517,17 @@ const TESTS = [
 						tabType: "library",
 						skipGrouping: true,
 					});
+					// Open the submenus as Gecko does (popupshowing builds their entries): the 「Zotero Bridge ▸」
+					// submenu, then the variant submenus inside it (篩選, 在醫學資料庫搜尋)
+					let opened = new Set();
+					for (let round = 0; round < 3; round++) {
+						for (let sub of popup.querySelectorAll("menupopup")) {
+							if (opened.has(sub)) continue;
+							opened.add(sub);
+							sub.dispatchEvent(new win.Event("popupshowing"));
+						}
+					}
+					d.submenusOpened = (d.submenusOpened || 0) + opened.size;
 					let ours = [...popup.querySelectorAll("[data-l10n-id]")].filter(e => e.dataset.l10nId.startsWith("zotero-bridge-"));
 					// Labels with variables get their args in onShowing; give them some here
 					for (let el of ours) {
@@ -521,6 +536,10 @@ const TESTS = [
 					await doc.l10n.translateFragment(popup);
 					rendered[target] = ours.map(e => `${e.dataset.l10nId}: ${e.getAttribute("label")}`);
 					if (!ours.length) problems.push(`${target}: no Zotero Bridge menu elements were created`);
+					// The submenus' entries were built too: group captions and commands from the catalog
+					if (target !== "main/menubar/tools" && !ours.some(e => e.dataset.l10nId === "zotero-bridge-toolbar-group-sync")) {
+						problems.push(`${target}: the Zotero Bridge submenu built no entries when it opened`);
+					}
 					for (let el of ours) {
 						if (!(el.getAttribute("label") || "").trim()) problems.push(`${target}: ${el.dataset.l10nId} has no label after translation`);
 					}
@@ -574,6 +593,7 @@ const TESTS = [
 			check(menu.groups.length > 0, "no group shows in the toolbar menu");
 			check(!menu.untranslated.length, `toolbar menu entries without a label: ${menu.untranslated.join(", ")}`);
 			eq(menu.entries[menu.entries.length - 1], "settings", "last entry of the toolbar menu");
+			eq(menu.entries[0], "palette", "first entry of the toolbar menu (快速指令…)");
 			// Keyboard: Zotero's arrow-key row continues from 新增筆記 to the button and back
 			note.focus();
 			note.dispatchEvent(new win.KeyboardEvent("keydown", { key: Zotero.arrowNextKey, bubbles: true, cancelable: true }));
@@ -590,6 +610,64 @@ const TESTS = [
 				Zotero.Prefs.clear(ZB_PREF + "feature.toolbarButton", true);
 			}
 			await waitFor(() => !button.hidden, "the button to come back with 工具列按鈕 on", 5000);
+		},
+	},
+	{
+		name: "快速指令 opens from chrome://zotero-bridge/, finds 分類 first, closes with Esc; Ctrl/Cmd+Shift+P opens it",
+		needs: ["Zotero.ZoteroBridge is set and has every module"],
+		timeout: 60000,
+		async fn(d) {
+			let P = zb().palette;
+			let win = mainWindow();
+			let dialog = null;
+			try {
+				let view = null;
+				dialog = await P.open(win, { onOpen: (w, v) => {
+					view = v;
+				} });
+				check(dialog && view, "ZB.palette.open() did not show the palette (see the plugin errors)");
+				let doc = dialog.document;
+				d.url = doc.documentURI;
+				eq(doc.documentURI, P.DIALOG_URL, "palette window URL");
+				let root = doc.getElementById(P.DIALOG_ROOT);
+				// palette.css is applied (registered chrome package)
+				d.rootDisplay = dialog.getComputedStyle(root).display;
+				eq(d.rootDisplay, "flex", "display of #zb-palette (is palette.css loaded?)");
+				let input = doc.getElementById("zb-pal-input");
+				eq(input.getAttribute("role"), "combobox", "role of the search field");
+				check(doc.querySelector('label[for="zb-pal-input"]'), "the search field has no label");
+				d.groups = [...root.querySelectorAll(".zb-pal-group-title")].map(t => t.textContent);
+				check(d.groups.length >= 5, `group titles: ${JSON.stringify(d.groups)}`);
+				// Type 分類 as a user does
+				input.focus();
+				input.value = "分類";
+				input.dispatchEvent(new dialog.Event("input", { bubbles: true }));
+				let options = [...root.querySelectorAll('[role="option"]')];
+				d.results = options.slice(0, 5).map(o => `${o.getAttribute("data-zb-entry")}: ${o.querySelector(".zb-pal-name").textContent}`);
+				check(options.length > 0, "no results for 分類");
+				eq(options[0].getAttribute("data-zb-entry"), "classify", "first result for 分類");
+				eq(options[0].getAttribute("aria-selected"), "true", "the first result is the active one");
+				eq(input.getAttribute("aria-activedescendant"), options[0].id, "aria-activedescendant");
+				check(!/\{ ?\$/.test(root.textContent), "a Fluent placeholder shows in the palette");
+				// Esc closes it, running nothing
+				input.dispatchEvent(new dialog.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+				await waitFor(() => dialog.closed, "the palette to close on Esc", 10000);
+				check(!P.isOpen, "ZB.palette.isOpen after Esc");
+				// The shortcut is registered in the main window, and opens the palette
+				d.shortcut = P.shortcutLabel();
+				eq(d.shortcut, Zotero.isMac ? "⇧⌘P" : "Ctrl+Shift+P", "shortcut");
+				check(P.windowCount >= 1, "no main window listens for the shortcut");
+				win.focus();
+				win.document.documentElement.dispatchEvent(new win.KeyboardEvent("keydown", {
+					key: "P", code: "KeyP", shiftKey: true, ctrlKey: !Zotero.isMac, metaKey: !!Zotero.isMac, bubbles: true, cancelable: true,
+				}));
+				await waitFor(() => P.isOpen, "the shortcut to open the palette", 10000);
+				P.close();
+			}
+			finally {
+				P.close();
+				if (dialog && !dialog.closed) dialog.close();
+			}
 		},
 	},
 	{
@@ -1296,14 +1374,14 @@ const TESTS = [
 				return found;
 			};
 			// Off in 研究生引導, on in 進階 (features.js); none of these has its own onShowing condition
+			// (entries of the item and collection menus' 「Zotero Bridge ▸」 submenus, from content/commands.js)
 			const GATED = [
 				"zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-menu-ebhc-report",
-				"zotero-bridge-menu-pubmed-watch", "zotero-bridge-chase-items", "zotero-bridge-chase-tools-included",
-				"zotero-bridge-menu-progress-report", "zotero-bridge-menu-concepts-ai",
+				"zotero-bridge-toolbar-chase-items", "zotero-bridge-chase-tools-included", "zotero-bridge-chase-tools-import",
 			];
 			// On in both presets
-			const ALWAYS = ["zotero-bridge-menu-sync", "zotero-bridge-search-tools", "zotero-bridge-screen-tools-dedup",
-				"zotero-bridge-menu-dashboard", "zotero-bridge-menu-concepts-update", "zotero-bridge-classify-items", "zotero-bridge-classify-tools"];
+			const ALWAYS = ["zotero-bridge-menu-sync", "zotero-bridge-menu-regenerate", "zotero-bridge-classify-tools", "zotero-bridge-toolbar-screen",
+				"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary", "zotero-bridge-cmd-export-collection"];
 			// What a menu's onShowing decides, with the context MenuManager would pass
 			let visibility = (menu) => {
 				let visible = null;
@@ -1319,8 +1397,8 @@ const TESTS = [
 			// The toolbar menu's entries (content/toolbar.js), off in 研究生引導 / on in both
 			const TOOLBAR_GATED = ["pubmed-watch", "chase-items", "chase-included", "chase-import", "synthesis", "review-draft",
 				"ebhc-report", "progress-report", "concepts-ai"];
-			const TOOLBAR_ALWAYS = ["sync", "sync-no-ai", "sync-obsidian", "sync-notion", "status", "classify", "dashboard", "concepts",
-				"bibliography", "quick-search", "screen", "dedup", "prisma", "appraisal-summary", "regenerate", "settings"];
+			const TOOLBAR_ALWAYS = ["palette", "sync", "sync-no-ai", "sync-obsidian", "sync-notion", "status", "classify", "dashboard", "concepts",
+				"bibliography", "export-collection", "quick-search", "search-item", "screen", "dedup", "prisma", "appraisal-summary", "regenerate", "settings"];
 			let button = mainWindow().document.getElementById(ZB.toolbar.BUTTON_ID);
 			let before = F.snapshot();
 			let problems = [];
@@ -1410,6 +1488,10 @@ const TESTS = [
 			let before = zb();
 			let count = () => Zotero.MenuManager._menuManager.options.filter(o => o.pluginID === PLUGIN_ID).length;
 			let menus = count();
+			eq(menus, 3, "menu registrations before the cycle (item, collection, Tools)");
+			// An open 快速指令 window goes with the plugin
+			let palette = await before.palette.open(mainWindow());
+			check(palette, "the palette did not open before the cycle");
 			await addon.disable();
 			await waitFor(() => !Zotero.ZoteroBridge, "Zotero.ZoteroBridge to be deleted by shutdown()", 20000);
 			await waitFor(() => count() === 0, "the plugin's menus to be unregistered", 10000);
@@ -1418,6 +1500,23 @@ const TESTS = [
 			check(!mainWindow().document.getElementById("zotero-bridge-tb-button"), "toolbar button still in the main window after shutdown");
 			check(!mainWindow().document.getElementById("zotero-bridge-tb-popup"), "toolbar menu still in the main window after shutdown");
 			check(!mainWindow().document.getElementById("zotero-bridge-toolbar-css"), "toolbar stylesheet still in the main window after shutdown");
+			await waitFor(() => palette.closed, "the 快速指令 window to close at shutdown", 10000);
+			// The shortcut went with it: Ctrl/Cmd+Shift+P opens nothing
+			let win = mainWindow();
+			win.document.documentElement.dispatchEvent(new win.KeyboardEvent("keydown", {
+				key: "P", code: "KeyP", shiftKey: true, ctrlKey: !Zotero.isMac, metaKey: !!Zotero.isMac, bubbles: true, cancelable: true,
+			}));
+			await delay(1000);
+			let paletteWindows = [];
+			let all = Services.wm.getEnumerator(null);
+			while (all.hasMoreElements()) {
+				let w = all.getNext();
+				try {
+					if (w.document.documentURI === "chrome://zotero-bridge/content/palette.xhtml") paletteWindows.push(w);
+				}
+				catch (e) {}
+			}
+			eq(paletteWindows.length, 0, "palette windows after shutdown and the shortcut");
 			await addon.enable();
 			await waitFor(() => Zotero.ZoteroBridge && Zotero.ZoteroBridge !== before, "a new Zotero.ZoteroBridge after enable()", 20000);
 			await waitFor(() => count() === menus, `${menus} menus registered again`, 10000);

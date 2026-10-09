@@ -384,7 +384,7 @@ async function fire(timer) {
 }
 
 function toolsEntry(env, l10nID) {
-	let menu = env.menus.find(m => m.menuID === "zotero-bridge-ai-batch-tools");
+	let menu = env.menus.find(m => m.menuID === "zotero-bridge-tools");
 	return menu.menus.find(m => m.l10nID === l10nID);
 }
 
@@ -412,7 +412,7 @@ test("AI batch: confirm, one batch with the normal requests, restart while in pr
 		},
 	});
 	let ZB = await start(env);
-	assert.equal(env.menus.at(-1).menuID, "zotero-bridge-ai-batch-tools");
+	// Tools menu: only while batches are pending (commands.js, menus.js)
 	assert.equal(visible(env, "zotero-bridge-menu-ai-batch-check"), false);
 	assert.equal(visible(env, "zotero-bridge-menu-ai-batch-cancel"), false);
 	let items = addItems(env);

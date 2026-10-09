@@ -374,7 +374,7 @@
 		body.append(row);
 	}
 
-	// ---------- Tools → 同步閱讀狀態 ----------
+	// ---------- 同步閱讀狀態 (toolbar, 快速指令) ----------
 
 	/** Status-only pass over every synced item: no AI, no page or note rewrites beyond the status. */
 	function runPass() {

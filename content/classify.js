@@ -781,7 +781,7 @@
 		let head = el("header", { class: "zb-cl-head" });
 		head.append(
 			el("h1", { class: "zb-cl-title" }, "文獻自動分類：先看建議，再決定"),
-			el("p", { class: "zb-cl-lead" }, "下面是建議，判斷在你。勾選你同意的，按「套用」才會把文獻加進 Zotero 子分類；不會把文獻移出任何分類，也不會改動或刪除你原本的分類。之後想反悔：工具 → 復原上次分類。"),
+			el("p", { class: "zb-cl-lead" }, "下面是建議，判斷在你。勾選你同意的，按「套用」才會把文獻加進 Zotero 子分類；不會把文獻移出任何分類，也不會改動或刪除你原本的分類。之後想反悔：Zotero Bridge 按鈕或快速指令 → 復原上次分類。"),
 		);
 		if (plan.target) head.append(el("p", { class: "zb-cl-target" }, `放在：${plan.target}`));
 		if (plan.notes && plan.notes.length) {
@@ -929,11 +929,6 @@
 	function featureOn(id) {
 		let f = scope.ZB && scope.ZB.features;
 		return !f || f.isEnabled(id);
-	}
-
-	function gated(id, menus) {
-		let f = scope.ZB && scope.ZB.features;
-		return f ? f.gateMenus(id, menus) : menus;
 	}
 
 	function notify(text, headline = TITLE) {
@@ -1544,7 +1539,7 @@
 			let lines = [result.added || result.created
 				? `已加入 ${result.added} 筆分類，新建 ${result.created} 個子分類${result.already ? `（${result.already} 筆原本就在）` : ""}。`
 				: `勾選的 ${result.already} 筆原本就在這些分類裡，沒有變動。`];
-			if (result.added || result.created) lines.push("想反悔：工具 → 復原上次分類。");
+			if (result.added || result.created) lines.push("想反悔：Zotero Bridge 按鈕或快速指令 → 復原上次分類。");
 			if (result.errors.length) lines.push(...result.errors.slice(0, 3));
 			notify(lines.join("\n"));
 			return Object.assign({ cancelled: false }, result);
@@ -1555,87 +1550,11 @@
 		}
 	}
 
-	function selectedCollections(context) {
-		return (context.collectionTreeRows || []).filter(r => r.isCollection && r.isCollection()).map(r => r.ref);
-	}
-
-	function activeScopeItems() {
-		try {
-			let pane = Zotero.getActiveZoteroPane();
-			let selected = pane && pane.getSelectedItems ? pane.getSelectedItems() : [];
-			if (selected && selected.length) return selected;
-			let collection = pane && pane.getSelectedCollections()[0];
-			return collection ? scope.ZB.adapter.itemsInCollection(collection, true) : [];
-		}
-		catch (e) {
-			return [];
-		}
-	}
-
-	/** Item, collection and Tools menu entries; returns the menu IDs to unregister. */
-	function registerMenus({ pluginID, icon }) {
-		let log = e => Zotero.logError(e);
-		let ids = [];
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-classify-item",
-			pluginID,
-			target: "main/library/item",
-			menus: gated("autoClassify", [{
-				menuType: "menuitem",
-				l10nID: "zotero-bridge-classify-items",
-				icon,
-				onCommand: (ev, context) => {
-					run(context.items || []).catch(log);
-				},
-			}]),
-		}));
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-classify-collection",
-			pluginID,
-			target: "main/library/collection",
-			menus: gated("autoClassify", [{
-				menuType: "menuitem",
-				l10nID: "zotero-bridge-classify-collection",
-				icon,
-				onShowing: (ev, context) => context.setVisible(selectedCollections(context).length > 0),
-				onCommand: (ev, context) => {
-					let items = [];
-					for (let c of selectedCollections(context)) items.push(...scope.ZB.adapter.itemsInCollection(c, true));
-					run(items).catch(log);
-				},
-			}]),
-		}));
-		ids.push(Zotero.MenuManager.registerMenu({
-			menuID: "zotero-bridge-classify-tools",
-			pluginID,
-			target: "main/menubar/tools",
-			menus: [
-				...gated("autoClassify", [{
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-classify-tools",
-					onCommand: () => {
-						run(activeScopeItems()).catch(log);
-					},
-				}]),
-				{
-					// Not gated: what was applied can always be taken back, also after the switch went off
-					menuType: "menuitem",
-					l10nID: "zotero-bridge-classify-undo",
-					onShowing: (ev, context) => context.setVisible(!!readLastRun()),
-					onCommand: () => {
-						undoLast().catch(log);
-					},
-				},
-			],
-		}));
-		return ids.filter(Boolean);
-	}
-
 	return {
 		DIMENSIONS, DESIGN_NAMES, DEFAULT_PARENT, TOPIC_SYSTEM, DIALOG_URL, DIALOG_ROOT, SOURCE_LABELS, CONFIDENCE_LABELS,
 		cleanName, nameKey, sameName, tokenize, parseCondition, parseRules, describeErrors, evaluate, parseTopics,
 		buildTopicPrompt, parseTopicResponse, estimateTokens, estimateTopicRun, guessDesign, designSuggestions, picoValues,
 		picoSuggestions, buildSuggestions, defaultPicks, planApply, describeCounts, renderReview,
-		readOptions, recordFor, suggest, review, apply, undoLast, readLastRun, run, registerMenus,
+		readOptions, recordFor, suggest, review, apply, undoLast, readLastRun, run,
 	};
 });
