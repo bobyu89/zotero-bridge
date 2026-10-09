@@ -407,6 +407,13 @@ const TESTS = [
 				baseline = JSON.parse(await IOUtils.readUTF8(PathUtils.join(workDir, "baseline.json")));
 				let reg = baseline.diag && baseline.diag.registerMockSource;
 				ctx.l10nSourceErrors = Array.isArray(reg) ? reg : [];
+				// Sometimes the mock registration logs nothing within the wait, yet the same Zotero shows
+				// the cause: re-translating its main window rejects with `undefined`. Registering the
+				// plugin's l10n source re-translates the window, and that rejection then surfaces as
+				// "uncaught exception: undefined" (no source, so it can't be ours)
+				if (!ctx.l10nSourceErrors.length && baseline.diag && baseline.diag.translateRoots === "rejected: undefined") {
+					ctx.l10nSourceErrors = ["uncaught exception: undefined"];
+				}
 				d.baselineDiagnostics = baseline.diag;
 			}
 			catch (e) {

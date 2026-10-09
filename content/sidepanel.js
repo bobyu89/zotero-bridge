@@ -129,8 +129,22 @@
 		Zotero.logError(e);
 	}
 
+	// False once the plugin is gone, so a late promise or event never reaches a missing ZB
 	function featureOn(id) {
-		return ZB().features.isEnabled(id);
+		return alive() && ZB().features.isEnabled(id);
+	}
+
+	/** An event listener that does nothing after shutdown and logs instead of throwing. */
+	function listen(el, type, fn) {
+		el.addEventListener(type, (ev) => {
+			if (!alive()) return;
+			try {
+				fn(ev);
+			}
+			catch (e) {
+				log(e);
+			}
+		});
 	}
 
 	function fill(text, args) {
@@ -245,14 +259,7 @@
 		details.append(h(doc, "summary", { class: "zb-sp-summary" }, row));
 		let body = h(doc, "div", { class: "zb-sp-body" });
 		details.append(body);
-		details.addEventListener("toggle", () => {
-			try {
-				setOpen(id, details.open);
-			}
-			catch (e) {
-				log(e);
-			}
-		});
+		listen(details, "toggle", () => setOpen(id, details.open));
 		return { details, body };
 	}
 
@@ -342,7 +349,7 @@
 		}
 		else {
 			let open = t(doc, "button", "openFeatures", null, { class: "zb-sp-link", type: "button", "data-zb-action": "open-features" });
-			open.addEventListener("click", () => C().openSettings("ai"));
+			listen(open, "click", () => C().openSettings("ai"));
 			body.append(h(doc, "p", { class: "zb-sp-hint" }, t(doc, "span", "aiOff"), " ", open));
 		}
 		// Filled when the literature note has been read
@@ -396,7 +403,7 @@
 			let att = data.attachments[0];
 			if (att) {
 				let open = t(doc, "button", "openPDF", null, { type: "button", "data-zb-action": "open-pdf" });
-				open.addEventListener("click", () => openAttachment(att.id));
+				listen(open, "click", () => openAttachment(att.id));
 				body.append(h(doc, "div", { class: "zb-sp-actions" }, open));
 			}
 			panel.append(details);
@@ -421,7 +428,7 @@
 					? t(doc, "button", "showFewer", null, { class: "zb-sp-link", type: "button", "aria-expanded": "true" })
 					: t(doc, "button", "showAll", { count: g.items.length }, { class: "zb-sp-link", type: "button", "aria-expanded": "false" });
 				more.setAttribute("data-zb-action", "show-all");
-				more.addEventListener("click", () => {
+				listen(more, "click", () => {
 					if (all) expanded.delete(key);
 					else expanded.add(key);
 					refreshBody(ctx.body);
@@ -448,7 +455,7 @@
 			if (comment) b.append(" ", h(doc, "span", { class: "zb-sp-quote-text" }, core.shorten(comment, QUOTE_LENGTH)));
 		}
 		if (ann.pageLabel) b.append(h(doc, "span", { class: "zb-sp-page" }, `p. ${ann.pageLabel}`));
-		b.addEventListener("click", () => openAnnotation(att.id, ann.key));
+		listen(b, "click", () => openAnnotation(att.id, ann.key));
 		return b;
 	}
 
@@ -478,7 +485,7 @@
 
 	function settingsLink(doc, name, section) {
 		let b = t(doc, "button", name, null, { class: "zb-sp-link", type: "button", "data-zb-settings": section });
-		b.addEventListener("click", () => C().openSettings(section));
+		listen(b, "click", () => C().openSettings(section));
 		return b;
 	}
 
@@ -546,13 +553,14 @@
 		let b = t(doc, "button", name, null, { type: "button", "data-zb-command": cmd.id });
 		if (cmd.variants) {
 			b.setAttribute("aria-haspopup", "menu");
-			b.addEventListener("click", () => openVariants(ctx, b, cmd));
+			listen(b, "click", () => openVariants(ctx, b, cmd));
 			return b;
 		}
-		b.addEventListener("click", () => {
+		listen(b, "click", () => {
 			b.disabled = true;
 			b.setAttribute("aria-busy", "true");
 			C().execute(cmd, selectionFor(item)).then(() => {
+				if (!alive()) return;
 				b.disabled = false;
 				b.removeAttribute("aria-busy");
 				refreshBody(ctx.body);
@@ -582,7 +590,7 @@
 				mi.setAttribute("label", v.label);
 				mi.setAttribute("data-l10n-id", v.l10n);
 				if (v.args) mi.setAttribute("data-l10n-args", JSON.stringify(v.args));
-				mi.addEventListener("command", () => run(v));
+				listen(mi, "command", () => run(v));
 				popup.append(mi);
 			}
 			popup.addEventListener("popuphidden", (ev) => {
@@ -602,7 +610,7 @@
 		for (let v of entries) {
 			if (v.separator) continue;
 			let b = h(doc, "button", { type: "button", "data-zb-variant": v.id }, v.label);
-			b.addEventListener("click", () => run(v));
+			listen(b, "click", () => run(v));
 			list.append(b);
 		}
 		button.after(list);
@@ -622,12 +630,12 @@
 	/** The links in 重點 and the sync time in 狀態, once the literature note has been read. */
 	function fillLinks(ctx, links, status) {
 		let { doc, body, item, count } = ctx;
-		let current = () => renders.get(body) === count;
+		let current = () => alive() && renders.get(body) === count;
 		Promise.resolve(ZB().main.noteLinks(item)).then((info) => {
 			if (!current() || !info) return;
 			let link = (name, url, kind) => {
 				let b = t(doc, "button", name, null, { class: "zb-sp-link", type: "button", "data-zb-link": kind });
-				b.addEventListener("click", () => Zotero.launchURL(url));
+				listen(b, "click", () => Zotero.launchURL(url));
 				return b;
 			};
 			if (info.obsidian) links.append(link("linkObsidian", info.obsidian, "obsidian"));
@@ -661,7 +669,7 @@
 			mi.setAttribute("label", entry === C().SETTINGS ? C().SETTINGS.toolsLabel : entry.label);
 			mi.setAttribute("data-l10n-id", l10n);
 			mi.setAttribute("data-zb-entry", entry.id);
-			mi.addEventListener("command", () => C().execute(entry, sel));
+			listen(mi, "command", () => C().execute(entry, sel));
 			popup.append(mi);
 		}
 		popup.addEventListener("popuphidden", (ev) => {
