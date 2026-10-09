@@ -21,9 +21,64 @@ zotero-bridge-menu-review-draft =
 zotero-bridge-menu-ebhc-report =
     .label = Draft Evidence-Based Health Care Report (AI)
 zotero-bridge-pane-header =
-    .label = AI Literature Note
+    .label = ZotMax
 zotero-bridge-pane-sidenav =
-    .tooltiptext = AI Literature Note
+    .tooltiptext = ZotMax
+zotero-bridge-pane-more =
+    .tooltiptext = More: Quick Commands, Settings
+zotero-bridge-pane-key-points = Key points
+zotero-bridge-pane-highlights = My highlights
+zotero-bridge-pane-status = Status
+zotero-bridge-pane-actions = Actions
+zotero-bridge-pane-search = Search further
+zotero-bridge-pane-findings = Main findings
+zotero-bridge-pane-full-note = Full AI note
+zotero-bridge-pane-full-note-meta = Full AI note ({ $name })
+zotero-bridge-pane-no-note = This item has no AI literature note yet.
+zotero-bridge-pane-no-note-hint = Generating one calls the AI service you set up (paid), then syncs to Notion/Obsidian.
+zotero-bridge-pane-generate = Generate AI note
+    .title = Sync to Notion + Obsidian; this item has no AI note, so one is generated (paid)
+zotero-bridge-pane-ai-off = AI literature notes are off; syncing organises the bibliography, highlights and your notes only. To turn them on: Settings → Features.
+zotero-bridge-pane-open-features = Open Settings
+zotero-bridge-pane-link-obsidian = Open note in Obsidian
+zotero-bridge-pane-link-fulltext = Open full-text note
+zotero-bridge-pane-link-notion = Open in Notion
+zotero-bridge-pane-no-highlights = No highlights yet. Highlight in the PDF and they are grouped here by what each colour means.
+zotero-bridge-pane-colors = Colour meanings
+zotero-bridge-pane-open-pdf = Open PDF
+zotero-bridge-pane-count = { $count ->
+        [one] { $count } highlight
+       *[other] { $count } highlights
+    }
+zotero-bridge-pane-show-all = Show all ({ $count })
+zotero-bridge-pane-show-fewer = Show fewer
+zotero-bridge-pane-ann-image = Image annotation
+zotero-bridge-pane-ann-ink = Ink annotation
+zotero-bridge-pane-ann-note = Sticky note
+zotero-bridge-pane-ann-highlight = Highlight
+zotero-bridge-pane-classified = Auto-classified
+zotero-bridge-pane-last-synced = Last synced: { $name }
+zotero-bridge-pane-not-synced = Not synced to Obsidian yet.
+zotero-bridge-pane-summary-none = Not generated yet
+zotero-bridge-pane-summary-off = AI notes are off
+zotero-bridge-pane-cmd-sync = Sync
+    .title = Sync to Notion + Obsidian (generate an AI note only if missing)
+zotero-bridge-pane-cmd-sync-no-ai = Sync without AI
+    .title = Sync without calling the AI (reuse the existing AI note)
+zotero-bridge-pane-cmd-regenerate = Regenerate AI note
+    .title = Regenerate the AI note and sync (paid)
+zotero-bridge-pane-cmd-classify = Auto-classify…
+    .title = Auto-classification: review the suggestions; items go into sub-collections only after you tick them
+zotero-bridge-pane-cmd-search-item = Search databases…
+    .title = Search medical databases for this item (PubMed, CINAHL, Cochrane…)
+zotero-bridge-pane-cmd-chase-items = Chase citations
+    .title = Chase this item's citations (OpenAlex): its references and the papers citing it
+zotero-bridge-pane-cmd-appraisal-coach = Compare with AI
+    .title = Appraisal coach: an AI answers each item from the paper alone, then the items where it differs from you are listed (estimated cost first)
+zotero-bridge-pane-cmd-appraisal-coach-blocked = Compare with AI
+    .title = { $reason }
+zotero-bridge-pane-cmd-palette = Quick Commands…
+    .title = Find any ZotMax feature by typing
 zotero-bridge-menu-export-library =
     .label = Export Bibliography to Obsidian
 zotero-bridge-menu-export-collection =
@@ -142,6 +197,8 @@ zotero-bridge-menu-palette =
     .label = ZotMax Quick Commands…
 zotero-bridge-cmd-export-collection =
     .label = Export Bibliography of Selected Collection
+zotero-bridge-cmd-appraisal-coach =
+    .label = Appraisal coach: compare with AI
 zotero-bridge-cmd-screen-ft-exclude-reason =
     .label = Full Text: Exclude ({ $reason })
 zotero-bridge-palette-title = ZotMax Quick Commands
@@ -215,6 +272,7 @@ zotero-bridge-feature-requires =
         [sync] Turn on “Sync to Obsidian / Notion” first.
         [aiNotes] Turn on “AI literature notes” first.
         [autoClassify] Turn on “Auto-classification” first.
+        [appraisalForm] Turn on “Appraisal form” first.
        *[concepts] Turn on “Concept cards” first.
     }
 zotero-bridge-feature-sync = Sync to Obsidian / Notion
@@ -265,6 +323,8 @@ zotero-bridge-feature-concepts-ai = AI synthesis for concept cards
 zotero-bridge-feature-concepts-ai-desc = Let an AI draft a synthesis for one concept card, with a checklist of numbers to verify.
 zotero-bridge-feature-classify-ai = AI topic classification
 zotero-bridge-feature-classify-ai-desc = Lets an AI decide which of your topics each item belongs to, from title and abstract; you see the item count and estimated cost first.
+zotero-bridge-feature-appraisal-coach = Appraisal coach
+zotero-bridge-feature-appraisal-coach-desc = Once you have answered the appraisal form yourself, an AI answers it from the paper alone and the items where it differs are listed with its quotes; whether to change anything is your call. Estimated cost first.
 
 ## Settings → tabs, search and showSection (preferences.xhtml, preferences.js)
 zotero-bridge-prefs-search-label = Find a setting
@@ -322,3 +382,39 @@ zotero-bridge-fulltext-markitdown-hint = markitdown is Microsoft's open-source c
 zotero-bridge-notion-rename =
     .label = Rename Notion columns to Chinese…
 zotero-bridge-notion-columns-hint = New databases get Chinese column names (標題, 作者, 年份, 研究設計…); the English columns of older databases keep working. “Rename Notion columns to Chinese” lists the changes first and renames only after you confirm.
+
+## 讀懂統計: the PDF reader's selection popup, the ZotMax panel's 統計解釋 and the switch (content/stats-explainer.js)
+
+zotero-bridge-feature-stats-explainer = Understand the statistics
+zotero-bridge-feature-stats-explainer-desc = Select a passage in a PDF and an AI explains its statistics (OR, confidence intervals, p values…) in plain words, with what to watch for; every number is checked against the text.
+zotero-bridge-cmd-explain-stats =
+    .label = Explain the Selected Statistics
+zotero-bridge-pane-stats = Statistics explained
+zotero-bridge-stats-popup = ZotMax: Explain the statistics
+zotero-bridge-stats-terms = What it is
+zotero-bridge-stats-restatement = What this passage says
+zotero-bridge-stats-clinical = What it means in practice
+zotero-bridge-stats-cautions = Watch out for
+zotero-bridge-stats-here = In this passage:
+zotero-bridge-stats-removed = ⚠ This number is not in the text and was removed
+zotero-bridge-stats-removed-many = ⚠ { $count } numbers are not in the text and were removed
+zotero-bridge-stats-loading = The AI is explaining…
+zotero-bridge-stats-loading-cost = The AI is explaining… (about { $name })
+zotero-bridge-stats-loading-simpler = Finding simpler words…
+zotero-bridge-stats-save = Save to note
+zotero-bridge-stats-saved = Saved to note
+zotero-bridge-stats-simpler = Explain it more simply
+zotero-bridge-stats-simpler-title = Simpler
+zotero-bridge-stats-open-page = Back to page { $name } of the PDF
+zotero-bridge-stats-open-pdf = Back to the PDF
+zotero-bridge-stats-hint = The AI only points the way: every number was checked against the text, and the text has the last word.
+zotero-bridge-stats-no-terms = No statistics found in this passage.
+zotero-bridge-stats-no-key = No AI API key yet, so nothing can be explained. Add a Claude or OpenAI key under Settings → AI.
+zotero-bridge-stats-open-settings = Open Settings
+zotero-bridge-stats-failed = Could not explain: { $error }
+zotero-bridge-stats-bad-format = The AI did not answer in the expected format; this is what it said (its numbers were checked too).
+zotero-bridge-stats-dismiss = Dismiss
+zotero-bridge-stats-saved-to = Saved to 「統計筆記」 in the literature note.
+zotero-bridge-stats-no-vault = No Obsidian vault set, so there is nowhere to save: Settings → Sync → Obsidian.
+zotero-bridge-stats-not-synced = This item has not been synced to Obsidian yet. Sync it once, then Save to note.
+zotero-bridge-stats-save-failed = Could not save to the note: { $error }

@@ -23,6 +23,7 @@
 	const DIALOG_URL = "chrome://zotero-bridge/content/palette.xhtml";
 	const DIALOG_ROOT = "zb-palette";
 	const DIALOG_NAME = "zotero-bridge-palette";
+	let openCount = 0;
 	const HTML_NS = "http://www.w3.org/1999/xhtml";
 	// Zotero's configurable shortcuts (Ctrl+Shift+key, Cmd+Shift+key on macOS): extensions.zotero.keys.*
 	const ZOTERO_KEYS = ["saveToZotero", "newItem", "newNote", "library", "quicksearch", "copySelectedItemCitationsToClipboard",
@@ -477,7 +478,9 @@
 		let texts = await localize(win && win.document, entries);
 		let dialog;
 		try {
-			dialog = win.openDialog(DIALOG_URL, DIALOG_NAME, "chrome,dialog=no,resizable,centerscreen");
+			// A fresh window name each time: reopening right after Esc must not get the closing window
+			// back from Gecko (it would close under us: "快速指令視窗沒有開啟")
+			dialog = win.openDialog(DIALOG_URL, `${DIALOG_NAME}-${++openCount}`, "chrome,dialog=no,resizable,centerscreen");
 			current = dialog;
 			let rootEl = await waitForDialog(dialog);
 			if (current !== dialog) return null;

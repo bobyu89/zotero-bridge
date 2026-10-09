@@ -347,7 +347,7 @@ const TESTS = [
 				fulltextMd: ["toMarkdown", "trimForAI", "markHighlights", "buildFullTextNote", "notionChunks"],
 				usage: ["recordUsage"],
 				secrets: ["get", "set", "clear", "migrateFromPrefs", "createStore", "geckoBackend"],
-				adapter: ["extractItemData", "saveAINote", "getAINote", "toRegularItems"],
+				adapter: ["extractItemData", "paneData", "saveAINote", "getAINote", "toRegularItems"],
 				fulltext: ["prepare", "render", "verifyAIHighlights", "writeObsidian", "writeNotion", "runMarkitdown"],
 				bibliography: ["exportLibrary", "exportCollections", "citekeyFor", "afterSync"],
 				images: ["collect"],
@@ -362,14 +362,17 @@ const TESTS = [
 				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "menuTargets", "relatedFor", "showMore", "openTarget"],
 				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "batchParams", "parseResults"],
 				ebhcReport: ["run", "askOptions", "processReport", "buildReportNote"],
-				appraisalForm: ["renderPaneRow", "syncInfo", "saveRecord", "exportSummary", "exportCollections"],
+				appraisalForm: ["renderPaneRow", "syncInfo", "saveRecord", "stateFor", "exportSummary", "exportCollections"],
+				appraisalCoach: ["readiness", "buildPrompt", "parseResponse", "verifyItems", "compare", "decide", "summaryLine", "run", "runFromCommand", "renderRowButton", "renderFormSection", "blockedReason"],
 				progressReport: ["run", "askOptions", "logStatusChange", "latestReport"],
 				features: ["isEnabled", "rawValue", "applyPreset", "currentPreset", "snapshot", "restore", "migrate", "gateMenus"],
 				commands: ["get", "execute", "fromWindow", "fromContext", "isVisible", "availability", "paletteEntries", "search", "normalize", "openSettings"],
 				menus: ["register", "buildEntries", "toolsEntries"],
 				palette: ["open", "close", "render", "localize", "attach", "detach", "shutdown", "shortcutLabel"],
 				toolbar: ["init", "add", "remove", "shutdown", "update"],
-				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly", "renameNotionColumns", "notionClient", "prepareFullText", "batchStatus"],
+				sidepanel: ["init", "register", "render", "refreshAll", "addStylesheet", "removeStylesheet", "shutdown", "targetItem"],
+				statsExplainer: ["init", "register", "shutdown", "explain", "explainCurrentSelection", "simplify", "saveToNote", "paneView", "renderPane", "onSelectionPopup", "methodsExcerpt", "checkExplanation", "appendStatsNote"],
+				main: ["init", "shutdown", "run", "readSettings", "renderPane", "noteLinks", "saveQuietly", "renameNotionColumns", "notionClient", "prepareFullText", "batchStatus"],
 			};
 			let missing = [];
 			for (let [mod, fns] of Object.entries(MODULES)) {
@@ -406,6 +409,13 @@ const TESTS = [
 				baseline = JSON.parse(await IOUtils.readUTF8(PathUtils.join(workDir, "baseline.json")));
 				let reg = baseline.diag && baseline.diag.registerMockSource;
 				ctx.l10nSourceErrors = Array.isArray(reg) ? reg : [];
+				// Sometimes the mock registration logs nothing within the wait, yet the same Zotero shows
+				// the cause: re-translating its main window rejects with `undefined`. Registering the
+				// plugin's l10n source re-translates the window, and that rejection then surfaces as
+				// "uncaught exception: undefined" (no source, so it can't be ours)
+				if (!ctx.l10nSourceErrors.length && baseline.diag && baseline.diag.translateRoots === "rejected: undefined") {
+					ctx.l10nSourceErrors = ["uncaught exception: undefined"];
+				}
 				d.baselineDiagnostics = baseline.diag;
 			}
 			catch (e) {
@@ -1149,15 +1159,306 @@ const TESTS = [
 			check(body.textContent.includes("E2E stubbed summary sentence."), `renderPane() output lacks the AI note: ${body.textContent.slice(0, 200)}`);
 			check(summary && summary.includes("E2E stubbed summary"), `setSectionSummary got ${JSON.stringify(summary)}`);
 			check(body.querySelectorAll("button").length >= 2, "renderPane() made no action buttons");
+			// The panel's stylesheet is in the main window (sidepanel.css)
+			check(doc.getElementById("zotero-bridge-sidepanel-css"), "no #zotero-bridge-sidepanel-css in the main window");
 			// The real item pane: select the item and wait for the section to render
 			await win.ZoteroPane.selectItem(ctx.english.id);
 			let section = await waitFor(() => [...doc.querySelectorAll("item-pane-custom-section")].find(e => e.dataset.pane === ctx.paneKey),
 				`<item-pane-custom-section data-pane="${ctx.paneKey}"> in the item pane`, 20000);
+			// The ZotMax icon in the item pane's side navigation
 			let details = section.closest("item-details");
+			let sidenav = (details && details.querySelector("item-pane-sidenav")) || doc.querySelector("#zotero-item-pane item-pane-sidenav");
+			d.sidenavPanes = sidenav ? [...sidenav.querySelectorAll("[data-pane]")].map(e => String(e.dataset.pane)) : null;
+			check(sidenav && [...sidenav.querySelectorAll("[data-pane]")].some(e => e.dataset.pane === ctx.paneKey), `no ZotMax button in the item pane's side navigation (panes: ${JSON.stringify(d.sidenavPanes)})`);
 			if (details && details.scrollToPane) details.scrollToPane(ctx.paneKey, "instant");
 			await waitFor(() => section.textContent.includes("E2E stubbed summary sentence."),
 				"the plugin's item pane section to render the AI note", 20000);
 			d.sectionText = section.textContent.replace(/\s+/g, " ").slice(0, 200);
+			let part = id => section.querySelector(`[data-zb-sub="${id}"]`);
+			check(part("keyPoints") && part("keyPoints").textContent.includes("E2E stubbed summary sentence."), "重點 does not show the take-away");
+			check(part("actions"), "no 動作 part");
+			d.commands = [...part("actions").querySelectorAll("button[data-zb-command]")].map(b => String(b.dataset.zbCommand));
+			check(d.commands.includes("sync-no-ai") && d.commands.includes("palette"), `動作 commands ${JSON.stringify(d.commands)}`);
+			// The red highlight of the sync test, under 我的劃線
+			d.highlights = String(part("highlights") && part("highlights").dataset.zbCount);
+			eq(d.highlights, "1", "highlights counted in 我的劃線");
+			// The literature note the earlier sync wrote: its link, once read
+			await waitFor(() => section.querySelector("[data-zb-link=obsidian]"), "在 Obsidian 開啟筆記 in 重點", 20000);
+			// A button runs its catalog command on this item: 同步，不呼叫 AI (Obsidian only, no Notion configured)
+			let before = (await findNote(ctx.noteDir, ctx.english.key)).text;
+			let beforeSynced = fmValue(frontmatter(before), "last_synced");
+			await delay(1100);
+			part("actions").querySelector("button[data-zb-command=sync-no-ai]").click();
+			// Runs are queued: an empty run resolves after it
+			await delay(200);
+			await zb().main.run([], {});
+			let after = (await findNote(ctx.noteDir, ctx.english.key)).text;
+			d.lastSynced = { before: String(beforeSynced), after: String(fmValue(frontmatter(after), "last_synced")) };
+			check(d.lastSynced.after && d.lastSynced.after !== d.lastSynced.before, `the click did not sync the item (last_synced ${JSON.stringify(d.lastSynced)})`);
+			// …and the panel refreshed with the sync time
+			let fresh = () => [...doc.querySelectorAll("item-pane-custom-section")].find(e => e.dataset.pane === ctx.paneKey);
+			await waitFor(() => {
+				let line = fresh() && fresh().querySelector("[data-zb-synced]");
+				return line && !line.hidden;
+			}, "the last sync time under 狀態", 20000);
+		},
+	},
+	{
+		name: "the ZotMax panel is in the reader's side pane next to the PDF",
+		needs: ["item pane section renders (renderPane in the main window and the real item pane)"],
+		timeout: 90000,
+		async fn(d) {
+			let win = mainWindow();
+			let doc = win.document;
+			let reader = await Zotero.Reader.open(ctx.textPDF.id);
+			check(reader, "Zotero.Reader.open returned nothing");
+			let tabID = reader.tabID;
+			d.tabID = String(tabID);
+			try {
+				await waitFor(() => win.Zotero_Tabs && win.Zotero_Tabs.selectedID === tabID, "the reader tab to be selected", 30000);
+				let pane = doc.getElementById("zotero-context-pane");
+				check(pane, "no #zotero-context-pane in the main window");
+				// A collapsed side pane is opened, as the user would
+				try {
+					let splitter = doc.getElementById("zotero-context-splitter");
+					d.collapsed = !!(splitter && splitter.getAttribute("state") === "collapsed");
+					if (d.collapsed && win.ZoteroContextPane && win.ZoteroContextPane.togglePane) win.ZoteroContextPane.togglePane();
+				}
+				catch (e) {
+					d.toggleError = String(e);
+				}
+				let section = await waitFor(() => [...pane.querySelectorAll("item-pane-custom-section")].find(e => e.dataset.pane === ctx.paneKey),
+					`<item-pane-custom-section data-pane="${ctx.paneKey}"> in the reader's side pane`, 30000);
+				let sidenavs = [...pane.querySelectorAll("item-pane-sidenav")];
+				d.sidenavPanes = sidenavs.map(n => [...n.querySelectorAll("[data-pane]")].map(e => String(e.dataset.pane)));
+				check(sidenavs.some(n => [...n.querySelectorAll("[data-pane]")].some(e => e.dataset.pane === ctx.paneKey)), `no ZotMax button in the reader's side navigation (${JSON.stringify(d.sidenavPanes)})`);
+				let details = section.closest("item-details");
+				if (details && details.scrollToPane) details.scrollToPane(ctx.paneKey, "instant");
+				// The PDF's parent item: its AI note
+				await waitFor(() => {
+					let kp = section.querySelector('[data-zb-sub="keyPoints"]');
+					return kp && kp.textContent.includes("E2E stubbed summary sentence.");
+				}, "the panel to show the parent item's 重點 in the reader", 30000);
+				d.sectionText = section.textContent.replace(/\s+/g, " ").slice(0, 200);
+			}
+			finally {
+				try {
+					win.Zotero_Tabs.close(tabID);
+				}
+				catch (e) {
+					d.closeError = String(e);
+				}
+			}
+		},
+	},
+	{
+		name: "評讀陪練: the coach compares an AI's answers from text.pdf with the form and records 保留我的判斷 (stubbed Claude API)",
+		needs: ["AI note through the plugin's fetch with a stubbed Claude API (no network)"],
+		async fn(d) {
+			let ZB = zb();
+			let AF = ZB.appraisalForm;
+			let T = ZB.appraisalTools;
+			let pluginGlobal = Components.utils.getGlobalForObject(ZB.main.run);
+			let realFetch = pluginGlobal.fetch;
+			let calls = [];
+			const KEY = "sk-ant-e2e-fake-key";
+			// The user's own appraisal: every closed CASP RCT item, item 7 answered 否
+			let answers = {};
+			for (let item of ZB.appraisalCoach.closedItems("casp-rct")) answers[item.id] = { answer: "是", note: "", source: "human" };
+			answers["7"] = { answer: "否", note: "E2E own note", source: "human" };
+			// The AI: the same except item 7, with a sentence that is in text.pdf (make-fixtures.mjs)
+			const QUOTE = "The intervention reduced the rate of falls by thirty percent compared with usual care.";
+			let aiItems = Object.keys(answers).map(id => ({ id, answer: "是", reason: `E2E reason ${id}`, quotes: [] }));
+			aiItems.find(i => i.id === "7").quotes = [{ text: QUOTE, page: "1" }];
+			let stub = async (url, init) => {
+				let body = JSON.parse(init.body);
+				calls.push({ url: String(url), system: body.system ? body.system.length : 0, user: String(body.messages[0].content) });
+				if (!String(url).startsWith("https://api.anthropic.com/")) throw new Error(`unexpected network call to ${url}`);
+				return new pluginGlobal.Response(JSON.stringify({
+					model: "e2e-model", stop_reason: "end_turn",
+					content: [{ type: "text", text: JSON.stringify({ items: aiItems }) }],
+					usage: { input_tokens: 2000, output_tokens: 400 },
+				}), { status: 200, headers: { "content-type": "application/json" } });
+			};
+			let retry = ZB.main.runtime.retry;
+			let formNote = null;
+			try {
+				setPref("feature.appraisalCoach", true);
+				check(ZB.appraisalCoach.enabled(), "評讀陪練 should be on (it needs 文獻評讀表 and AI 文獻筆記)");
+				let saved = await AF.saveRecord(ctx.english, T.normalizeRecord({ tool: "casp-rct", answers, overall: "納入" }));
+				formNote = saved.note;
+				AF._paneState.delete(ctx.english.id);
+				d.blocked = String(ZB.appraisalCoach.blockedReason(ctx.english));
+				eq(d.blocked, "", "blockedReason with every item answered");
+				Object.defineProperty(pluginGlobal, "fetch", { value: stub, writable: true, configurable: true });
+				ZB.main.runtime.retry = { maxRetries: 0 };
+				await ZB.secrets.set("anthropicKey", KEY);
+				setPref("llm.provider", "anthropic");
+				let confirmText = "";
+				let run = await ZB.appraisalCoach.run(ctx.english, { confirm: (text) => {
+					confirmText = String(text);
+					return true;
+				} });
+				d.confirm = confirmText.slice(0, 200);
+				check(run, "run() returned nothing (cancelled or failed; see the plugin errors)");
+				d.summary = String(ZB.appraisalCoach.summaryText(run));
+			}
+			finally {
+				Object.defineProperty(pluginGlobal, "fetch", { value: realFetch, writable: true, configurable: true });
+				ZB.main.runtime.retry = retry;
+				await ZB.secrets.clear("anthropicKey");
+			}
+			d.calls = calls.map(c => ({ url: c.url, system: c.system, userChars: c.user.length }));
+			eq(calls.length, 1, "fetch calls");
+			check(calls[0].system === 2, `system blocks: ${calls[0].system}, expected the instructions and the checklist`);
+			check(calls[0].user.includes("falls by thirty percent"), "the request lacks text.pdf's full text");
+			check(!calls[0].user.includes("E2E own note"), "the user's note went into the request");
+			eq(d.summary, "13 題中 12 題一致，1 題不同（一致 92%）", "summary");
+			let stored = () => AF.readNoteHTML(AF.getFormNote(ctx.english).getNote());
+			let item7 = stored().coach[0].items.find(i => i.id === "7");
+			d.item7 = { user: String(item7.user), ai: String(item7.ai), quotes: item7.quotes.length, page: Number(item7.quotes[0] && item7.quotes[0].page) || 0 };
+			eq(d.item7.quotes, 1, "the quote from text.pdf is verified");
+			eq(d.item7.page, 1, "the quote's PDF page");
+
+			// The form in the real item pane document: exactly item 7 listed, then 「保留我的判斷」
+			let doc = mainWindow().document;
+			let body = doc.createElement("div");
+			ZB.main.renderPane({ doc, body, item: ctx.english, setSectionSummary: () => {} });
+			let section = body.querySelector("[data-zb-coach]");
+			check(section, "no 評讀陪練 results in the open form");
+			let listed = [...section.children].filter(e => e.hasAttribute("data-zb-coach-item")).map(e => String(e.getAttribute("data-zb-coach-item")));
+			d.listed = listed;
+			eq(JSON.stringify(listed), JSON.stringify(["7"]), "items listed as different");
+			let keep = section.querySelector('[data-zb-coach-item="7"] [data-zb-coach-decide="kept"]');
+			check(keep, "no 保留我的判斷 button");
+			keep.click();
+			await waitFor(() => {
+				let it = stored().coach[0].items.find(i => i.id === "7");
+				return it && it.decision === "kept";
+			}, "the decision in the note JSON", 10000);
+			let after = stored();
+			d.decision = { decision: String(after.coach[0].items.find(i => i.id === "7").decision), answer: String(after.answers["7"].answer) };
+			eq(d.decision.answer, "否", "保留我的判斷 keeps the user's answer");
+			d.line = String(ZB.appraisalCoach.summaryLine(after));
+			eq(d.line, "評讀陪練：一致 12/13，修改 0 題", "synced line");
+			let ledger = JSON.parse(Zotero.Prefs.get(ZB_PREF + "usage.ledger", true) || "{}");
+			let month = ledger[ZB.usage.monthKey()];
+			d.ledgerModels = month ? Object.keys(month.byModel || {}) : [];
+			check(d.ledgerModels.includes("e2e-model"), `no usage ledger entry for e2e-model (${JSON.stringify(d.ledgerModels)})`);
+			// Leave the item as it was for the tests after this one
+			AF._paneState.delete(ctx.english.id);
+			if (formNote) await formNote.eraseTx();
+			Zotero.Prefs.clear(ZB_PREF + "feature.appraisalCoach", true);
+		},
+		get allow() {
+			return ctx.keyStoreUsable ? null : /os-keystore|OSKeyStore|key store|鑰匙圈/i;
+		},
+	},
+	{
+		name: "讀懂統計: a selection of text.pdf explained in the reader's panel with a stubbed AI; the invented number is removed",
+		needs: ["the ZotMax panel is in the reader's side pane next to the PDF"],
+		timeout: 90000,
+		async fn(d) {
+			let ZB = zb();
+			let S = ZB.statsExplainer;
+			let win = mainWindow();
+			let doc = win.document;
+			// The selection: a sentence of text.pdf as the PDF worker reads it
+			let full = await Zotero.PDFWorker.getFullText(ctx.textPDF.id, 1);
+			const SENTENCE = "The intervention reduced the rate of falls by thirty percent compared with usual care.";
+			check(String(full.text).replace(/\s+/g, " ").includes(SENTENCE), "text.pdf does not contain the sentence to select");
+			// The stub's answer: no number is in the selection or text.pdf, so 30% and 0.7 are invented
+			const ANSWER = JSON.stringify({
+				terms: [{ term: "rate of falls", what: "跌倒率", here: "下降 30%，相當於 rate ratio 0.7" }],
+				restatement: "介入讓跌倒率下降三成。",
+				clinical: "對社區長者有意義。",
+				cautions: ["這段沒有寫信賴區間。"],
+			});
+			let pluginGlobal = Components.utils.getGlobalForObject(ZB.main.run);
+			let realFetch = pluginGlobal.fetch;
+			let calls = [];
+			let stub = async (url) => {
+				calls.push(String(url));
+				if (!String(url).startsWith("https://api.anthropic.com/")) throw new Error(`unexpected network call to ${url}`);
+				return new pluginGlobal.Response(JSON.stringify({
+					model: "e2e-model", stop_reason: "end_turn",
+					content: [{ type: "text", text: ANSWER }],
+					usage: { input_tokens: 800, output_tokens: 200 },
+				}), { status: 200, headers: { "content-type": "application/json" } });
+			};
+			let before = {
+				on: Zotero.Prefs.get(ZB_PREF + "feature.statsExplainer", true),
+				confirm: Zotero.Prefs.get(ZB_PREF + "statsExplainer.confirm", true),
+			};
+			Object.defineProperty(pluginGlobal, "fetch", { value: stub, writable: true, configurable: true });
+			let retry = ZB.main.runtime.retry;
+			ZB.main.runtime.retry = { maxRetries: 0 };
+			let reader = null;
+			try {
+				await ZB.secrets.set("anthropicKey", "sk-ant-e2e-fake-key");
+				setPref("llm.provider", "anthropic");
+				setPref("feature.statsExplainer", true);
+				setPref("statsExplainer.confirm", "never");
+				d.listening = !!S.listening;
+				check(S.listening, "the reader listener is not registered (Zotero.Reader.registerEventListener)");
+				reader = await Zotero.Reader.open(ctx.textPDF.id);
+				check(reader, "Zotero.Reader.open returned nothing");
+				await waitFor(() => win.Zotero_Tabs && win.Zotero_Tabs.selectedID === reader.tabID, "the reader tab to be selected", 30000);
+				// The popup event as the reader dispatches it, through Zotero's own dispatcher when it has one
+				let holder = doc.createElement("div");
+				let event = {
+					type: "renderTextSelectionPopup", reader, doc,
+					params: { annotation: { text: SENTENCE, pageLabel: "1", position: { pageIndex: 0, rects: [[72, 700, 500, 712]] } } },
+					append: (...nodes) => holder.append(...nodes),
+				};
+				d.dispatch = typeof Zotero.Reader._dispatchEvent === "function" ? "Zotero.Reader._dispatchEvent" : "onSelectionPopup";
+				if (d.dispatch === "Zotero.Reader._dispatchEvent") Zotero.Reader._dispatchEvent(event);
+				else S.onSelectionPopup(event);
+				let button = holder.querySelector("button[data-zb-stats=explain]");
+				check(button, "no 「ZotMax：解釋統計」 button in the popup");
+				d.buttonText = String(button.textContent);
+				button.click();
+				await waitFor(() => S.loadRecord(ctx.english).entries.length > 0, "the explanation saved in the child note", 30000);
+				eq(calls.length, 1, "fetch calls");
+				let entry = S.loadRecord(ctx.english).entries[0];
+				d.removed = entry.removed.terms;
+				d.here = String(entry.explanation.terms[0].here);
+				check(!/30|0\.7/.test(d.here), `the invented numbers stayed: ${d.here}`);
+				check(d.here.includes(S.REMOVED), `no removal marker: ${d.here}`);
+				// The reader's side pane shows it under 統計解釋
+				let pane = doc.getElementById("zotero-context-pane");
+				let section = await waitFor(() => [...pane.querySelectorAll("item-pane-custom-section")].find(e => e.dataset.pane === ctx.paneKey),
+					"the ZotMax section in the reader's side pane", 30000);
+				let part = await waitFor(() => section.querySelector('[data-zb-sub="stats"] [data-zb-entry]') && section.querySelector('[data-zb-sub="stats"]'),
+					"統計解釋 in the reader's side pane", 30000);
+				d.partText = part.textContent.replace(/\s+/g, " ").slice(0, 300);
+				check(part.querySelector("[data-zb-removed]"), "no removed-number marker in the panel");
+				check(part.querySelector("[data-zb-warning]"), "no 「這個數字不在原文裡」 warning in the panel");
+				check(!/30%/.test(part.textContent), "the panel shows the invented 30%");
+				// 存到筆記: the literature note of the earlier sync gets the 「統計筆記」 callout
+				await S.saveToNote(ctx.english, entry.id);
+				let note = await findNote(ctx.noteDir, ctx.english.key);
+				check(note && note.text.includes("[!note]- 統計筆記"), "存到筆記 did not write the 「統計筆記」 callout");
+				check(note.text.indexOf("統計筆記") > note.text.indexOf("%% zotero-bridge:end %%"), "the callout is inside the managed block");
+			}
+			finally {
+				Object.defineProperty(pluginGlobal, "fetch", { value: realFetch, writable: true, configurable: true });
+				ZB.main.runtime.retry = retry;
+				await ZB.secrets.clear("anthropicKey");
+				setPref("feature.statsExplainer", before.on === undefined ? false : before.on);
+				setPref("statsExplainer.confirm", before.confirm || "above");
+				if (reader) {
+					try {
+						win.Zotero_Tabs.close(reader.tabID);
+					}
+					catch (e) {
+						d.closeError = String(e);
+					}
+				}
+			}
+		},
+		get allow() {
+			return ctx.keyStoreUsable ? null : /os-keystore|OSKeyStore|key store|鑰匙圈/i;
 		},
 	},
 	{
@@ -1601,6 +1902,7 @@ const TESTS = [
 			const GATED = [
 				"zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-menu-ebhc-report",
 				"zotero-bridge-toolbar-chase-items", "zotero-bridge-chase-tools-included", "zotero-bridge-chase-tools-import",
+				"zotero-bridge-cmd-appraisal-coach",
 			];
 			// On in both presets
 			const ALWAYS = ["zotero-bridge-menu-sync", "zotero-bridge-menu-regenerate", "zotero-bridge-classify-tools", "zotero-bridge-toolbar-screen",
@@ -1619,7 +1921,7 @@ const TESTS = [
 			};
 			// The toolbar menu's entries (content/toolbar.js), off in 研究生引導 / on in both
 			const TOOLBAR_GATED = ["pubmed-watch", "chase-items", "chase-included", "chase-import", "synthesis", "review-draft",
-				"ebhc-report", "progress-report", "concepts-ai"];
+				"ebhc-report", "progress-report", "concepts-ai", "appraisal-coach"];
 			const TOOLBAR_ALWAYS = ["palette", "sync", "sync-no-ai", "sync-obsidian", "sync-notion", "status", "classify", "dashboard", "concepts",
 				"bibliography", "export-collection", "quick-search", "search-item", "screen", "dedup", "prisma", "appraisal-summary", "regenerate", "settings"];
 			let button = mainWindow().document.getElementById(ZB.toolbar.BUTTON_ID);
@@ -1723,6 +2025,7 @@ const TESTS = [
 			check(!mainWindow().document.getElementById("zotero-bridge-tb-button"), "toolbar button still in the main window after shutdown");
 			check(!mainWindow().document.getElementById("zotero-bridge-tb-popup"), "toolbar menu still in the main window after shutdown");
 			check(!mainWindow().document.getElementById("zotero-bridge-toolbar-css"), "toolbar stylesheet still in the main window after shutdown");
+			check(!mainWindow().document.getElementById("zotero-bridge-sidepanel-css"), "ZotMax panel stylesheet still in the main window after shutdown");
 			await waitFor(() => palette.closed, "the 快速指令 window to close at shutdown", 10000);
 			// The shortcut went with it: Ctrl/Cmd+Shift+P opens nothing
 			let win = mainWindow();
@@ -1749,6 +2052,7 @@ const TESTS = [
 			await waitFor(() => mainWindow().document.getElementById("zotero-bridge-tb-button"), "toolbar button back in the main window", 10000);
 			eq(mainWindow().document.querySelectorAll("#zotero-bridge-tb-button").length, 1, "toolbar buttons after the cycle");
 			eq(mainWindow().document.querySelectorAll("#zotero-bridge-toolbar-css").length, 1, "toolbar stylesheets after the cycle");
+			eq(mainWindow().document.querySelectorAll("#zotero-bridge-sidepanel-css").length, 1, "ZotMax panel stylesheets after the cycle");
 			d.menus = menus;
 		},
 		// disable() and enable() each rebuild Zotero's plugin l10n source (see the startup test)

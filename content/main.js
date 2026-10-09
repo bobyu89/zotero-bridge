@@ -36,24 +36,31 @@
 		notify("ZotMax", `「${f.label}」目前關閉。要使用的話：設定 → ZotMax → 功能，把它打開。`);
 	}
 
-	async function readSettings() {
+	/** Where literature notes go (prefs only, no secrets): what the item pane needs to find a note. */
+	function vaultSettings() {
 		let vaultPath = String(pref("obsidian.vaultPath") || "").trim();
-		let provider = pref("llm.provider") === "openai" ? "openai" : "anthropic";
-		// Secrets live in the login manager (secrets.js), not in prefs
-		let notionToken = await ZB.secrets.get("notionToken");
-		let apiKey = await ZB.secrets.get(provider === "openai" ? "openaiKey" : "anthropicKey");
 		return {
 			vaultPath,
 			vaultName: String(pref("obsidian.vaultName") || "").trim() || (vaultPath ? PathUtils.filename(vaultPath) : ""),
 			filenameFormat: pref("obsidian.filenameFormat") || "citekey",
 			createBase: pref("obsidian.createBase") !== false,
 			includeNotes: pref("includeNotes") !== false,
-			notionToken: String(notionToken || "").trim(),
 			defaults: {
 				obsidianFolder: pref("obsidian.folder") || "",
 				notionDatabase: String(pref("notion.database") || "").trim(),
 			},
 			rules: ZB.core.parseRules(pref("routing.rules")),
+		};
+	}
+
+	async function readSettings() {
+		let provider = pref("llm.provider") === "openai" ? "openai" : "anthropic";
+		let vault = vaultSettings();
+		// Secrets live in the login manager (secrets.js), not in prefs
+		let notionToken = await ZB.secrets.get("notionToken");
+		let apiKey = await ZB.secrets.get(provider === "openai" ? "openaiKey" : "anthropicKey");
+		return Object.assign(vault, {
+			notionToken: String(notionToken || "").trim(),
 			llm: {
 				enabled: pref("llm.enabled") !== false,
 				provider,
@@ -74,7 +81,7 @@
 				batchThreshold: Math.max(2, Number(pref("llm.batchThreshold")) || 10),
 			},
 			notionSynthesisParent: String(pref("notion.synthesisParent") || "").trim(),
-		};
+		});
 	}
 
 	function parseHTML(html) {
@@ -533,6 +540,82 @@
 		return m ? m[1].trim() : "";
 	}
 
+	// ---------- the item pane's links to the synced notes ----------
+
+	// What syncs in this session wrote, per item ("libraryID/KEY"): { at, obsidianPath, notionUrl }
+	let syncedThisSession = new Map();
+
+	/**
+	 * Links for the item pane's ZotMax panel (sidepanel.js): the literature note in Obsidian, its
+	 * full-text note, the Notion page and when the item was last synced. Read from the note's
+	 * frontmatter at its usual place (or where a sync in this session wrote it); a Notion page synced
+	 * without a vault is known only after a sync in this session. Never throws, never goes online.
+	 * Resolves to { obsidian, fullText, notion, lastSynced, vault (a vault is set), found (a note exists) }.
+	 */
+	async function noteLinks(item) {
+		let out = { obsidian: "", fullText: "", notion: "", lastSynced: "", vault: false, found: false };
+		let session = item ? syncedThisSession.get(itemRef(item)) : null;
+		if (session) {
+			out.notion = session.notionUrl || "";
+			out.lastSynced = session.at || "";
+		}
+		try {
+			let settings = vaultSettings();
+			if (!item || !settings.vaultPath) return out;
+			out.vault = true;
+			let data = ZB.adapter.paneData(item);
+			let target;
+			if (session && session.obsidianPath) {
+				let parts = session.obsidianPath.split("/");
+				target = obsidianTarget(settings, parts.slice(0, -1), parts[parts.length - 1].replace(/\.md$/i, ""));
+			}
+			else {
+				let route = ZB.core.resolveRoute(data, settings.rules, settings.defaults);
+				target = await resolveObsidianPath(settings, ZB.core.splitFolder(route.obsidianFolder), ZB.core.noteBasename(data, settings.filenameFormat), data);
+			}
+			if ((await noteOwner(target.path)) !== `${data.libraryPath}/${data.key}`) return out;
+			let text = await IOUtils.readUTF8(target.path);
+			let fm = ZB.core.splitFrontmatter(text).frontmatter || "";
+			out.found = true;
+			out.obsidian = target.uri;
+			out.lastSynced = ZB.core.frontmatterScalar(fm, "last_synced") || out.lastSynced;
+			let notion = /^notion:\s*"?([^"\n]+)"?\s*$/m.exec(fm);
+			if (notion) out.notion = notion[1].trim();
+			let link = fullTextLinkOf(text);
+			if (link && settings.vaultName && await IOUtils.exists(PathUtils.join(settings.vaultPath, ...link.split("/").filter(Boolean)) + ".md")) {
+				out.fullText = ZB.core.obsidianURI(settings.vaultName, link);
+			}
+		}
+		catch (e) {
+			Zotero.debug(`ZotMax: item pane could not read the literature note: ${e}`);
+		}
+		return out;
+	}
+
+	/**
+	 * Where the item's literature note is, for writes outside a sync (讀懂統計's 「存到筆記」): the same
+	 * lookup as noteLinks. Resolves to { path, relPath } when the note exists and belongs to the item,
+	 * else null. Never goes online.
+	 */
+	async function literatureNote(item) {
+		let settings = vaultSettings();
+		if (!item || !settings.vaultPath) return null;
+		let data = ZB.adapter.paneData(item);
+		let session = syncedThisSession.get(itemRef(item));
+		let target;
+		if (session && session.obsidianPath) {
+			let parts = session.obsidianPath.split("/");
+			target = obsidianTarget(settings, parts.slice(0, -1), parts[parts.length - 1].replace(/\.md$/i, ""));
+		}
+		else {
+			let route = ZB.core.resolveRoute(data, settings.rules, settings.defaults);
+			target = await resolveObsidianPath(settings, ZB.core.splitFolder(route.obsidianFolder), ZB.core.noteBasename(data, settings.filenameFormat), data,
+				{ index: obsidianIndexCache(settings) });
+		}
+		if ((await noteOwner(target.path)) !== `${data.libraryPath}/${data.key}`) return null;
+		return { path: target.path, relPath: target.relPath };
+	}
+
 	async function writeObsidian(obsidian, data, opts) {
 		await IOUtils.makeDirectory(obsidian.dir, { createAncestors: true, ignoreExisting: true });
 		let existing = (await IOUtils.exists(obsidian.path)) ? await IOUtils.readUTF8(obsidian.path) : null;
@@ -799,7 +882,18 @@
 		// Serialize runs so manual and automatic syncs never interleave
 		let p = running.then(() => runNow(items, action));
 		running = p.catch(() => {});
+		// The item pane's panel shows the new links and sync time (sidepanel.js)
+		p.then(refreshPanel, refreshPanel);
 		return p;
+	}
+
+	function refreshPanel() {
+		try {
+			if (ZB.sidepanel) ZB.sidepanel.refreshAll();
+		}
+		catch (e) {
+			Zotero.logError(e);
+		}
 	}
 
 	async function runNow(items, action) {
@@ -917,6 +1011,12 @@
 			try {
 				let result = await syncItem(item, action, settings, ctx);
 				ok++;
+				let known = syncedThisSession.get(itemRef(item)) || {};
+				syncedThisSession.set(itemRef(item), {
+					at: nowISO(),
+					obsidianPath: result.obsidianPath || known.obsidianPath || "",
+					notionUrl: result.notionUrl || known.notionUrl || "",
+				});
 				if (result.quoteCheck) {
 					for (let k of Object.keys(quotes)) quotes[k] += result.quoteCheck[k];
 				}
@@ -1467,127 +1567,11 @@
 		};
 	}
 
-	// ---------- item pane: AI note section ----------
+	// ---------- item pane: the ZotMax panel (sidepanel.js) ----------
 
-	let paneID = null;
-	let paneRefresh = new WeakMap();
-
-	// Inline styles from Zotero's own variables (no stylesheet in the item pane): they follow the light
-	// and dark themes and the font size setting. Same rhythm as the settings pane (DESIGN.md)
-	const PANE_STYLE = {
-		// The per-item tools (status, screening, search links, appraisal) above the note
-		tools: "padding-bottom: 4px; margin-bottom: 8px; border-bottom: 1px solid var(--fill-quinary);",
-		lead: "margin: 2px 0;",
-		hint: "margin: 2px 0; font-size: 0.9em; color: var(--fill-secondary);",
-		meta: "margin: 0 0 6px; font-size: 0.9em; color: var(--fill-secondary);",
-		facts: "margin: 0 0 6px; font-weight: 600;",
-		heading: "margin: 10px 0 2px; font-weight: 600;",
-		text: "margin: 2px 0;",
-		quote: "margin: 4px 0; padding-inline-start: 8px; border-inline-start: 2px solid var(--fill-quinary); color: var(--fill-secondary); font-style: italic;",
-		actions: "display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px;",
-	};
-
-	function renderPane({ doc, body, item, setSectionSummary }) {
-		body.replaceChildren();
-		let el = (tag, text, style) => {
-			let e = doc.createElement(tag);
-			if (text !== undefined) e.textContent = text;
-			if (style) e.setAttribute("style", style);
-			return e;
-		};
-		// Each row only when its feature is on (features.js). A <section>, not a <div>: the rows stay
-		// the first <div>s that hold their own content
-		let tools = el("section", undefined, PANE_STYLE.tools);
-		tools.dataset.zbPane = "tools";
-		if (featureOn("status")) ZB.status.renderPaneRow(doc, tools, item);
-		if (featureOn("screening")) ZB.screening.renderPaneRow(doc, tools, item);
-		if (featureOn("searchLinks")) ZB.searchLinks.renderPaneRow(doc, tools, item);
-		// 文獻評讀表 (appraisal-form.js)
-		if (featureOn("appraisalForm")) ZB.appraisalForm.renderPaneRow(doc, tools, item);
-		if (tools.childNodes.length) body.append(tools);
-
-		let button = (label, action) => {
-			let b = el("button", label);
-			b.addEventListener("click", () => {
-				run([item], action).then(() => {
-					let refresh = paneRefresh.get(body);
-					if (refresh) refresh();
-				}).catch(e => Zotero.logError(e));
-			});
-			return b;
-		};
-		let syncOn = featureOn("sync");
-		let aiOn = featureOn("aiNotes");
-		let note = item && item.isRegularItem() ? ZB.adapter.getAINote(item) : null;
-		let actions = el("div", undefined, PANE_STYLE.actions);
-		if (!note) {
-			if (aiOn) {
-				setSectionSummary("尚未產生");
-				body.append(
-					el("p", "這篇文獻還沒有 AI 文獻筆記。", PANE_STYLE.lead),
-					el("p", "產生時會呼叫你設定的 AI 服務（要付費），完成後同步到 Notion／Obsidian。", PANE_STYLE.hint),
-				);
-				actions.append(button("產生 AI 筆記並同步", { targets: ["notion", "obsidian"], ai: "missing" }));
-			}
-			else {
-				setSectionSummary("AI 筆記已關閉");
-				body.append(el("p", "AI 文獻筆記目前關閉，同步時只整理書目、劃線和你的筆記。要打開：設定 → ZotMax → 功能。", PANE_STYLE.hint));
-				if (syncOn) actions.append(button("同步到 Notion + Obsidian", { targets: ["notion", "obsidian"], ai: "reuse" }));
-			}
-			if (actions.childNodes.length) body.append(actions);
-			return;
-		}
-		let { md, model, at, data } = readAINote(note.getNote());
-		let summary = ZB.markdown.plainText(ZB.llm.extractSummary(md));
-		setSectionSummary(summary.slice(0, 80));
-		if (model || at) body.append(el("div", [model, at && at.slice(0, 10)].filter(Boolean).join(" · "), PANE_STYLE.meta));
-		if (data) {
-			let facts = [
-				data.study_design,
-				Number.isFinite(data.sample_size) ? `N = ${data.sample_size}` : "",
-				data.evidence_level ? `CEBM ${data.evidence_level}` : "",
-				data.jbi_level ? `JBI ${data.jbi_level}` : "",
-				data.appraisal_overall ? `評讀：${data.appraisal_overall}` : "",
-				data.country,
-			].filter(Boolean);
-			if (facts.length) body.append(el("div", facts.join(" · "), PANE_STYLE.facts));
-		}
-		for (let block of ZB.markdown.mdToOutline(md)) {
-			if (block.type === "h") {
-				body.append(el("div", block.text, PANE_STYLE.heading));
-			}
-			else if (block.type === "li") {
-				body.append(el("div", "• " + block.text, `margin: 1px 0; margin-inline-start: ${0.8 + block.level}em; text-indent: -0.8em;`));
-			}
-			else if (block.type === "quote") {
-				body.append(el("div", block.text, PANE_STYLE.quote));
-			}
-			else {
-				body.append(el("div", block.text, PANE_STYLE.text));
-			}
-		}
-		// The note stays readable with AI notes off; only the actions whose feature is off go
-		if (syncOn) actions.append(button("同步到 Notion + Obsidian", { targets: ["notion", "obsidian"], ai: "reuse" }));
-		if (aiOn) actions.append(button("重新產生", { targets: ["notion", "obsidian"], ai: "regenerate" }));
-		if (actions.childNodes.length) body.append(actions);
-	}
-
-	function registerItemPane() {
-		let icon = rootURI + "content/icons/bridge.svg";
-		paneID = Zotero.ItemPaneManager.registerSection({
-			paneID: "zotero-bridge-ai-note",
-			pluginID,
-			header: { l10nID: "zotero-bridge-pane-header", icon },
-			sidenav: { l10nID: "zotero-bridge-pane-sidenav", icon },
-			onInit: ({ body, refresh }) => {
-				paneRefresh.set(body, refresh);
-			},
-			onItemChange: ({ item, setEnabled }) => {
-				setEnabled(!!item && item.isRegularItem());
-				return true;
-			},
-			onRender: renderPane,
-		}) || null;
+	/** The panel's render hook, kept here for callers of ZB.main.renderPane (the e2e harness). */
+	function renderPane(props) {
+		return ZB.sidepanel.render(props);
 	}
 
 	// ---------- auto-sync ----------
@@ -1676,13 +1660,17 @@
 			if (names.length) Zotero.debug(`ZotMax: moved ${names.join(", ")} from prefs to the login manager`);
 		}).catch(e => Zotero.logError(e));
 		registerMenus();
-		registerItemPane();
+		// The ZotMax panel in the item pane and the reader's side pane (sidepanel.js)
+		ZB.sidepanel.init({ pluginID, rootURI, chrome: !!opts.chrome });
+		ZB.sidepanel.register();
 		registerNotifier();
 		remindInterruptedBatch();
 		// Automatic PubMed checks (off unless enabled in the settings)
 		ZB.pubmedWatch.init();
 		// Polling of AI batches submitted earlier (ai-batch.js)
 		ZB.aiBatch.init();
+		// 讀懂統計: the button in the PDF reader's text-selection popup (stats-explainer.js)
+		ZB.statsExplainer.init({ pluginID });
 	}
 
 	// A batch still marked running at startup was cut off by Zotero quitting or crashing
@@ -1698,12 +1686,13 @@
 	}
 
 	function shutdown() {
+		// First: the PDF reader's listener (Zotero can still call it while the plugin is disabled)
+		ZB.statsExplainer.shutdown();
 		// The batch loop stops before its next item; its pref already lists what is left
 		if (currentBatch) Object.assign(currentBatch, { cancelled: true, shutdown: true });
 		for (let id of menuIDs) Zotero.MenuManager.unregisterMenu(id);
 		menuIDs = [];
-		if (paneID) Zotero.ItemPaneManager.unregisterSection(paneID);
-		paneID = null;
+		ZB.sidepanel.shutdown();
 		if (notifierID) Zotero.Notifier.unregisterObserver(notifierID);
 		notifierID = null;
 		if (autoSyncTimer) clearTimeout(autoSyncTimer);
@@ -1722,6 +1711,10 @@
 		prepareFullText,
 		// for status.js
 		enqueue, notify, buildObsidianIndex, saveQuietly,
+		// for sidepanel.js
+		noteLinks, vaultSettings,
+		// for stats-explainer.js (「存到筆記」)
+		literatureNote,
 		// for the modules whose features can be switched off (features.js)
 		notifyFeatureOff,
 		// for appraisal-form.js

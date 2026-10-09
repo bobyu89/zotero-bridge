@@ -1028,6 +1028,28 @@
 		return { collection: current, label, note: "" };
 	}
 
+	/**
+	 * The 自動分類 sub-collections an item is in: collections two levels under a collection named like
+	 * the parent (classify.parentName), as [{ folder, value, id }] (研究設計 / RCT). Read-only; for the
+	 * item pane's ZotMax panel.
+	 */
+	function itemClassifications(item) {
+		let parentName = readOptions().parentName;
+		let out = [];
+		for (let c of Zotero.Collections.get(item.getCollections()) || []) {
+			if (!c || c.deleted || !c.parentID) continue;
+			let folder = Zotero.Collections.get(c.parentID);
+			let parent = folder && folder.parentID ? Zotero.Collections.get(folder.parentID) : null;
+			if (!parent || folder.deleted || parent.deleted || !sameName(parent.name, parentName)) continue;
+			out.push({ folder: folder.name, value: c.name, id: c.id });
+		}
+		let order = name => {
+			let i = DIMENSIONS.findIndex(d => d.folder === name);
+			return i < 0 ? DIMENSIONS.length : i;
+		};
+		return out.sort((a, b) => order(a.folder) - order(b.folder) || a.value.localeCompare(b.value));
+	}
+
 	function itemKeysOf(collection) {
 		try {
 			return Zotero.Items.get(collection.getChildItems(true)).filter(Boolean).map(i => i.key);
@@ -1555,6 +1577,6 @@
 		cleanName, nameKey, sameName, tokenize, parseCondition, parseRules, describeErrors, evaluate, parseTopics,
 		buildTopicPrompt, parseTopicResponse, estimateTokens, estimateTopicRun, guessDesign, designSuggestions, picoValues,
 		picoSuggestions, buildSuggestions, defaultPicks, planApply, describeCounts, renderReview,
-		readOptions, recordFor, suggest, review, apply, undoLast, readLastRun, run,
+		readOptions, recordFor, itemClassifications, suggest, review, apply, undoLast, readLastRun, run,
 	};
 });

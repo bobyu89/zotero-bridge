@@ -452,6 +452,12 @@
 			keywords: ["評讀", "評讀總表", "評讀表", "appraisal", "critical appraisal", "casp", "jbi", "品質", "quality", "kappa", "一致性", "總表", "summary"],
 			// exportCollections says 「請先在左側選取分類。」 when there is none
 			run: sel => ZB().appraisalForm.exportCollections(targetCollections(sel)) },
+		// Disabled (not hidden) until the user answered every item themselves: blocked() says why
+		{ id: "appraisal-coach", group: "appraise", l10n: "zotero-bridge-cmd-appraisal-coach", label: "評讀陪練：對照 AI",
+			features: ["appraisalCoach"], needs: "items", menus: ["item"],
+			keywords: [...KW.ai, "評讀陪練", "陪練", "對照", "評讀", "評讀表", "appraisal", "critical appraisal", "coach", "casp", "jbi", "compare", "second opinion", "練習"],
+			blocked: sel => ZB().appraisalCoach.blockedReason(firstItem(sel)),
+			run: sel => ZB().appraisalCoach.runFromCommand(sel.items) },
 
 		// ---------- AI 輔助與寫作 ----------
 		{ id: "regenerate", group: "ai", l10n: "zotero-bridge-menu-regenerate", label: "重新產生 AI 筆記並同步",
@@ -488,6 +494,11 @@
 			features: ["conceptsAI"], needs: null, menus: [],
 			keywords: [...KW.ai, "概念", "概念卡片", "concept", "綜整", "synthesis", "summary"],
 			run: () => ZB().concepts.synthesizeFromMenu() },
+		// The text selected in the PDF reader (its selection popup has the same as a button)
+		{ id: "explain-stats", group: "ai", l10n: "zotero-bridge-cmd-explain-stats", label: "解釋所選統計",
+			features: ["statsExplainer"], needs: null, menus: [],
+			keywords: [...KW.ai, "讀懂統計", "統計", "statistics", "解釋", "explain", "odds ratio", "信賴區間", "confidence interval", "p 值", "p value", "效果量", "effect size", "pdf"],
+			run: sel => ZB().statsExplainer.explainCurrentSelection(sel && sel.window) },
 		// Like the Tools entries: only while batches are pending
 		{ id: "ai-batch-check", group: "ai", l10n: "zotero-bridge-menu-ai-batch-check", label: "檢查 AI 批次進度",
 			features: [], needs: null, menus: [], tools: true,

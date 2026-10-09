@@ -435,6 +435,25 @@
 					<button label="載入內建比較表模板來修改" oncommand="ZoteroBridgePrefs.loadDefaultSynthesisPrompt()"/>
 				</hbox>
 			</vbox>
+
+			<vbox data-zb-feature="statsExplainer" class="zb-subsection">
+				<label><html:h3>讀懂統計</html:h3></label>
+				<hbox align="center">
+					<label value="AI 解釋之前先問我："/>
+					<menulist preference="extensions.zotero-bridge.statsExplainer.confirm" native="true">
+						<menupopup>
+							<menuitem label="預估費用超過門檻才問（預設）" value="above"/>
+							<menuitem label="每次都問" value="always"/>
+							<menuitem label="不用問" value="never"/>
+						</menupopup>
+					</menulist>
+				</hbox>
+				<hbox align="center">
+					<label value="門檻（美元）："/>
+					<html:input type="number" min="0" step="0.01" preference="extensions.zotero-bridge.statsExplainer.confirmAbove"/>
+				</hbox>
+				<description class="zb-hint">解釋一段選取通常是一次很短的呼叫。不問的時候，預估費用寫在 ZotMax 面板的「AI 解釋中…」旁邊；用的是下方「本月 AI 用量」的價格表。</description>
+			</vbox>
 		</groupbox>
 
 		<groupbox data-zb-section="usage" data-zb-feature="aiNotes aiBatch synthesis reviewDraft ebhcReport progressReport conceptsAI">

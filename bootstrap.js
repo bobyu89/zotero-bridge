@@ -4,7 +4,7 @@ var ZB;
 // the 快速指令 window, content/palette.xhtml)
 var chromeHandle = null;
 
-const SCRIPTS = ["apa-zh.js", "appraisal-tools.js", "core.js", "markdown.js", "notion.js", "llm.js", "synthesis.js", "verify.js", "fulltext-md.js", "scanned.js", "usage.js", "secrets.js", "zotero-adapter.js", "fulltext.js", "export.js", "annotation-images.js", "status.js", "review-draft.js", "screening.js", "pubmed-watch.js", "dashboard.js", "citation-chase.js", "search-links.js", "ebhc-report.js", "ai-batch.js", "appraisal-form.js", "progress-report.js", "concepts.js", "classify.js", "features.js", "commands.js", "menus.js", "palette.js", "toolbar.js", "main.js"];
+const SCRIPTS = ["apa-zh.js", "appraisal-tools.js", "core.js", "markdown.js", "notion.js", "llm.js", "synthesis.js", "verify.js", "fulltext-md.js", "scanned.js", "usage.js", "secrets.js", "zotero-adapter.js", "fulltext.js", "export.js", "annotation-images.js", "status.js", "review-draft.js", "screening.js", "pubmed-watch.js", "dashboard.js", "citation-chase.js", "search-links.js", "ebhc-report.js", "ai-batch.js", "appraisal-coach.js", "appraisal-form.js", "progress-report.js", "concepts.js", "classify.js", "stats-explainer.js", "features.js", "commands.js", "menus.js", "palette.js", "toolbar.js", "sidepanel.js", "main.js"];
 
 function install() {}
 
@@ -30,7 +30,8 @@ async function startup({ id, version, rootURI }) {
 	// Exposed so the preferences pane (a separate scope) can call testNotion()
 	Zotero.ZoteroBridge = ZB;
 	ZB.version = version;
-	ZB.main.init({ id, rootURI });
+	// The ZotMax panel (sidepanel.js) loads its stylesheet from chrome:// when that is registered
+	ZB.main.init({ id, rootURI, chrome: !!chromeHandle });
 	// The toolbar button (toolbar.js) loads its stylesheet from chrome:// when that is registered
 	ZB.toolbar.init({ rootURI, chrome: !!chromeHandle });
 	await Zotero.PreferencePanes.register({
@@ -49,6 +50,8 @@ async function startup({ id, version, rootURI }) {
 
 function onMainWindowLoad({ window }) {
 	window.MozXULElement.insertFTLIfNeeded("zotero-bridge.ftl");
+	// The ZotMax panel's stylesheet (item pane and the reader's side pane)
+	if (ZB && ZB.sidepanel) ZB.sidepanel.addStylesheet(window);
 	// The ZotMax button in the items toolbar
 	if (ZB && ZB.toolbar) ZB.toolbar.add(window);
 	// Ctrl+Shift+P (⇧⌘P) opens 快速指令
@@ -56,6 +59,7 @@ function onMainWindowLoad({ window }) {
 }
 
 function onMainWindowUnload({ window }) {
+	if (ZB && ZB.sidepanel) ZB.sidepanel.removeStylesheet(window);
 	if (ZB && ZB.toolbar) ZB.toolbar.remove(window);
 	if (ZB && ZB.palette) ZB.palette.detach(window);
 	window.document.querySelector('[href="zotero-bridge.ftl"]')?.remove();

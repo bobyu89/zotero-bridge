@@ -37,6 +37,23 @@
 		return tools.normalizeRecord(JSON.parse(JSON.stringify(record)));
 	}
 
+	/** 評讀陪練 (appraisal-coach.js), when loaded: its synced line and its parts of the form. */
+	function coachModule() {
+		if (scope.ZB && scope.ZB.appraisalCoach) return scope.ZB.appraisalCoach;
+		if (typeof module === "object" && module.exports) {
+			try {
+				return require("./appraisal-coach.js");
+			}
+			catch (e) {}
+		}
+		return null;
+	}
+
+	function coachLine(record) {
+		let coach = coachModule();
+		return coach ? coach.summaryLine(record) : "";
+	}
+
 	function hasContent(record) {
 		return !!record && (Object.values(record.answers || {}).some(a => a.answer || a.note) || !!record.overall);
 	}
@@ -128,6 +145,7 @@
 			parts.push(`<p>${escapeHTML(tools.describeSummary(tools.summarize(tool, record.answers)))}</p>`);
 		}
 		parts.push(`<p><strong>整體評價</strong>：${escapeHTML(overallLine(record))}</p>`);
+		if (coachLine(record)) parts.push(`<p>${escapeHTML(coachLine(record))}</p>`);
 		if (tool && record.dual) {
 			parts.push("<h2>評讀者 B</h2>", markdown.mdToHtml(tools.toMarkdownTable(tool, record.answersB, { includeNotes: false })));
 			parts.push(markdown.mdToHtml(dualLines(record, tool).join("\n\n")));
@@ -170,6 +188,7 @@
 		let parts = [`## ${SECTION_HEADING}`, callout.join("\n")];
 		if (!opts.notion) parts.push(tools.toMarkdownTable(tool, record.answers));
 		parts.push(`**整體評價**：${overallLine(record)}`);
+		if (coachLine(record)) parts.push(coachLine(record));
 		parts.push(...dualLines(record, tool));
 		return parts.join("\n\n");
 	}
@@ -604,6 +623,14 @@
 			+ (st.record.overall ? ` · ${st.record.overall}` : "");
 	}
 
+	/** The form's state in a few words (「尚未評讀」, 「已核對 · 納入」), for the panel's folded 狀態 line. */
+	function paneSummary(item) {
+		if (!item || !item.isRegularItem || !item.isRegularItem()) return "";
+		let st = stateFor(item);
+		if (!st.saved && !hasContent(st.record)) return "尚未評讀";
+		return [statusOf(st.record) === "verified" ? "已核對" : statusText(st.record), st.record.overall].filter(Boolean).join(" · ");
+	}
+
 	/** 「文獻評讀表」 row in the plugin's item pane section, expanding to the whole form. */
 	function renderPaneRow(doc, body, item) {
 		if (!item || !item.isRegularItem || !item.isRegularItem()) return;
@@ -625,6 +652,9 @@
 				draw();
 			});
 			row.append(toggle);
+			// 評讀陪練: 「對照 AI」 next to it (appraisal-coach.js)
+			let coach = coachModule();
+			if (coach && coach.renderRowButton) coach.renderRowButton(doc, row, item, st, draw);
 			wrap.append(row);
 			if (st.expanded) wrap.append(renderForm(doc, item, st, draw));
 		};
@@ -852,6 +882,9 @@
 			msg.setAttribute("data-zb-message", "");
 			panel.append(msg);
 		}
+		// 評讀陪練: 「對照 AI」 in the actions and the latest comparison (appraisal-coach.js)
+		let coach = coachModule();
+		if (coach && coach.renderFormSection) coach.renderFormSection(doc, panel, actions, item, st, redraw);
 		return panel;
 	}
 
@@ -1036,7 +1069,7 @@
 		overrideStudy, appraisalSection, replaceAppraisalSection, applyToSource,
 		summaryPaths, counts, agreement, summaryBody, summaryCSV, summaryFrontmatter, buildSummaryNote, wordDocument,
 		// Zotero
-		getFormNote, loadRecord, initialRecord, saveRecord, renderPaneRow, insertNotionTable, overrideStudyForItem,
+		getFormNote, loadRecord, initialRecord, saveRecord, stateFor, renderPaneRow, paneSummary, insertNotionTable, overrideStudyForItem,
 		exportSummary, exportCollections,
 		_paneState: paneState,
 	};

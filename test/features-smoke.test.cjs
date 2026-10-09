@@ -373,12 +373,19 @@ test("item pane: rows and actions follow the switches; the note stays readable",
 	let summary = null;
 	let render = (it = item) => env.panes[0].onRender({ doc, body, item: it, setSectionSummary: (s) => { summary = s; } });
 
+	let sub = id => body.querySelector(`[data-zb-sub="${id}"]`);
+	// The 動作 part: catalog commands run on this item, switched-off ones hidden; 快速指令… always last
+	let commands = () => [...sub("actions").querySelectorAll("button[data-zb-command]")].map(b => b.dataset.zbCommand);
+	let keyPointCommands = () => [...sub("keyPoints").querySelectorAll("button[data-zb-command]")].map(b => b.dataset.zbCommand);
+
 	render();
-	assert.ok(body.querySelector("section[data-zb-pane=tools]"), "tool rows grouped above the note");
+	assert.ok(sub("status").querySelector("section[data-zb-pane=tools]"), "tool rows grouped under 狀態");
 	assert.ok(body.querySelector("[data-zb-appraisal]"));
-	assert.match(body.textContent, /閱讀狀態：/);
-	assert.match(body.textContent, /衛教降低跌倒。/);
-	assert.deepEqual([...body.querySelectorAll("button")].map(b => b.textContent).filter(t => /同步|重新/.test(t)), ["同步到 Notion + Obsidian", "重新產生"]);
+	assert.match(sub("status").textContent, /閱讀狀態：/);
+	assert.match(sub("keyPoints").textContent, /衛教降低跌倒。/);
+	// 研究生引導: 引文追蹤 is off
+	assert.deepEqual(commands(), ["sync", "sync-no-ai", "regenerate", "classify", "search-item", "palette"]);
+	assert.ok(sub("search"), "延伸搜尋 with the search links");
 
 	F.setEnabled("appraisalForm", false);
 	F.setEnabled("status", false);
@@ -388,23 +395,31 @@ test("item pane: rows and actions follow the switches; the note stays readable",
 	render();
 	assert.equal(body.querySelector("[data-zb-appraisal]"), null);
 	assert.equal(body.querySelector("section[data-zb-pane=tools]"), null, "no empty tools block");
+	assert.equal(sub("status").hidden, true, "狀態 has nothing to show");
+	assert.equal(sub("search"), null);
 	assert.doesNotMatch(body.textContent, /閱讀狀態：/);
-	assert.match(body.textContent, /衛教降低跌倒。/, "an existing AI note is still shown");
-	assert.deepEqual([...body.querySelectorAll("button")].map(b => b.textContent), ["同步到 Notion + Obsidian"]);
+	assert.match(sub("keyPoints").textContent, /衛教降低跌倒。/, "an existing AI note is still shown");
+	assert.deepEqual(commands(), ["sync", "sync-no-ai", "classify", "palette"]);
 
 	let fresh = new env.MockItem("journalArticle", { title: "New" });
 	render(fresh);
 	assert.equal(summary, "AI 筆記已關閉");
-	assert.match(body.textContent, /AI 文獻筆記目前關閉/);
-	assert.deepEqual([...body.querySelectorAll("button")].map(b => b.textContent), ["同步到 Notion + Obsidian"]);
+	assert.match(sub("keyPoints").textContent, /AI 文獻筆記目前關閉/);
+	assert.ok(sub("keyPoints").querySelector("[data-zb-action=open-features]"), "a way to the switch");
+	assert.deepEqual(keyPointCommands(), []);
+	assert.deepEqual(commands(), ["sync", "sync-no-ai", "classify", "palette"]);
 	F.setEnabled("sync", false);
 	render(fresh);
-	assert.equal(body.querySelectorAll("button").length, 0);
+	assert.deepEqual(commands(), ["classify", "palette"]);
 	F.setEnabled("sync", true);
 	F.setEnabled("aiNotes", true);
 	render(fresh);
 	assert.equal(summary, "尚未產生");
-	assert.deepEqual([...body.querySelectorAll("button")].map(b => b.textContent), ["產生 AI 筆記並同步"]);
+	assert.match(sub("keyPoints").textContent, /這篇還沒有 AI 文獻筆記。/);
+	assert.deepEqual(keyPointCommands(), ["sync"], "「產生 AI 筆記」 is the catalog's 同步");
+	assert.equal(sub("keyPoints").querySelector("button[data-zb-command]").textContent, "產生 AI 筆記");
+	// Nothing to regenerate yet
+	assert.deepEqual(commands(), ["sync", "sync-no-ai", "classify", "palette"]);
 	assert.deepEqual(env.errors, []);
 });
 

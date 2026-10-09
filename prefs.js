@@ -112,7 +112,7 @@ pref("extensions.zotero-bridge.searchLinks.meshHelper", true);
 // an enable pref before use it instead: llm.enabled, llm.batchAPI, status.enabled, apaZh.enabled,
 // images.export. features.version: the one-time migrations done (0 = none yet; 1 turns everything on for
 // profiles that used the plugin before the switches existed; 2 gives 進階 profiles the v0.10.0 switches:
-// 全文筆記, 文獻自動分類, 工具列按鈕, AI 標重點 and AI 主題分類)
+// 全文筆記, 文獻自動分類, 工具列按鈕, AI 標重點 and AI 主題分類; 3 the v0.12.0 switches: 評讀陪練)
 pref("extensions.zotero-bridge.features.version", 0);
 pref("extensions.zotero-bridge.feature.sync", true);
 pref("extensions.zotero-bridge.feature.bibliography", true);
@@ -133,6 +133,8 @@ pref("extensions.zotero-bridge.feature.aiHighlights", false);
 pref("extensions.zotero-bridge.feature.autoClassify", true);
 pref("extensions.zotero-bridge.feature.classifyAI", false);
 pref("extensions.zotero-bridge.feature.toolbarButton", true);
+pref("extensions.zotero-bridge.feature.appraisalCoach", false);
+pref("extensions.zotero-bridge.feature.statsExplainer", false);
 // Settings pane (content/preferences.js): the tab chosen last, and a section (data-zb-section ID, e.g.
 // "notion") to open the next time the pane is on screen; the pane clears it once it has opened it
 pref("extensions.zotero-bridge.prefs.lastTab", "features");
@@ -149,3 +151,10 @@ pref("extensions.zotero-bridge.classify.pico", true);
 pref("extensions.zotero-bridge.classify.topicList", "");
 pref("extensions.zotero-bridge.classify.ruleList", "");
 pref("extensions.zotero-bridge.classify.lastRun", "");
+// The ZotMax panel in the item pane (content/sidepanel.js): which parts are open, JSON { keyPoints: true, … }
+// (empty = 重點 and 動作 open, the others closed)
+pref("extensions.zotero-bridge.pane.open", "{}");
+// 讀懂統計 (content/stats-explainer.js): when to ask before the AI call — "above" (only when the estimate
+// is over statsExplainer.confirmAbove US$; otherwise the estimate shows in the panel), "always" or "never"
+pref("extensions.zotero-bridge.statsExplainer.confirm", "above");
+pref("extensions.zotero-bridge.statsExplainer.confirmAbove", "0.05");

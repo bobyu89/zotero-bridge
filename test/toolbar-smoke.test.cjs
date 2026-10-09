@@ -341,7 +341,7 @@ test("menu: 快速指令… first, groups in workflow order with labels, setting
 	({ groups, entries } = openMenu(env));
 	assert.deepEqual(groups, ["sync", "organize", "search", "appraise", "ai"]);
 	assert.deepEqual(entries.search, ["quick-search", "search-item", "pubmed-watch", "chase-items", "chase-included", "chase-import"]);
-	assert.deepEqual(entries.ai, ["regenerate", "synthesis", "review-draft", "ebhc-report", "progress-report", "concepts-ai"]);
+	assert.deepEqual(entries.ai, ["regenerate", "synthesis", "review-draft", "ebhc-report", "progress-report", "concepts-ai", "explain-stats"]);
 	assert.deepEqual(entries.sync, GUIDED.sync, "resume, stop and discard only with a batch");
 	assert.deepEqual(entries.organize, GUIDED.organize, "undo only after a run");
 

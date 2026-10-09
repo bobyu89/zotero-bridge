@@ -90,7 +90,7 @@ function makeMainWindow(selection, opened) {
 	// The palette window: the real palette.xhtml in jsdom
 	win.openDialog = (url, name, features) => {
 		assert.equal(url, "chrome://zotero-bridge/content/palette.xhtml");
-		assert.equal(name, "zotero-bridge-palette");
+		assert.match(name, /^zotero-bridge-palette-\d+$/, "a fresh window name for each opening");
 		assert.match(features, /chrome/);
 		let d = new JSDOM(fs.readFileSync(path.join(ROOT, "content", "palette.xhtml"), "utf8"), { contentType: "application/xml" });
 		let closed = false;
@@ -482,6 +482,7 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 	same(shown(itemMenu, ctx).filter(x => !x.startsWith("#") && x !== "—"), [
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
 		"zotero-bridge-classify-tools", "zotero-bridge-search-menu ▸", "zotero-bridge-toolbar-chase-items", "zotero-bridge-toolbar-screen ▸",
+		"zotero-bridge-cmd-appraisal-coach",
 		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-menu-ebhc-report",
 	]);
 	same(shown(collMenu, cctx).filter(x => !x.startsWith("#") && x !== "—"), [
@@ -662,9 +663,12 @@ test("palette search: Chinese and English keywords, case- and width-insensitive,
 	assert.equal(top("流程圖"), "prisma");
 	assert.equal(top("flow diagram"), "prisma");
 	assert.equal(top("prsma"), "prisma", "fuzzy: a letter missing");
-	assert.equal(top("評讀"), "appraisal-summary");
-	assert.equal(top("CASP"), "appraisal-summary");
-	assert.equal(top("jbi"), "appraisal-summary");
+	same(C.search(entries, "評讀").slice(0, 2).map(e => e.id).sort(), ["appraisal-coach", "appraisal-summary"]);
+	assert.equal(top("評讀總表"), "appraisal-summary");
+	assert.equal(top("評讀陪練"), "appraisal-coach");
+	assert.equal(top("對照 AI"), "appraisal-coach");
+	same(C.search(entries, "CASP").slice(0, 2).map(e => e.id).sort(), ["appraisal-coach", "appraisal-summary"]);
+	same(C.search(entries, "jbi").slice(0, 2).map(e => e.id).sort(), ["appraisal-coach", "appraisal-summary"]);
 	assert.equal(top("obsidian sync"), "sync-obsidian", "every word must match");
 	same(C.search(entries, "引文追蹤").slice(0, 2).map(e => e.id).sort(), ["chase-included", "chase-items"]);
 	assert.equal(top("snowball"), "chase-items");

@@ -424,7 +424,9 @@ test("item pane: quick links for the item and PICO links from the AI note", asyn
 	let body = doc.getElementById("b");
 	let render = it => env.panes[0].onRender({ doc, body, item: it, setSectionSummary: () => {} });
 	render(item);
-	let rows = [...body.querySelectorAll("div")].filter(d => d.querySelector("a[data-source]"));
+	// The rows sit in the panel's 延伸搜尋 part
+	let searchRows = () => [...body.querySelectorAll('[data-zb-sub="search"] .zb-sp-body > div')].filter(d => d.querySelector("a[data-source]"));
+	let rows = searchRows();
 	assert.equal(rows.length, 2);
 	assert.match(rows[0].textContent, /^🔎 搜尋：PubMedCochrane Library/);
 	assert.deepEqual([...rows[0].querySelectorAll("a")].map(a => a.dataset.source), ["pubmed", "cochrane", "cinahl", "embase", "scholar", "europepmc", "related"]);
@@ -451,7 +453,7 @@ test("item pane: quick links for the item and PICO links from the AI note", asyn
 	let zh = paper(env, { title: "跌倒預防衛教", DOI: "", extra: "" });
 	addAINote(env, zh, { population: "住院病人", intervention: "衛教", outcomes: "跌倒發生率" });
 	render(zh);
-	let zhRows = [...body.querySelectorAll("div")].filter(d => d.querySelector("a[data-source]"));
+	let zhRows = searchRows();
 	assert.equal(zhRows[1].firstChild.textContent, "PICO（原文詞彙）：");
 	assert.deepEqual([...zhRows[1].querySelectorAll("a")].map(a => [a.dataset.source, a.getAttribute("href")]), [
 		["scholar", "https://scholar.google.com/scholar?hl=zh-TW&q=%E4%BD%8F%E9%99%A2%E7%97%85%E4%BA%BA%20AND%20%E8%A1%9B%E6%95%99%20AND%20%E8%B7%8C%E5%80%92%E7%99%BC%E7%94%9F%E7%8E%87"],
@@ -461,7 +463,7 @@ test("item pane: quick links for the item and PICO links from the AI note", asyn
 	// No AI note: links only; turned off: nothing
 	let plain = paper(env);
 	render(plain);
-	assert.equal([...body.querySelectorAll("div")].filter(d => d.querySelector("a[data-source]")).length, 1);
+	assert.equal(searchRows().length, 1);
 	assert.match(body.textContent, /還沒有 AI 文獻筆記/);
 	env.prefStore["extensions.zotero-bridge.searchLinks.paneLinks"] = false;
 	render(item);

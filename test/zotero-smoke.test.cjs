@@ -671,7 +671,7 @@ test("item pane shows the AI note; synthesis from a collection writes Obsidian, 
 	let a = new env.MockItem("journalArticle", { title: "A", year: "2024", citationKey: "chen2024", creators: [{ lastName: "Chen", creatorType: "author" }] });
 	let b = new env.MockItem("journalArticle", { title: "B", year: "2021", citationKey: "lee2021", creators: [{ lastName: "Lee", creatorType: "author" }], abstractNote: "abstract B" });
 	let aiNote = new env.MockItem("note");
-	aiNote.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 claude-opus-5-5 於 2026-10-01T00:00:00Z 產生（ZotMax）</em></p><h2>一句話摘要</h2><p>衛教降低跌倒。</p><ul><li>設計：RCT</li></ul>"
+	aiNote.noteHTML = "<h1>🤖 AI 文獻筆記</h1><p><em>由 claude-opus-5-5 於 2026-10-01T00:00:00Z 產生（ZotMax）</em></p><h2>一句話摘要</h2><p>衛教降低跌倒。</p><h2>研究設計</h2><ul><li>設計：RCT</li></ul>"
 		+ "<h2>📋 結構化資料（ZotMax）</h2><pre>{\n  \"study_design\": \"RCT\",\n  \"sample_size\": 80\n}</pre>";
 	aiNote.tags = ["zotero-bridge-ai"];
 	env.addChild(a, aiNote);
@@ -685,13 +685,24 @@ test("item pane shows the AI note; synthesis from a collection writes Obsidian, 
 	let summary;
 	env.panes[0].onRender({ doc, body, item: a, setSectionSummary: s => { summary = s; } });
 	assert.equal(summary, "衛教降低跌倒。");
-	assert.match(body.textContent, /RCT · N = 80/);
+	let keyPoints = body.querySelector('[data-zb-sub="keyPoints"]');
+	assert.equal(keyPoints.querySelector(".zb-sp-lead").textContent, "衛教降低跌倒。");
+	assert.equal(keyPoints.querySelector(".zb-sp-facts").textContent, "RCT · N = 80");
 	assert.doesNotMatch(body.textContent, /study_design/);
-	assert.match(body.textContent, /claude-opus-5-5 · 2026-10-01/);
-	assert.match(body.textContent, /• 設計：RCT/);
-	// Two actions, plus 「開啟評讀表」 on the 文獻評讀表 row (appraisal-form.js)
-	assert.equal(body.querySelectorAll("button").length, 3);
+	// The whole AI note, folded, named by model and date; its one-sentence summary only in 重點
+	let full = keyPoints.querySelector("[data-zb-full-note]");
+	assert.equal(full.querySelector("summary").textContent, "完整 AI 筆記（claude-opus-5-5 · 2026-10-01）");
+	assert.deepEqual([...full.querySelectorAll("li")].map(li => li.textContent), ["設計：RCT"]);
+	assert.doesNotMatch(full.textContent, /衛教降低跌倒/);
+	// The catalog's item commands (進階: all on) and 快速指令…; 「開啟評讀表」 on the 文獻評讀表 row (appraisal-form.js)
+	assert.deepEqual([...body.querySelectorAll('[data-zb-sub="actions"] button')].map(b => b.dataset.zbCommand),
+		["sync", "sync-no-ai", "regenerate", "classify", "search-item", "chase-items", "appraisal-coach", "palette"]);
+	assert.ok(body.querySelector('[data-zb-appraisal] [data-zb-action="toggle"]'));
 	assert.match(body.textContent, /文獻評讀表：尚未評讀/);
+	// The literature note in the vault: its link appears once the note has been read
+	for (let i = 0; i < 100 && !body.querySelector("[data-zb-link=obsidian]"); i++) await new Promise(r => setTimeout(r, 10));
+	assert.ok(body.querySelector("[data-zb-link=obsidian]"), "在 Obsidian 開啟筆記");
+	assert.equal(body.querySelector("[data-zb-links]").hidden, false);
 	// An AI note saved by Zotero Bridge (≤ 0.10): read exactly like a current one
 	let oldHTML = aiNote.noteHTML.split("ZotMax").join("Zotero Bridge");
 	assert.match(oldHTML, /產生（Zotero Bridge）<\/em>[\s\S]*📋 結構化資料（Zotero Bridge）/);
@@ -702,7 +713,7 @@ test("item pane shows the AI note; synthesis from a collection writes Obsidian, 
 	assert.doesNotMatch(fromOld.md, /Zotero Bridge|結構化資料/);
 	env.panes[0].onRender({ doc, body, item: b, setSectionSummary: s => { summary = s; } });
 	assert.equal(summary, "尚未產生");
-	assert.match(body.textContent, /還沒有 AI 文獻筆記/);
+	assert.match(body.querySelector('[data-zb-sub="keyPoints"]').textContent, /這篇還沒有 AI 文獻筆記。/);
 
 	// Synthesis from the collection menu
 	let collection = { id: 7, name: "碩論", libraryID: 1, getChildItems: () => [a, b] };

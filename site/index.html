@@ -312,6 +312,8 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
             <tr><th scope="row">AI 主題分類<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">自動分類時由 AI 判斷文獻屬於你列的哪些主題，結果仍由你勾選。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
             <tr><th scope="row">批次 API<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">一次產生大量 AI 筆記時用批次 API，約半價、最長等 24 小時。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
             <tr><th scope="row">AI 標重點<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">寫 AI 筆記時順便挑幾句關鍵原句，核對後標在全文筆記裡，僅供參考。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
+            <tr><th scope="row">評讀陪練<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">自己答完評讀表後，請 AI 只看原文作答，列出跟你不同的題目；改不改由你決定。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
+            <tr><th scope="row">讀懂統計<span class="tags"><span class="tagx cost">AI・花費</span></span><span class="what">在 PDF 選一段文字，AI 用白話解釋裡面的統計和要注意的地方，每個數字都和原文核對。</span></th><td class="st"><span class="sw"><i></i><b>關</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
             <tr class="rest"><th scope="row">其他功能<span class="what">同步、全文筆記、閱讀狀態、評讀表、PRISMA 篩選、資料庫搜尋連結、文獻自動分類（研究設計、規則、PICO）、工具列按鈕等，兩種組合一樣。</span></th><td class="st"><span class="sw on"><i></i><b>開</b></span></td><td class="st"><span class="sw on"><i></i><b>開</b></span></td></tr>
           </tbody>
         </table>
@@ -402,7 +404,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
           <li><span>清單裡出現 <b>ZotMax</b> 就安裝完成。之後有新版本，Zotero 會自動更新。</span></li>
         </ol>
         <div class="note info"><p>Zotero 介面如果是中文，選單位置相同，只是名稱換成中文。</p></div>
-        <div class="note tip"><p><strong>功能組合：</strong>第一次打開設定頁，組合是「研究生引導」：自動找文獻（PubMed 追蹤、引文追蹤）、AI 寫作（文獻比較表、草稿、概念卡片 AI 綜整、AI 主題分類、批次 API、AI 標重點）和進度報告先關著，其他照常可用。需要時再逐一打開，或直接選「進階」全部打開。</p></div>
+        <div class="note tip"><p><strong>功能組合：</strong>第一次打開設定頁，組合是「研究生引導」：自動找文獻（PubMed 追蹤、引文追蹤）、AI 寫作（文獻比較表、草稿、概念卡片 AI 綜整、AI 主題分類、批次 API、AI 標重點）、評讀陪練、讀懂統計和進度報告先關著，其他照常可用。需要時再逐一打開，或直接選「進階」全部打開。</p></div>
         <div class="check">
           <h3>打勾確認</h3>
           <label><input type="checkbox" id="c2a"><span class="box"></span><span>外掛清單裡看得到 <b>ZotMax</b>，而且是啟用狀態。</span></label>
@@ -537,7 +539,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
               <li class="only-obsidian">Obsidian 的 <code>Zotero/</code> 資料夾多了一篇筆記，劃線以彩色 highlight 呈現。</li>
             </ul></span></li>
           <li class="only-ai"><span>再按右鍵 › <kbd>ZotMax</kbd> › <kbd>同步到 Notion + Obsidian（沒有 AI 筆記才產生）</kbd>，等 AI 寫好筆記（約半分鐘到兩分鐘）。</span></li>
-          <li class="only-ai"><span>點選這篇文獻，Zotero 右側面板會出現 <b>「AI 文獻筆記」</b> 區塊，顯示一句話摘要與重點。</span></li>
+          <li class="only-ai"><span>點選這篇文獻，Zotero 右側面板的 <b>ZotMax</b> 區塊（右緣直排圖示裡的橋形圖示）會顯示一句話摘要與主要發現。</span></li>
           <li><span>不想每次按右鍵：文獻清單上方的工具列、<kbd>新增筆記</kbd> 右邊有一個 <b>ZotMax</b> 按鈕（橋形圖示）。選好文獻後按它，「同步」那一組有一樣的選項。</span></li>
         </ol>
         <details class="more trouble">
@@ -562,7 +564,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
         <div class="check">
           <h3>打勾確認</h3>
           <label><input type="checkbox" id="c7a"><span class="box"></span><span>第一次同步成功（進度視窗顯示完成）。</span></label>
-          <label class="only-ai"><input type="checkbox" id="c7b"><span class="box"></span><span>AI 文獻筆記已產生，Zotero 右側看得到。</span></label>
+          <label class="only-ai"><input type="checkbox" id="c7b"><span class="box"></span><span>AI 文獻筆記已產生，Zotero 右側的 ZotMax 面板看得到。</span></label>
         </div>
       </section>
 
@@ -588,6 +590,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
 
         <h3>進階功能</h3>
         <ol class="how">
+          <li><span><b>側邊面板：</b>選一篇文獻，或在 PDF 閱讀器裡，按右緣的橋形圖示打開 <b>ZotMax</b> 面板：重點、你的劃線、閱讀狀態與評讀都在這裡，下面的按鈕直接同步這一篇。</span></li>
           <li><span><b>自動同步：</b>在設定頁的「自動同步」區塊勾選後，條目、劃線或筆記一變更就自動同步（不會自動呼叫 AI）。</span></li>
           <li class="only-obsidian"><span><b>閱讀進度看板：</b>打開 <code>Zotero/Zotero 文獻庫.base</code>，在「閱讀進度」看板拖曳卡片，就能更新待讀／閱讀中／已讀／已引用。</span></li>
           <li><span><b>研究大腦（選用）：</b>用 Claude Code 或 Codex 讀你的文獻筆記，幫你比對文獻、找研究缺口。請看 <a href="https://github.com/bobyu89/zotero-bridge/tree/main/research-brain" target="_blank" rel="noopener">研究大腦說明</a>。</span></li>
