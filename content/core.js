@@ -559,20 +559,35 @@
 	 *   target: "obsidian" | "notion", fullTextNote (Notion: a full-text child page exists) }
 	 * @returns {{ keyPoints, sections: [{ id, type, title, md, color }] }} Markdown without callout markup
 	 */
-	function buildNoteSections(data, opts = {}) {
-		let notion = opts.target === "notion";
+	/**
+	 * The parts of 「重點」 as data, shared by the literature note (buildNoteSections) and the item
+	 * pane's ZotMax panel (sidepanel.js), so both say the same thing.
+	 * @param {object} data item data (attachments with annotations)
+	 * @param {object} opts { aiMarkdown, study, appraisal ({ verified, tool, overall }), colorMeanings }
+	 * @returns {{ ai, groups, sentence, facts, findings, top }}
+	 */
+	function keyPoints(data, opts = {}) {
 		let groups = annotationGroups(data, opts.colorMeanings);
 		let ai = opts.aiMarkdown ? String(opts.aiMarkdown).trim() : "";
+		return {
+			ai,
+			groups,
+			sentence: oneSentence(ai),
+			facts: factsLine(opts.study, opts.appraisal),
+			findings: keyFindings(ai),
+			top: topHighlights(groups),
+		};
+	}
+
+	function buildNoteSections(data, opts = {}) {
+		let notion = opts.target === "notion";
+		let { ai, groups, sentence, facts, findings, top } = keyPoints(data, opts);
 
 		// 「重點」: what you need in a ten-second glance
 		let kp = [];
-		let sentence = oneSentence(ai);
 		if (sentence) kp.push(`**一句話**：${sentence}`);
-		let facts = factsLine(opts.study, opts.appraisal);
 		if (facts) kp.push(facts);
-		let findings = keyFindings(ai);
 		if (findings.length) kp.push("**主要發現**\n" + findings.map(f => `- ${f}`).join("\n"));
-		let top = topHighlights(groups);
 		if (top.length) {
 			kp.push("**我的劃線**\n" + top.map(({ att, ann, group }) => {
 				let text = shorten(ann.text, 140);
@@ -821,7 +836,7 @@
 		noteBasename, splitFolder, demoteHeadings, zoteroSelectURI, annotationURI, obsidianURI, tagToObsidian,
 		yamlScalar, splitFrontmatter, parseFrontmatterBlocks, buildFrontmatter, managedFrontmatter, studyFrontmatter, appraisalFrontmatter,
 		annotationsMarkdown, buildManagedSection, buildObsidianNote, buildNoteSections, callout,
-		DEFAULT_COLOR_MEANINGS, colorMeanings, annotationGroups, topHighlights, oneSentence, keyFindings, aiNoteBody, factsLine,
+		DEFAULT_COLOR_MEANINGS, colorMeanings, annotationGroups, topHighlights, keyPoints, shorten, oneLine, oneSentence, keyFindings, aiNoteBody, factsLine,
 		resolveRoute, parseRules, truncate, buildBaseFile, STATUSES, DELETED_STATUS,
 		frontmatterScalar, setFrontmatterValue, zoteroKeyFromHead, markObsidianNoteDeleted,
 	};

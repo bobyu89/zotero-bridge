@@ -149,3 +149,6 @@ pref("extensions.zotero-bridge.classify.pico", true);
 pref("extensions.zotero-bridge.classify.topicList", "");
 pref("extensions.zotero-bridge.classify.ruleList", "");
 pref("extensions.zotero-bridge.classify.lastRun", "");
+// The ZotMax panel in the item pane (content/sidepanel.js): which parts are open, JSON { keyPoints: true, … }
+// (empty = 重點 and 動作 open, the others closed)
+pref("extensions.zotero-bridge.pane.open", "{}");

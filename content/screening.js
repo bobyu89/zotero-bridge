@@ -931,6 +931,12 @@
 		body.append(row);
 	}
 
+	/** The item's screening decisions in a few words ("" when undecided), for the panel's folded 狀態 line. */
+	function paneSummary(item) {
+		if (!item || !item.isRegularItem()) return "";
+		return describeState(readState(item.getTags().map(t => t.tag), config()));
+	}
+
 	// ---------- deduplication ----------
 
 	function describeGroup(group) {
@@ -1220,6 +1226,6 @@
 		normalizeDOI, normalizeTitle, yearOf, findDuplicates,
 		computePrisma, checkCounts, buildMermaid, countsTable, issuesMarkdown, evidenceRow, sortRows, evidenceTable,
 		csvCell, buildCSV, buildReviewSection, frontmatterFor, buildReviewNote, notionBlocks,
-		config, itemRecord, setDecision, renderPaneRow, dedupCollection, generateReport,
+		config, itemRecord, setDecision, renderPaneRow, paneSummary, dedupCollection, generateReport,
 	};
 });

@@ -347,7 +347,7 @@ const TESTS = [
 				fulltextMd: ["toMarkdown", "trimForAI", "markHighlights", "buildFullTextNote", "notionChunks"],
 				usage: ["recordUsage"],
 				secrets: ["get", "set", "clear", "migrateFromPrefs", "createStore", "geckoBackend"],
-				adapter: ["extractItemData", "saveAINote", "getAINote", "toRegularItems"],
+				adapter: ["extractItemData", "paneData", "saveAINote", "getAINote", "toRegularItems"],
 				fulltext: ["prepare", "render", "verifyAIHighlights", "writeObsidian", "writeNotion", "runMarkitdown"],
 				bibliography: ["exportLibrary", "exportCollections", "citekeyFor", "afterSync"],
 				images: ["collect"],
@@ -369,7 +369,8 @@ const TESTS = [
 				menus: ["register", "buildEntries", "toolsEntries"],
 				palette: ["open", "close", "render", "localize", "attach", "detach", "shutdown", "shortcutLabel"],
 				toolbar: ["init", "add", "remove", "shutdown", "update"],
-				main: ["init", "shutdown", "run", "readSettings", "renderPane", "saveQuietly", "renameNotionColumns", "notionClient", "prepareFullText", "batchStatus"],
+				sidepanel: ["init", "register", "render", "refreshAll", "addStylesheet", "removeStylesheet", "shutdown", "targetItem"],
+				main: ["init", "shutdown", "run", "readSettings", "renderPane", "noteLinks", "saveQuietly", "renameNotionColumns", "notionClient", "prepareFullText", "batchStatus"],
 			};
 			let missing = [];
 			for (let [mod, fns] of Object.entries(MODULES)) {
@@ -1149,15 +1150,96 @@ const TESTS = [
 			check(body.textContent.includes("E2E stubbed summary sentence."), `renderPane() output lacks the AI note: ${body.textContent.slice(0, 200)}`);
 			check(summary && summary.includes("E2E stubbed summary"), `setSectionSummary got ${JSON.stringify(summary)}`);
 			check(body.querySelectorAll("button").length >= 2, "renderPane() made no action buttons");
+			// The panel's stylesheet is in the main window (sidepanel.css)
+			check(doc.getElementById("zotero-bridge-sidepanel-css"), "no #zotero-bridge-sidepanel-css in the main window");
 			// The real item pane: select the item and wait for the section to render
 			await win.ZoteroPane.selectItem(ctx.english.id);
 			let section = await waitFor(() => [...doc.querySelectorAll("item-pane-custom-section")].find(e => e.dataset.pane === ctx.paneKey),
 				`<item-pane-custom-section data-pane="${ctx.paneKey}"> in the item pane`, 20000);
+			// The ZotMax icon in the item pane's side navigation
 			let details = section.closest("item-details");
+			let sidenav = (details && details.querySelector("item-pane-sidenav")) || doc.querySelector("#zotero-item-pane item-pane-sidenav");
+			d.sidenavPanes = sidenav ? [...sidenav.querySelectorAll("[data-pane]")].map(e => String(e.dataset.pane)) : null;
+			check(sidenav && sidenav.querySelector(`[data-pane="${ctx.paneKey}"]`), `no ZotMax button in the item pane's side navigation (panes: ${JSON.stringify(d.sidenavPanes)})`);
 			if (details && details.scrollToPane) details.scrollToPane(ctx.paneKey, "instant");
 			await waitFor(() => section.textContent.includes("E2E stubbed summary sentence."),
 				"the plugin's item pane section to render the AI note", 20000);
 			d.sectionText = section.textContent.replace(/\s+/g, " ").slice(0, 200);
+			let part = id => section.querySelector(`[data-zb-sub="${id}"]`);
+			check(part("keyPoints") && part("keyPoints").textContent.includes("E2E stubbed summary sentence."), "重點 does not show the take-away");
+			check(part("actions"), "no 動作 part");
+			d.commands = [...part("actions").querySelectorAll("button[data-zb-command]")].map(b => String(b.dataset.zbCommand));
+			check(d.commands.includes("sync-no-ai") && d.commands.includes("palette"), `動作 commands ${JSON.stringify(d.commands)}`);
+			// The red highlight of the sync test, under 我的劃線
+			d.highlights = String(part("highlights") && part("highlights").dataset.zbCount);
+			eq(d.highlights, "1", "highlights counted in 我的劃線");
+			// The literature note the earlier sync wrote: its link, once read
+			await waitFor(() => section.querySelector("[data-zb-link=obsidian]"), "在 Obsidian 開啟筆記 in 重點", 20000);
+			// A button runs its catalog command on this item: 同步，不呼叫 AI (Obsidian only, no Notion configured)
+			let before = (await findNote(ctx.noteDir, ctx.english.key)).text;
+			let beforeSynced = fmValue(frontmatter(before), "last_synced");
+			await delay(1100);
+			part("actions").querySelector("button[data-zb-command=sync-no-ai]").click();
+			// Runs are queued: an empty run resolves after it
+			await delay(200);
+			await zb().main.run([], {});
+			let after = (await findNote(ctx.noteDir, ctx.english.key)).text;
+			d.lastSynced = { before: String(beforeSynced), after: String(fmValue(frontmatter(after), "last_synced")) };
+			check(d.lastSynced.after && d.lastSynced.after !== d.lastSynced.before, `the click did not sync the item (last_synced ${JSON.stringify(d.lastSynced)})`);
+			// …and the panel refreshed with the sync time
+			let fresh = () => [...doc.querySelectorAll("item-pane-custom-section")].find(e => e.dataset.pane === ctx.paneKey);
+			await waitFor(() => {
+				let line = fresh() && fresh().querySelector("[data-zb-synced]");
+				return line && !line.hidden;
+			}, "the last sync time under 狀態", 20000);
+		},
+	},
+	{
+		name: "the ZotMax panel is in the reader's side pane next to the PDF",
+		needs: ["item pane section renders (renderPane in the main window and the real item pane)"],
+		timeout: 90000,
+		async fn(d) {
+			let win = mainWindow();
+			let doc = win.document;
+			let reader = await Zotero.Reader.open(ctx.textPDF.id);
+			check(reader, "Zotero.Reader.open returned nothing");
+			let tabID = reader.tabID;
+			d.tabID = String(tabID);
+			try {
+				await waitFor(() => win.Zotero_Tabs && win.Zotero_Tabs.selectedID === tabID, "the reader tab to be selected", 30000);
+				let pane = doc.getElementById("zotero-context-pane");
+				check(pane, "no #zotero-context-pane in the main window");
+				// A collapsed side pane is opened, as the user would
+				try {
+					let splitter = doc.getElementById("zotero-context-splitter");
+					d.collapsed = !!(splitter && splitter.getAttribute("state") === "collapsed");
+					if (d.collapsed && win.ZoteroContextPane && win.ZoteroContextPane.togglePane) win.ZoteroContextPane.togglePane();
+				}
+				catch (e) {
+					d.toggleError = String(e);
+				}
+				let section = await waitFor(() => [...pane.querySelectorAll("item-pane-custom-section")].find(e => e.dataset.pane === ctx.paneKey),
+					`<item-pane-custom-section data-pane="${ctx.paneKey}"> in the reader's side pane`, 30000);
+				let sidenavs = [...pane.querySelectorAll("item-pane-sidenav")];
+				d.sidenavPanes = sidenavs.map(n => [...n.querySelectorAll("[data-pane]")].map(e => String(e.dataset.pane)));
+				check(sidenavs.some(n => n.querySelector(`[data-pane="${ctx.paneKey}"]`)), `no ZotMax button in the reader's side navigation (${JSON.stringify(d.sidenavPanes)})`);
+				let details = section.closest("item-details");
+				if (details && details.scrollToPane) details.scrollToPane(ctx.paneKey, "instant");
+				// The PDF's parent item: its AI note
+				await waitFor(() => {
+					let kp = section.querySelector('[data-zb-sub="keyPoints"]');
+					return kp && kp.textContent.includes("E2E stubbed summary sentence.");
+				}, "the panel to show the parent item's 重點 in the reader", 30000);
+				d.sectionText = section.textContent.replace(/\s+/g, " ").slice(0, 200);
+			}
+			finally {
+				try {
+					win.Zotero_Tabs.close(tabID);
+				}
+				catch (e) {
+					d.closeError = String(e);
+				}
+			}
 		},
 	},
 	{
@@ -1723,6 +1805,7 @@ const TESTS = [
 			check(!mainWindow().document.getElementById("zotero-bridge-tb-button"), "toolbar button still in the main window after shutdown");
 			check(!mainWindow().document.getElementById("zotero-bridge-tb-popup"), "toolbar menu still in the main window after shutdown");
 			check(!mainWindow().document.getElementById("zotero-bridge-toolbar-css"), "toolbar stylesheet still in the main window after shutdown");
+			check(!mainWindow().document.getElementById("zotero-bridge-sidepanel-css"), "ZotMax panel stylesheet still in the main window after shutdown");
 			await waitFor(() => palette.closed, "the 快速指令 window to close at shutdown", 10000);
 			// The shortcut went with it: Ctrl/Cmd+Shift+P opens nothing
 			let win = mainWindow();
@@ -1749,6 +1832,7 @@ const TESTS = [
 			await waitFor(() => mainWindow().document.getElementById("zotero-bridge-tb-button"), "toolbar button back in the main window", 10000);
 			eq(mainWindow().document.querySelectorAll("#zotero-bridge-tb-button").length, 1, "toolbar buttons after the cycle");
 			eq(mainWindow().document.querySelectorAll("#zotero-bridge-toolbar-css").length, 1, "toolbar stylesheets after the cycle");
+			eq(mainWindow().document.querySelectorAll("#zotero-bridge-sidepanel-css").length, 1, "ZotMax panel stylesheets after the cycle");
 			d.menus = menus;
 		},
 		// disable() and enable() each rebuild Zotero's plugin l10n source (see the startup test)

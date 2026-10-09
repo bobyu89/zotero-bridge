@@ -1,6 +1,6 @@
 ---
 name: ZotMax
-description: Zotero 10 外掛的設定頁、項目窗格與工具列按鈕：在 Zotero 自己的視窗裡，像學長姐的提點一樣安靜、清楚。
+description: Zotero 10 外掛的設定頁、項目窗格的 ZotMax 面板與工具列按鈕：在 Zotero 自己的視窗裡，像學長姐的提點一樣安靜、清楚。
 colors:
   # The plugin defines no colors of its own: every value is one of Zotero's theme variables, so light
   # and dark themes come for free. Hex values are Zotero's light theme, for reference only.
@@ -95,6 +95,21 @@ components:
     backgroundColor: "{colors.tint}"
     textColor: "{colors.text}"
     rounded: "{rounded.md}"
+  panel-part-summary:
+    # a native <details> summary in the ZotMax panel; the peek next to it is {typography.hint} in text-muted
+    textColor: "{colors.text}"
+    fontWeight: 600
+  panel-annotation:
+    textColor: "{colors.text}"
+    rounded: "{rounded.sm}"
+    padding: "0.125em 0.25em"
+  panel-annotation-hover:
+    backgroundColor: "{colors.tint}"
+    rounded: "{rounded.sm}"
+  panel-chip:
+    textColor: "{colors.text-muted}"
+    rounded: "{rounded.sm}"
+    padding: "0 0.45em"
 ---
 
 # Design System: ZotMax
@@ -113,7 +128,7 @@ The surface is **Operate** mode. A nursing graduate student opens settings to ge
 - Settings by workflow: a search box, then six tabs in research order (功能 · 同步 · 整理 · 找文獻 · 篩選與評讀 · AI); every section has a stable ID other code can open.
 - Progressive disclosure twice over: sections of a switched-off feature disappear, and expert options sit behind a closed `<details>`.
 - Standard controls only: native checkboxes, radios, buttons, XUL menulists. No custom switches, no modals; the plugin's own windows are the 文獻自動分類 review and 快速指令, both opened on request.
-- One command catalog: the toolbar menu, the right-click menus and 快速指令 show the same commands, in the same groups, with the same words.
+- One command catalog: the toolbar menu, the right-click menus and 快速指令 show the same commands, in the same groups, with the same words; the ZotMax panel's 動作 runs a few of the same commands for one item.
 - Traditional Chinese copy; method terms (PICO, MeSH, CASP, JBI, PRISMA) stay in English.
 
 ## Colors
@@ -164,7 +179,7 @@ A restrained, borrowed palette: neutral fills from Zotero, its accent for select
 
 Single column, the width of Zotero's settings content area. The 功能 block, the search box and its status lines cap their text and rows at 46em so lines stay readable on wide windows. Spacing runs on a 0.25em step scale (0.25, 0.5, 0.75, 1, 1.5em): tight inside a row (0.25–0.5em), 0.5em between rows with a hairline, 1.5em above each feature group. Preset options sit side by side on wide panes and stack when narrower than about 32em (CSS grid `auto-fit, minmax(16em, 1fr)`).
 
-In the item pane (no stylesheet available), the same rhythm is applied inline: the per-item tool rows (each with its own 2px/6px margins) sit in one block with a hairline below, then the AI note; actions sit in a wrapping row with a 6px gap.
+In the item pane, the ZotMax panel has its own stylesheet (`sidepanel.css`, added to every main window and removed at shutdown) on the same 0.25em scale: 0.5em between the parts with a hairline, 0.5em inside a part, 0.25em inside a group. The rows other modules draw into it (status, screening, 文獻評讀表, search links) keep their small inline 2px/6px rhythm.
 
 ### Settings pane structure
 
@@ -264,7 +279,7 @@ The mouse way into every command, next to the items it acts on. It is a guest in
 ### Command catalog (`content/commands.js`)
 The single list of everything the plugin can be asked to do; every surface is generated from it, so a command reads and acts the same wherever it is found.
 - **Entry:** id, l10n ID and its zh-TW label (identical to the FTL), workflow group, the feature switches that show it (any of them), what it acts on (selected items, the selected collection, either, or nothing), the right-click surfaces it belongs to, an extra live condition (a batch to resume, a run to undo), Chinese and English search keywords, and the function it runs, or variants (decisions, databases, exclusion reasons).
-- **Surfaces:** the toolbar menu and 快速指令 offer every command; the item menu the ones that act on items; the collection menu the ones that act on a collection; the Tools menu only 「ZotMax 設定…」, 「ZotMax 快速指令…」 and the batch entries while they apply.
+- **Surfaces:** the toolbar menu and 快速指令 offer every command; the ZotMax panel's 動作 a fixed few item commands (with short labels of their own); the item menu the ones that act on items; the collection menu the ones that act on a collection; the Tools menu only 「ZotMax 設定…」, 「ZotMax 快速指令…」 and the batch entries while they apply.
 - **Settings destinations:** the sections of the settings pane by their stable IDs (`features, sync, obsidian, notion, routing, autosync, status, apaZh, bibliography, concepts, fulltext, colors, classify, searchLinks, ncbi, pubmedWatch, citationChase, screening, ai, usage`), opened through `prefs.pendingSection`, which the pane reads.
 
 ### Right-click menus (`content/menus.js`)
@@ -282,10 +297,19 @@ The keyboard way to everything, and the way to find a feature by name. A non-mod
 - **Bottom** (sidepane material, Hairline above): a `role="status"` line (result count, 「沒有符合「…」的指令。…」, why a choice can't run) and the keys in Pencil: 「上下鍵選擇 · Enter 執行 · Esc 關閉」 and the shortcut.
 - **Keys:** ArrowUp/ArrowDown move (wrapping), PageUp/PageDown by five, Enter chooses, Esc closes. Choosing closes the palette first; the command then runs on the main window's selection at that moment.
 
-### Item pane section
-- **Tools block:** status, screening, search links and appraisal rows, each only when its feature is on, inside a `<section>` with a Hairline below.
-- **Note:** model and date in Pencil at 0.9em, study facts in 600, headings 600 with more space above (10px) than below (2px), quotes with a 2px Hairline at the inline start.
-- **Empty and off states:** 「這篇文獻還沒有 AI 文獻筆記。」 plus a Hint on cost; with AI notes off, one Hint saying where to turn it on.
+### ZotMax panel (`content/sidepanel.js`, `sidepanel.css`)
+The paper at a glance, next to it: one section of Zotero's item pane, so it sits beside the selected item in the library and beside the PDF in the reader's side pane (ItemPaneManager sections appear in both; for an attachment or a note it shows the parent item, a standalone PDF has none). It is the literature note's 「重點」 brought back into Zotero, plus the item's state and its commands. Always available, not a feature switch: Zotero's own header collapses it and remembers that (`extensions.zotero.panes.<pane>.open`; the pane ID `zotero-bridge-ai-note` is kept from the earlier 「AI 文獻筆記」 section so that state survives).
+- **Entry:** Zotero's side navigation gets the plugin's icon (`bridge.svg`, `context-fill`; zero-specificity `:where()` rules give it Pencil only where Zotero doesn't colour it), the header says 「ZotMax」 (the product name in every language) and carries one section button, 「⋯」 (`more.svg`): a native menu with 「快速指令…」 and 「ZotMax 設定…」, the catalog's own entries.
+- **Parts, in order:** five native `<details>` (summary: the name in Label weight, the native disclosure marker in Pencil; while closed a Pencil 0.92em peek on the same line, cut with an ellipsis). 重點 and 動作 start open; what the user opens or closes is remembered for all items (`extensions.zotero-bridge.pane.open`, JSON). A part with nothing to show is left out (延伸搜尋) or hidden (狀態).
+  1. **重點** — the note's 「重點」 as data (`core.keyPoints`, the same function `buildNoteSections` uses, so the panel never says something the note doesn't): the one-sentence take-away (Body), the facts line `design · N = … · CEBM … · JBI … · 評讀：…（已核對／待核對／AI 初評）` (600), 「主要發現」 (Label) with 2–3 bullets. Then the links line (as in the note's 重點): 「在 Obsidian 開啟筆記」「開啟全文筆記」「在 Notion 開啟」, each only when it exists, read from the literature note's frontmatter. Last, the whole AI note folded in a `.zb-sp-more` `<details>` named 「完整 AI 筆記（model · date）」: headings 600 with space above, bullets, quotes with a 2px Hairline at the inline start; the take-away is not repeated. Peek: the take-away.
+  2. **我的劃線** — one group per colour meaning, in the meanings' order (`core.annotationGroups`): a 0.75em swatch of the colour itself (ringed in Hairline, `forced-color-adjust: none`), the meaning (600), the count (Pencil); then the first three annotations as quiet full-width rows (quote shortened to 120 characters, or the kind in Pencil — 圖片註記, 手繪註記, 便利貼 — with its comment; the page in Pencil at the end). A row opens the PDF at that annotation (`Zotero.Reader.open(id, { annotationID })`); Wash on hover, Accent focus ring. 「全部顯示（n 則）」/「只顯示前幾則」 as a text button under a longer group. Peek: 「n 則」.
+  3. **狀態** — the modules' rows as they are (reading status picker, screening with its title/abstract buttons, 文獻評讀表 with 開啟評讀表), each only when its feature is on; the 自動分類 sub-collections the item is in as read-only chips (marker-tag style, 「研究設計：RCT」); 「上次同步：2026-10-01 16:00」 (or 「還沒有同步到 Obsidian。」) in Pencil. Peek: 「已讀 · 標題摘要：納入 · 已核對 · 納入」.
+  4. **動作** — native buttons in a wrapping row (0.5em gap), generated from the command catalog: 同步, 同步，不呼叫 AI, 重新產生 AI 筆記 (only once there is a note), 自動分類…, 搜尋資料庫… (its variants as a native menu under the button), 引文追蹤, then 快速指令…. Short labels with the catalog's full wording as the tooltip. They run with [this item] as the selection, like the item's right-click menu. Switched-off commands are hidden, as in the toolbar menu and the right-click menus (the palette is the one place that lists them, because it is where features are found by name); a running command disables its button (`aria-busy`) until it finishes, then the panel refreshes.
+  5. **延伸搜尋** — the search links row and the PICO row of search-links.js.
+- **Empty states:** no AI note — 「這篇還沒有 AI 文獻筆記。」 + a Hint on cost + 「產生 AI 筆記」 (the catalog's 同步, which generates a missing note); AI notes switched off — one Hint 「…要打開：設定 → 功能。」 with 「打開設定」; no highlights — one Hint on what will appear, 「顏色的意義」 (to the colour settings) and 「開啟 PDF」.
+- **Live:** one Notifier observer (items, item tags, collection membership, collections) refreshes the panels whose item, notes, attachments or annotations changed, debounced 250 ms; pref observers on every feature switch and the settings it shows; every sync run refreshes all panels. A refresh waits while focus is in a field of the panel (the 文獻評讀表), and happens when focus leaves it.
+- **Multi-select:** Zotero shows its own multi-item view without item pane sections; the panel has nothing to do there.
+- **Keyboard:** summaries, rows and buttons are native and in the Tab order; focus rings are 2px Accent. The swatch is decoration (`aria-hidden`); meanings and counts are words.
 
 ## Literature note (Obsidian and Notion)
 
@@ -338,5 +362,5 @@ The managed container keeps the same order: 重點 as open blocks at its top, ea
 - **Don't** load fonts, images or scripts from outside the plugin.
 - **Don't** use shadows, gradients, or colored side stripes.
 - **Don't** invent controls: no custom toggle switches, no modals for settings, no restyled toolbar buttons (the toolbar button uses Zotero's own class and states).
-- **Don't** use emoji as icons in new UI; existing item-pane rows keep theirs.
+- **Don't** use emoji as icons in new UI; existing item-pane rows keep theirs (the search row's 🔎).
 - **Don't** describe AI features as finding literature or writing for the user without saying the draft must be checked.

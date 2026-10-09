@@ -374,6 +374,13 @@
 		body.append(row);
 	}
 
+	/** The item's reading status in Zotero ("" when none or the feature is off), for the panel's folded 狀態 line. */
+	function paneSummary(item) {
+		let cfg = config();
+		if (!cfg.enabled || !item || !item.isRegularItem()) return "";
+		return zoteroStatus(item.getTags().map(t => t.tag), cfg);
+	}
+
 	// ---------- 同步閱讀狀態 (toolbar, 快速指令) ----------
 
 	/** Status-only pass over every synced item: no AI, no page or note rewrites beyond the status. */
@@ -593,6 +600,6 @@
 		DEFAULT_PREFIX, SIDES, AUTO_SYNC_PRIORITY, TAG_EMOJI,
 		cleanStatus, tagFor, tagStatus, isStatusTag, zoteroStatus, zoteroNeedsWrite, mergeStatus, describeConflict,
 		noteStatus, applyToNote, notionStatus,
-		config, setItemStatus, prepare, notionValue, notionWritten, applyPlanToNote, renderPaneRow, runPass,
+		config, setItemStatus, prepare, notionValue, notionWritten, applyPlanToNote, renderPaneRow, paneSummary, runPass,
 	};
 });

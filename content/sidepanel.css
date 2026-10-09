@@ -1,0 +1,317 @@
+/*
+ * ZotMax panel — the section in Zotero's item pane and the reader's side pane (content/sidepanel.js;
+ * DESIGN.md › ZotMax panel). Loaded into every main window and removed at shutdown.
+ * Same borrowed palette as the settings pane: every colour is one of Zotero's theme variables with a
+ * system-colour fallback, sizes in em (Zotero's font size setting scales it), flat (hairlines and the
+ * wash tint, no shadows). The rows of other modules inside it (status, screening, 文獻評讀表, search
+ * links) keep their own small inline rhythm.
+ */
+
+.zb-sp {
+	--zb-text: var(--fill-primary, CanvasText);
+	--zb-text-muted: var(--fill-secondary, GrayText);
+	--zb-line: var(--fill-quinary, rgba(0, 0, 0, 0.1));
+	--zb-tint: var(--fill-senary, rgba(0, 0, 0, 0.04));
+	--zb-accent: var(--color-accent, AccentColor);
+	--zb-space-1: 0.25em;
+	--zb-space-2: 0.5em;
+	--zb-space-3: 0.75em;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	color: var(--zb-text);
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+}
+
+.zb-sp p,
+.zb-sp ul,
+.zb-sp blockquote {
+	margin: 0;
+}
+
+/* ---------- the folding parts: 重點, 我的劃線, 狀態, 動作, 延伸搜尋 ---------- */
+
+.zb-sp-sub {
+	padding-block: var(--zb-space-2);
+	border-top: 1px solid var(--zb-line);
+}
+
+.zb-sp-sub:first-of-type {
+	border-top: none;
+	padding-top: 0;
+}
+
+.zb-sp-sub[hidden] {
+	display: none;
+}
+
+/* The summary keeps the native disclosure marker; title and peek share one line */
+.zb-sp-summary {
+	padding-block: 0.125em;
+	border-radius: 4px;
+}
+
+.zb-sp-summary::marker {
+	color: var(--zb-text-muted);
+}
+
+.zb-sp-row {
+	display: inline-flex;
+	align-items: baseline;
+	gap: var(--zb-space-2);
+	max-width: calc(100% - 1.25em);
+	vertical-align: top;
+}
+
+.zb-sp-title {
+	flex: none;
+	font-weight: 600;
+}
+
+/* What a closed part holds, in a few words: its count, the status, the take-away */
+.zb-sp-peek {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--zb-text-muted);
+	font-size: 0.92em;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.zb-sp-sub[open] > .zb-sp-summary .zb-sp-peek {
+	display: none;
+}
+
+.zb-sp-body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--zb-space-2);
+	margin-top: var(--zb-space-2);
+}
+
+/* ---------- text ---------- */
+
+.zb-sp-facts,
+.zb-sp-label {
+	font-weight: 600;
+}
+
+.zb-sp-hint {
+	color: var(--zb-text-muted);
+	font-size: 0.92em;
+}
+
+.zb-sp-hint[hidden],
+.zb-sp-links[hidden] {
+	display: none;
+}
+
+.zb-sp-list {
+	padding-inline-start: 1.25em;
+}
+
+.zb-sp-list > li + li {
+	margin-top: 0.125em;
+}
+
+.zb-sp-li-nested {
+	margin-inline-start: calc(var(--zb-level, 1) * 1em);
+}
+
+/* ---------- links and text buttons ---------- */
+
+.zb-sp-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--zb-space-1) var(--zb-space-3);
+}
+
+.zb-sp-link {
+	appearance: none;
+	margin: 0;
+	padding: 0;
+	border: none;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-decoration: underline;
+	text-decoration-color: var(--zb-text-muted);
+	text-underline-offset: 0.15em;
+	cursor: pointer;
+}
+
+.zb-sp-link:hover {
+	text-decoration-color: currentColor;
+}
+
+/* ---------- 我的劃線 ---------- */
+
+.zb-sp-group {
+	display: flex;
+	flex-direction: column;
+	gap: var(--zb-space-1);
+}
+
+.zb-sp-group + .zb-sp-group {
+	margin-top: var(--zb-space-1);
+}
+
+.zb-sp-group-head {
+	display: flex;
+	align-items: center;
+	gap: var(--zb-space-2);
+	font-weight: 600;
+}
+
+/* The annotation colour itself (set inline from the annotation), ringed so light colours show on any theme */
+.zb-sp-swatch {
+	flex: none;
+	box-sizing: border-box;
+	width: 0.75em;
+	height: 0.75em;
+	border: 1px solid var(--zb-line);
+	border-radius: 50%;
+	background: var(--zb-swatch, transparent);
+	forced-color-adjust: none;
+}
+
+.zb-sp-count {
+	color: var(--zb-text-muted);
+	font-weight: 400;
+}
+
+.zb-sp-anns {
+	padding: 0;
+	list-style: none;
+}
+
+/* One highlight: a quiet row that opens the PDF at it */
+.zb-sp-ann {
+	appearance: none;
+	box-sizing: border-box;
+	display: block;
+	width: calc(100% + 0.5em);
+	margin: 0 -0.25em;
+	padding: 0.125em 0.25em;
+	border: none;
+	border-radius: 4px;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: start;
+	cursor: pointer;
+}
+
+.zb-sp-ann:hover {
+	background: var(--zb-tint);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.zb-sp-ann {
+		transition: background-color 150ms ease-out;
+	}
+}
+
+.zb-sp-kind {
+	color: var(--zb-text-muted);
+}
+
+.zb-sp-page {
+	margin-inline-start: var(--zb-space-2);
+	color: var(--zb-text-muted);
+	font-size: 0.92em;
+	white-space: nowrap;
+}
+
+/* ---------- 狀態 ---------- */
+
+.zb-sp-classified {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--zb-space-1) var(--zb-space-2);
+}
+
+.zb-sp-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--zb-space-1);
+}
+
+/* Read-only, like the settings pane's marker tags */
+.zb-sp-chip {
+	padding: 0 0.45em;
+	border: 1px solid var(--zb-line);
+	border-radius: 4px;
+	color: var(--zb-text-muted);
+	font-size: 0.92em;
+}
+
+/* ---------- 動作 ---------- */
+
+.zb-sp-actions,
+.zb-sp-variants {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--zb-space-2);
+}
+
+.zb-sp-actions button[aria-busy="true"] {
+	cursor: progress;
+}
+
+/* ---------- the whole AI note, folded under 重點 ---------- */
+
+.zb-sp-more > summary {
+	color: var(--zb-text-muted);
+	border-radius: 4px;
+}
+
+.zb-sp-more > summary:hover,
+.zb-sp-more[open] > summary {
+	color: var(--zb-text);
+}
+
+.zb-sp-note {
+	display: flex;
+	flex-direction: column;
+	gap: 0.125em;
+	margin-top: var(--zb-space-2);
+}
+
+.zb-sp .zb-sp-note-heading {
+	margin-top: var(--zb-space-2);
+	font-weight: 600;
+}
+
+.zb-sp .zb-sp-note-heading:first-child {
+	margin-top: 0;
+}
+
+.zb-sp-quote {
+	padding-inline-start: var(--zb-space-2);
+	border-inline-start: 2px solid var(--zb-line);
+	color: var(--zb-text-muted);
+	font-style: italic;
+}
+
+/* ---------- keyboard focus: 2px Accent, like the settings pane ---------- */
+
+.zb-sp-summary:focus-visible,
+.zb-sp-more > summary:focus-visible,
+.zb-sp-link:focus-visible,
+.zb-sp-ann:focus-visible {
+	outline: 2px solid var(--zb-accent);
+	outline-offset: 1px;
+}
+
+/*
+ * The plugin's icons (bridge.svg in the side navigation and the header, more.svg on the ⋯ button)
+ * are drawn with context-fill. Zotero colours its own icons; these zero-specificity rules only fill in
+ * when nothing else does, so the icon follows the light, dark and high-contrast themes.
+ */
+:where(item-pane-sidenav [data-pane$="zotero-bridge-ai-note"], [data-pane$="zotero-bridge-ai-note"] .head) {
+	-moz-context-properties: fill, fill-opacity;
+	fill: var(--fill-secondary, currentColor);
+}

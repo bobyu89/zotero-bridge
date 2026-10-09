@@ -174,6 +174,65 @@
 		};
 	}
 
+	/** A file attachment with its annotations in reading order (sort index). */
+	function attachmentRecord(att) {
+		let annotations = att.getAnnotations()
+			.slice()
+			.sort((a, b) => String(a.annotationSortIndex).localeCompare(String(b.annotationSortIndex)))
+			.map(a => ({
+				key: a.key,
+				type: a.annotationType,
+				text: a.annotationText || "",
+				comment: a.annotationComment || "",
+				color: a.annotationColor || "",
+				pageLabel: a.annotationPageLabel || "",
+				tags: a.getTags().map(t => t.tag),
+			}));
+		return {
+			id: att.id,
+			key: att.key,
+			title: att.getField("title") || att.attachmentFilename || "Attachment",
+			contentType: att.attachmentContentType,
+			annotations,
+		};
+	}
+
+	/**
+	 * What the item pane's ZotMax panel shows, read synchronously and cheaply (no full text, no APA,
+	 * no citekey generation): the fields that name and route the literature note, the attachments
+	 * with their annotations, and the AI note and 文獻評讀表 child notes.
+	 */
+	function paneData(item) {
+		let lib = libraryInfo(item.libraryID);
+		let data = {
+			id: item.id,
+			key: item.key,
+			libraryID: item.libraryID,
+			libraryPath: lib.path,
+			libraryRouteID: lib.routeID,
+			itemType: item.itemType,
+			title: safeField(item, "title"),
+			shortTitle: safeField(item, "shortTitle"),
+			creators: item.getCreatorsJSON(),
+			year: safeField(item, "year"),
+			doi: safeField(item, "DOI"),
+			citationKey: citationKey(item),
+			collections: Zotero.Collections.get(item.getCollections()).filter(Boolean).map(collectionPath),
+			attachments: [],
+			aiNote: null,
+			appraisalNote: null,
+		};
+		for (let att of Zotero.Items.get(item.getAttachments())) {
+			if (att && att.isFileAttachment()) data.attachments.push(attachmentRecord(att));
+		}
+		for (let note of Zotero.Items.get(item.getNotes())) {
+			if (!note) continue;
+			if (isAINote(note)) data.aiNote = { key: note.key, id: note.id, html: note.getNote() };
+			else if (note.getTags().some(t => t.tag === APPRAISAL_TAG)) data.appraisalNote = { key: note.key, html: note.getNote() };
+		}
+		return data;
+	}
+
 	/**
 	 * @param {Zotero.Item} item regular item
 	 * @param {object} opts { fullTextLimit: number|0 (0 = don't read full text),
@@ -232,24 +291,7 @@
 		let sources = [];
 		for (let att of Zotero.Items.get(item.getAttachments())) {
 			if (!att.isFileAttachment()) continue;
-			let annotations = att.getAnnotations()
-				.slice()
-				.sort((a, b) => String(a.annotationSortIndex).localeCompare(String(b.annotationSortIndex)))
-				.map(a => ({
-					key: a.key,
-					type: a.annotationType,
-					text: a.annotationText || "",
-					comment: a.annotationComment || "",
-					color: a.annotationColor || "",
-					pageLabel: a.annotationPageLabel || "",
-					tags: a.getTags().map(t => t.tag),
-				}));
-			data.attachments.push({
-				key: att.key,
-				title: att.getField("title") || att.attachmentFilename || "Attachment",
-				contentType: att.attachmentContentType,
-				annotations,
-			});
+			data.attachments.push(attachmentRecord(att));
 			if ((opts.fullTextLimit || opts.checkFullText) && hasTextLayerType(att)) {
 				let source = await readFullTextSource(att);
 				sources.push(source);
@@ -346,7 +388,7 @@
 	}
 
 	ZB.adapter = {
-		AI_NOTE_TAG, AI_HISTORY_TAG, APPRAISAL_TAG, libraryInfo, zoteroKeyFor, collectionPath, toRegularItems, extractItemData, citationKey,
+		AI_NOTE_TAG, AI_HISTORY_TAG, APPRAISAL_TAG, libraryInfo, zoteroKeyFor, collectionPath, toRegularItems, extractItemData, paneData, attachmentRecord, citationKey,
 		saveAINote, getAINote, isAINote, isAIHistoryNote, itemsInCollection, listLibraries,
 	};
 })(this);

@@ -604,6 +604,14 @@
 			+ (st.record.overall ? ` · ${st.record.overall}` : "");
 	}
 
+	/** The form's state in a few words (「尚未評讀」, 「已核對 · 納入」), for the panel's folded 狀態 line. */
+	function paneSummary(item) {
+		if (!item || !item.isRegularItem || !item.isRegularItem()) return "";
+		let st = stateFor(item);
+		if (!st.saved && !hasContent(st.record)) return "尚未評讀";
+		return [statusOf(st.record) === "verified" ? "已核對" : statusText(st.record), st.record.overall].filter(Boolean).join(" · ");
+	}
+
 	/** 「文獻評讀表」 row in the plugin's item pane section, expanding to the whole form. */
 	function renderPaneRow(doc, body, item) {
 		if (!item || !item.isRegularItem || !item.isRegularItem()) return;
@@ -1036,7 +1044,7 @@
 		overrideStudy, appraisalSection, replaceAppraisalSection, applyToSource,
 		summaryPaths, counts, agreement, summaryBody, summaryCSV, summaryFrontmatter, buildSummaryNote, wordDocument,
 		// Zotero
-		getFormNote, loadRecord, initialRecord, saveRecord, renderPaneRow, insertNotionTable, overrideStudyForItem,
+		getFormNote, loadRecord, initialRecord, saveRecord, renderPaneRow, paneSummary, insertNotionTable, overrideStudyForItem,
 		exportSummary, exportCollections,
 		_paneState: paneState,
 	};
