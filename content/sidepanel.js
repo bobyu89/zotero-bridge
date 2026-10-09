@@ -41,7 +41,7 @@
 		{ id: "search", open: false },
 	];
 	// The item commands offered under 動作, in catalog order; 快速指令… comes last
-	const ACTIONS = ["sync", "sync-no-ai", "regenerate", "classify", "search-item", "chase-items"];
+	const ACTIONS = ["sync", "sync-no-ai", "regenerate", "classify", "search-item", "chase-items", "appraisal-coach"];
 	const SHOWN_PER_MEANING = 3;
 	const QUOTE_LENGTH = 120;
 	const REFRESH_DELAY_MS = 250;
@@ -89,6 +89,9 @@
 		"cmd-classify": ["zotero-bridge-pane-cmd-classify", "自動分類…"],
 		"cmd-search-item": ["zotero-bridge-pane-cmd-search-item", "搜尋資料庫…"],
 		"cmd-chase-items": ["zotero-bridge-pane-cmd-chase-items", "引文追蹤"],
+		"cmd-appraisal-coach": ["zotero-bridge-pane-cmd-appraisal-coach", "對照 AI"],
+		// A command that can't run on this item yet (blocked()): disabled, the reason as its tooltip
+		"cmd-appraisal-coach-blocked": ["zotero-bridge-pane-cmd-appraisal-coach-blocked", "對照 AI"],
 		"cmd-palette": ["zotero-bridge-pane-cmd-palette", "快速指令…"],
 	};
 
@@ -550,6 +553,13 @@
 	/** A button for a catalog command, run on [this item]; a command with variants opens them as a menu. */
 	function commandButton(ctx, cmd, name) {
 		let { doc, item } = ctx;
+		let why = blockedReason(cmd, item);
+		if (why && STRINGS[`${name}-blocked`]) {
+			let blocked = t(doc, "button", `${name}-blocked`, { reason: why }, { type: "button", "data-zb-command": cmd.id, "data-zb-blocked": "" });
+			blocked.disabled = true;
+			blocked.title = why;
+			return blocked;
+		}
 		let b = t(doc, "button", name, null, { type: "button", "data-zb-command": cmd.id });
 		if (cmd.variants) {
 			b.setAttribute("aria-haspopup", "menu");
@@ -567,6 +577,18 @@
 			});
 		});
 		return b;
+	}
+
+	/** Why a catalog command can't run on this item yet (its blocked(); "" when it can). */
+	function blockedReason(cmd, item) {
+		if (!alive() || typeof cmd.blocked !== "function") return "";
+		try {
+			return cmd.blocked(selectionFor(item)) || "";
+		}
+		catch (e) {
+			log(e);
+			return "";
+		}
 	}
 
 	/**

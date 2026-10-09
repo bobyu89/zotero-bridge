@@ -33,7 +33,7 @@
 	const PREF = "extensions.zotero-bridge.";
 	// Bumped when a later version needs another one-time migration (see MIGRATIONS)
 	const MIGRATION_PREF = "features.version";
-	const MIGRATION_VERSION = 2;
+	const MIGRATION_VERSION = 3;
 
 	const GROUPS = [
 		{ id: "organize", label: "整理與同步", l10n: "zotero-bridge-feature-group-organize" },
@@ -149,6 +149,10 @@
 			usesAI: true, usesNetwork: true, requires: ["autoClassify", "aiNotes"],
 			label: "AI 主題分類",
 			desc: "自動分類時讓 AI 依標題和摘要判斷文獻屬於你列的哪些主題；執行前先告訴你篇數和預估費用。" },
+		{ id: "appraisalCoach", group: "ai", pref: "feature.appraisalCoach", presets: { guided: false, advanced: true }, since: 3,
+			usesAI: true, usesNetwork: true, requires: ["appraisalForm", "aiNotes"],
+			label: "評讀陪練",
+			desc: "自己答完評讀表後，請 AI 只看原文獨立作答，列出跟你不同的題目和原文依據；要不要改由你決定。執行前先告訴你預估費用。" },
 	];
 
 	for (let f of FEATURES) {
@@ -317,6 +321,8 @@
 		// v0.10.0: 全文筆記, 文獻自動分類, 工具列按鈕, AI 標重點 and AI 主題分類 (every switch marked since: 2).
 		// added: those switches; newSwitches: whether the profile was on 進階 and got them on
 		{ version: 2, run: s => ({ added: FEATURES.filter(f => f.since === 2).map(f => f.id), newSwitches: migrateNewSwitches(s, 2) }) },
+		// v0.12.0: 評讀陪練 (every switch marked since: 3), the same way as step 2
+		{ version: 3, run: s => ({ added: FEATURES.filter(f => f.since === 3).map(f => f.id), newSwitches: migrateNewSwitches(s, 3) }) },
 	];
 
 	/**

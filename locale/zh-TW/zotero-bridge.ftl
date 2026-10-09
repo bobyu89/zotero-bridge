@@ -70,6 +70,10 @@ zotero-bridge-pane-cmd-search-item = 搜尋資料庫…
     .title = 在醫學資料庫搜尋這篇（PubMed、CINAHL、Cochrane…）
 zotero-bridge-pane-cmd-chase-items = 引文追蹤
     .title = 引文追蹤這篇（OpenAlex）：列出參考文獻和引用它的文獻
+zotero-bridge-pane-cmd-appraisal-coach = 對照 AI
+    .title = 評讀陪練：請 AI 只看原文逐題作答，列出跟你不同的題目（會先告訴你預估費用）
+zotero-bridge-pane-cmd-appraisal-coach-blocked = 對照 AI
+    .title = { $reason }
 zotero-bridge-pane-cmd-palette = 快速指令…
     .title = 用打字找 ZotMax 的所有功能
 zotero-bridge-menu-export-library =
@@ -190,6 +194,8 @@ zotero-bridge-menu-palette =
     .label = ZotMax 快速指令…
 zotero-bridge-cmd-export-collection =
     .label = 匯出目前分類的參考文獻
+zotero-bridge-cmd-appraisal-coach =
+    .label = 評讀陪練：對照 AI
 zotero-bridge-cmd-screen-ft-exclude-reason =
     .label = 全文：排除（{ $reason }）
 zotero-bridge-palette-title = ZotMax 快速指令
@@ -263,6 +269,7 @@ zotero-bridge-feature-requires =
         [sync] 要先打開「同步到 Obsidian／Notion」才會生效。
         [aiNotes] 要先打開「AI 文獻筆記」才會生效。
         [autoClassify] 要先打開「文獻自動分類」才會生效。
+        [appraisalForm] 要先打開「文獻評讀表」才會生效。
        *[concepts] 要先打開「概念卡片」才會生效。
     }
 zotero-bridge-feature-sync = 同步到 Obsidian／Notion
@@ -313,6 +320,8 @@ zotero-bridge-feature-concepts-ai = 概念卡片 AI 綜整
 zotero-bridge-feature-concepts-ai-desc = 讓 AI 為一張概念卡片寫綜整草稿，附數字查核清單。
 zotero-bridge-feature-classify-ai = AI 主題分類
 zotero-bridge-feature-classify-ai-desc = 自動分類時讓 AI 依標題和摘要判斷文獻屬於你列的哪些主題；執行前先告訴你篇數和預估費用。
+zotero-bridge-feature-appraisal-coach = 評讀陪練
+zotero-bridge-feature-appraisal-coach-desc = 自己答完評讀表後，請 AI 只看原文獨立作答，列出跟你不同的題目和原文依據；要不要改由你決定。執行前先告訴你預估費用。
 
 ## Settings → tabs, search and showSection (preferences.xhtml, preferences.js)
 zotero-bridge-prefs-search-label = 找設定

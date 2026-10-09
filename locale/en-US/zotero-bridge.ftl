@@ -73,6 +73,10 @@ zotero-bridge-pane-cmd-search-item = Search databases…
     .title = Search medical databases for this item (PubMed, CINAHL, Cochrane…)
 zotero-bridge-pane-cmd-chase-items = Chase citations
     .title = Chase this item's citations (OpenAlex): its references and the papers citing it
+zotero-bridge-pane-cmd-appraisal-coach = Compare with AI
+    .title = Appraisal coach: an AI answers each item from the paper alone, then the items where it differs from you are listed (estimated cost first)
+zotero-bridge-pane-cmd-appraisal-coach-blocked = Compare with AI
+    .title = { $reason }
 zotero-bridge-pane-cmd-palette = Quick Commands…
     .title = Find any ZotMax feature by typing
 zotero-bridge-menu-export-library =
@@ -193,6 +197,8 @@ zotero-bridge-menu-palette =
     .label = ZotMax Quick Commands…
 zotero-bridge-cmd-export-collection =
     .label = Export Bibliography of Selected Collection
+zotero-bridge-cmd-appraisal-coach =
+    .label = Appraisal coach: compare with AI
 zotero-bridge-cmd-screen-ft-exclude-reason =
     .label = Full Text: Exclude ({ $reason })
 zotero-bridge-palette-title = ZotMax Quick Commands
@@ -266,6 +272,7 @@ zotero-bridge-feature-requires =
         [sync] Turn on “Sync to Obsidian / Notion” first.
         [aiNotes] Turn on “AI literature notes” first.
         [autoClassify] Turn on “Auto-classification” first.
+        [appraisalForm] Turn on “Appraisal form” first.
        *[concepts] Turn on “Concept cards” first.
     }
 zotero-bridge-feature-sync = Sync to Obsidian / Notion
@@ -316,6 +323,8 @@ zotero-bridge-feature-concepts-ai = AI synthesis for concept cards
 zotero-bridge-feature-concepts-ai-desc = Let an AI draft a synthesis for one concept card, with a checklist of numbers to verify.
 zotero-bridge-feature-classify-ai = AI topic classification
 zotero-bridge-feature-classify-ai-desc = Lets an AI decide which of your topics each item belongs to, from title and abstract; you see the item count and estimated cost first.
+zotero-bridge-feature-appraisal-coach = Appraisal coach
+zotero-bridge-feature-appraisal-coach-desc = Once you have answered the appraisal form yourself, an AI answers it from the paper alone and the items where it differs are listed with its quotes; whether to change anything is your call. Estimated cost first.
 
 ## Settings → tabs, search and showSection (preferences.xhtml, preferences.js)
 zotero-bridge-prefs-search-label = Find a setting

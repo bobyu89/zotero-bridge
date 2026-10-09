@@ -452,6 +452,12 @@
 			keywords: ["評讀", "評讀總表", "評讀表", "appraisal", "critical appraisal", "casp", "jbi", "品質", "quality", "kappa", "一致性", "總表", "summary"],
 			// exportCollections says 「請先在左側選取分類。」 when there is none
 			run: sel => ZB().appraisalForm.exportCollections(targetCollections(sel)) },
+		// Disabled (not hidden) until the user answered every item themselves: blocked() says why
+		{ id: "appraisal-coach", group: "appraise", l10n: "zotero-bridge-cmd-appraisal-coach", label: "評讀陪練：對照 AI",
+			features: ["appraisalCoach"], needs: "items", menus: ["item"],
+			keywords: [...KW.ai, "評讀陪練", "陪練", "對照", "評讀", "評讀表", "appraisal", "critical appraisal", "coach", "casp", "jbi", "compare", "second opinion", "練習"],
+			blocked: sel => ZB().appraisalCoach.blockedReason(firstItem(sel)),
+			run: sel => ZB().appraisalCoach.runFromCommand(sel.items) },
 
 		// ---------- AI 輔助與寫作 ----------
 		{ id: "regenerate", group: "ai", l10n: "zotero-bridge-menu-regenerate", label: "重新產生 AI 筆記並同步",
