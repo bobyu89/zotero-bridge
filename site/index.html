@@ -546,13 +546,14 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
       <!-- 7 首次設定精靈 -->
       <section class="step" data-id="setup" data-title="首次設定精靈" data-phase="in" hidden>
         <h2>跟著 Zotero 裡的首次設定精靈走</h2>
-        <p class="lead">剛剛準備的東西，在這裡用上。精靈裡有三件事：</p>
+        <p class="lead">剛剛準備的東西，在這裡用上。精靈裡有四件事，每一步都可以略過：</p>
         <ol class="how">
           <li><span><b>選模式：</b>新使用者建議「研究生引導」：自動找文獻、AI 寫草稿、評讀陪練和讀懂統計先關著，整理、評讀、搜尋照常可用。想全部打開就選「進階」。之後在 設定 › ZotMax ›「功能」隨時改。</span></li>
           <li><span><b>指定筆記位置：</b><span class="only-obsidian">選剛剛那個 Obsidian vault 的資料夾</span><span class="only-both">；</span><span class="only-notion">貼上 Notion 的 token 和資料庫連結</span>。</span></li>
+          <li><span><b>AI（選填）：</b><span class="only-ai">貼上剛剛申請的 API 金鑰，<span class="only-anthropic">服務商選 <b>Claude</b></span><span class="only-openai">服務商選 <b>OpenAI</b></span>；金鑰存進 Zotero 的密碼管理。</span><span class="only-noai">選「先不用 AI」，之後想用再回來。</span></span></li>
           <li><span><b>試同步一篇：</b>挑一篇有 PDF、最好有劃線的文獻，先試一篇確認都接上了。</span></li>
         </ol>
-        <p class="only-ai">API 金鑰貼在 設定 › ZotMax ›「AI」分頁 › AI 服務，服務商選 <span class="only-anthropic"><b>Anthropic（Claude）</b>，貼到「Claude API key」</span><span class="only-openai"><b>OpenAI（GPT / Codex）</b>，貼到「OpenAI API key」</span>。</p>
+        <p class="only-ai">之後想換金鑰或服務商：設定 › ZotMax ›「AI」分頁 › AI 服務，服務商選 <span class="only-anthropic"><b>Anthropic（Claude）</b>，貼到「Claude API key」</span><span class="only-openai"><b>OpenAI（GPT / Codex）</b>，貼到「OpenAI API key」</span>。</p>
         <p class="only-noai">先不用 AI：同步時選「同步但不呼叫 AI」，或在 設定 › ZotMax ›「功能」關掉「AI 文獻筆記」。</p>
         <p class="zh">想再打開精靈：按 <span class="only-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></span><span class="only-mac"><kbd>⇧⌘P</kbd></span> 開快速指令，輸入「設定精靈」，選 <b>設定精靈…</b>。</p>
 

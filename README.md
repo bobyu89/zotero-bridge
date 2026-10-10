@@ -17,7 +17,7 @@
 
 ## 5 分鐘開始
 
-1. **安裝**：下載 `zotero-bridge-x.y.z.xpi`（用 Firefox 下載請在連結上按右鍵 →「另存連結」，不然 Firefox 會把它當成自己的擴充功能），然後 Zotero → 工具 → 插件 → 右上角齒輪 → **Install Plugin From File…**。
+1. **安裝**：下載 `zotero-bridge-x.y.z.xpi`（用 Firefox 下載請在連結上按右鍵 →「另存連結」，不然 Firefox 會把它當成自己的擴充功能），然後 Zotero → 工具 → 附加元件（英文介面：Tools → Plugins）→ 右上角齒輪 → **Install Plugin From File…**。
 2. **接上筆記工具**（至少一個）：第一次安裝後自動打開的[設定精靈](#首次設定精靈)會一步一步帶你做；要自己來，就到 Zotero → 設定 → **ZotMax** →「同步」分頁。
    - **Obsidian**：「Vault 資料夾路徑」選 vault 的根目錄。筆記預設放在 `Zotero/` 子資料夾。
    - **Notion**：建立一個 integration，把資料庫分享給它，貼上 token 和「預設資料庫連結」，按 **測試連線並補齊資料庫欄位**，欄位會自動建好。

@@ -39,4 +39,4 @@ jobs:
           gh release create "$TAG" "$XPI" \
             --target "$GITHUB_SHA" \
             --title "ZotMax $VERSION" \
-            --notes "下載下方的 zotero-bridge-$VERSION.xpi，在 Zotero →「工具 → 插件 → 齒輪 → Install Plugin From File」安裝。需要 Zotero 10；Obsidian 建議 1.14 以上。安裝精靈：https://bobyu89.github.io/zotero-bridge/ ／使用說明：https://github.com/${GITHUB_REPOSITORY}#readme"
+            --notes "下載下方的 zotero-bridge-$VERSION.xpi，在 Zotero →「工具 → 附加元件 → 齒輪 → Install Plugin From File」安裝。需要 Zotero 10；Obsidian 建議 1.14 以上。安裝精靈：https://bobyu89.github.io/zotero-bridge/ ／使用說明：https://github.com/${GITHUB_REPOSITORY}#readme"
