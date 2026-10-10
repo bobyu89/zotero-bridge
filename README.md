@@ -7,7 +7,7 @@
 **整理、追蹤、評讀交給它；找文獻和寫作留給你。** 新安裝預設是「研究生引導」模式：自動找文獻和 AI 寫草稿的功能先關著，每個功能都能單獨開關。
 
 - **下載**：[最新版 `.xpi`](https://github.com/bobyu89/zotero-bridge/releases/latest)。裝一次之後，Zotero 會自動檢查並更新。
-- **[安裝精靈](https://bobyu89.github.io/zotero-bridge/)**：依你的電腦、AI 服務商和筆記工具調整步驟，一步一步打勾完成，進度會記住。
+- **[安裝精靈](https://bobyu89.github.io/zotero-bridge/)**：依你的電腦、AI 服務商和筆記工具，先帶你準備好 Obsidian vault、Notion 和 API 金鑰，再把 `.xpi` 裝進 Zotero，之後交給外掛的首次設定精靈；進度會記住。
 - **[醫學文獻快速搜尋](https://bobyu89.github.io/zotero-bridge/search.html)**：PubMed、CINAHL、Cochrane、華藝、臺灣博碩士論文一次開，含 PICO 檢索式產生器。不用安裝，手機也能用。
 - **[文獻評讀表](https://bobyu89.github.io/zotero-bridge/appraisal.html)**：CASP、JBI 逐題評讀，複製成 Word 或 Markdown 表格。不用安裝。
 
