@@ -556,3 +556,13 @@ zotero-bridge-stats-saved-to = Saved to 「統計筆記」 in the literature not
 zotero-bridge-stats-no-vault = No Obsidian vault set, so there is nowhere to save: Settings → Sync → Obsidian.
 zotero-bridge-stats-not-synced = This item has not been synced to Obsidian yet. Sync it once, then Save to note.
 zotero-bridge-stats-save-failed = Could not save to the note: { $error }
+
+## 中文文獻補強 (content/zh-meta.js): the switch, the commands and the line in the ZotMax panel's 狀態
+zotero-bridge-feature-zh-meta = Chinese record check
+zotero-bridge-feature-zh-meta-desc = Checks the data of Chinese items imported from Airiti, NDLTD and similar sources (misplit author names, ROC years, volume/issue/pages, DOI, language) and lists suggested fixes; only what you tick is changed, and it can be undone. No network, no AI.
+zotero-bridge-cmd-zh-meta =
+    .label = Check Chinese Item Data (Selected Items or Collection)…
+zotero-bridge-cmd-zh-meta-undo =
+    .label = Undo Last Chinese Data Fix
+zotero-bridge-pane-zh-meta = Chinese data: { $count } things to check
+zotero-bridge-pane-zh-meta-review = Review and fix…

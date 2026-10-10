@@ -12,7 +12,8 @@
  *   我的劃線   the user's highlights grouped by colour meaning (core.annotationGroups), the first three of
  *              each; a click opens the PDF at that annotation.
  *   狀態       reading status, screening and 文獻評讀表 (their modules' rows), the 自動分類 sub-collections
- *              the item is in, and when it was last synced.
+ *              the item is in, and when it was last synced; for a Chinese item whose data needs a look
+ *              (中文文獻補強), one line with a button that opens its review window.
  *   動作       the item commands of the command catalog (commands.js), run with [this item] as the
  *              selection; switched-off commands hide, as in the toolbar and the right-click menus.
  *   延伸搜尋   the search links row (search-links.js).
@@ -97,6 +98,9 @@
 		// A command that can't run on this item yet (blocked()): disabled, the reason as its tooltip
 		"cmd-appraisal-coach-blocked": ["zotero-bridge-pane-cmd-appraisal-coach-blocked", "對照 AI"],
 		"cmd-palette": ["zotero-bridge-pane-cmd-palette", "快速指令…"],
+		// 中文文獻補強 (zh-meta.js), in 狀態
+		zhMeta: ["zotero-bridge-pane-zh-meta", "中文資料：{ $count } 個地方要檢查"],
+		zhMetaReview: ["zotero-bridge-pane-zh-meta-review", "檢查並修正…"],
 	};
 
 	let pluginID = null;
@@ -529,6 +533,9 @@
 		if (featureOn("status")) words.push(safe(() => ZB().status.paneSummary(item)));
 		if (featureOn("screening")) words.push(safe(() => ZB().screening.paneSummary(item)));
 		if (featureOn("appraisalForm")) words.push(safe(() => ZB().appraisalForm.paneSummary(item)));
+		// 中文文獻補強: only for a Chinese item with something to check, quiet otherwise
+		let zhCount = featureOn("zhMeta") ? (safe(() => ZB().zhMeta.paneCount(item)) || 0) : 0;
+		if (zhCount) words.push(fill(STRINGS.zhMeta[1], { count: zhCount }));
 		let { details, body } = part(doc, "status", words.filter(Boolean).join(" · "));
 		// The rows of the modules, each only when its feature is on. A <section>, so the rows stay the
 		// first <div>s that hold their own content
@@ -544,6 +551,21 @@
 					t(doc, "span", "classified", null, { class: "zb-sp-label" }),
 					h(doc, "span", { class: "zb-sp-chips" }, ...chips.map(c => h(doc, "span", { class: "zb-sp-chip" }, `${c.folder}：${c.value}`)))));
 			}
+		}
+		if (zhCount) {
+			let review = t(doc, "button", "zhMetaReview", null, { type: "button", "data-zb-action": "zh-meta" });
+			listen(review, "click", () => {
+				review.disabled = true;
+				review.setAttribute("aria-busy", "true");
+				Promise.resolve(ZB().zhMeta.run([item])).catch(log).then(() => {
+					if (!alive()) return;
+					review.disabled = false;
+					review.removeAttribute("aria-busy");
+					refreshBody(ctx.body);
+				});
+			});
+			body.append(h(doc, "div", { class: "zb-sp-zhmeta", "data-zb-zhmeta": String(zhCount) },
+				t(doc, "span", "zhMeta", { count: zhCount }, { class: "zb-sp-label" }), review));
 		}
 		// Filled when the literature note has been read
 		let synced = h(doc, "p", { class: "zb-sp-hint", hidden: true, "data-zb-synced": "" });

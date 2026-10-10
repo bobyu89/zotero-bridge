@@ -358,6 +358,7 @@ const TESTS = [
 				dashboard: ["update", "afterSync", "runFromMenu"],
 				concepts: ["update", "afterSync", "dashboardSection", "runFromMenu", "synthesizeFromMenu"],
 				classify: ["parseRules", "evaluate", "parseTopics", "suggest", "defaultPicks", "planApply", "apply", "undoLast", "readLastRun", "review", "renderReview", "run"],
+				zhMeta: ["analyze", "itemData", "findingsFor", "paneCount", "buildPlan", "defaultPicks", "review", "renderReview", "apply", "undoLast", "readLastRun", "run"],
 				citationChase: ["chaseCollection", "chaseItems", "importChecked"],
 				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "menuTargets", "relatedFor", "showMore", "openTarget"],
 				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "batchParams", "parseResults"],
@@ -1599,6 +1600,92 @@ const TESTS = [
 			finally {
 				if (win && !win.closed) win.close();
 				for (let key of ["classify.ruleList", "classify.topics"]) Zotero.Prefs.clear(ZB_PREF + key, true);
+			}
+		},
+	},
+	{
+		name: "中文文獻補強: a messy Chinese record is analyzed, fixed through the review window from chrome://zotero-bridge/, and undone (ZB.zhMeta)",
+		needs: ["Zotero.ZoteroBridge is set and has every module"],
+		timeout: 60000,
+		async fn(d) {
+			let Z = zb().zhMeta;
+			let EXTRA = "DOI: 10.6224/JN.202304_70(2).07";
+			let messy = await createItem("journalArticle", {
+				title: "護理人員跌倒預防衛教之成效：補強測試", date: "民國112年", publicationTitle: "護理雜誌", volume: "70(2)",
+				pages: "４５－５６頁", extra: EXTRA, language: "",
+			}, [{ name: "陳美玲、林小華", creatorType: "author" }]);
+			let win = null;
+			// Straight from the database, not the item's cache
+			let stored = async (field) => String(await Zotero.DB.valueQueryAsync(
+				"SELECT value FROM itemData JOIN itemDataValues USING (valueID) JOIN fields USING (fieldID) WHERE itemID=? AND fieldName=?", [messy.id, field]) || "");
+			let names = () => messy.getCreatorsJSON().map(c => String(c.name || `${c.lastName}/${c.firstName}`));
+			try {
+				// What the module sees in the real item (Zotero's date, creators in single-field mode, field validity)
+				let findings = Z.findingsFor(messy);
+				d.findings = findings.map(f => `${f.id}:${f.confidence}`);
+				let want = ["creators-0:sure", "date:sure", "volume:sure", "pages:sure", "DOI:sure", "language:sure"];
+				check(JSON.stringify(d.findings) === JSON.stringify(want), `findings ${JSON.stringify(d.findings)}, expected ${JSON.stringify(want)}`);
+				eq(Z.paneCount(messy), 6, "paneCount() for the ZotMax panel");
+
+				// The review window: every finding sure, so every box starts ticked; 套用勾選的修正
+				let plan = Z.buildPlan([messy]);
+				let opened = null;
+				let result = Z.review(plan, { onOpen: (w) => {
+					opened = w;
+				} });
+				win = await waitFor(() => opened, "the review window (chrome://zotero-bridge/content/zh-meta-review.xhtml) to show the plan", 30000);
+				let doc = win.document;
+				eq(doc.documentURI, Z.DIALOG_URL, "review window URL");
+				let root = doc.getElementById(Z.DIALOG_ROOT);
+				// classify-review.css and zh-meta-review.css are applied (registered chrome package)
+				d.rootDisplay = win.getComputedStyle(root).display;
+				eq(d.rootDisplay, "flex", "display of #zb-zhmeta (is classify-review.css loaded?)");
+				let row = root.querySelector(".zb-zm-row");
+				d.rowDisplay = row ? win.getComputedStyle(row).display : "";
+				eq(d.rowDisplay, "grid", "display of .zb-zm-row (is zh-meta-review.css loaded?)");
+				let boxes = [...root.querySelectorAll("input[type=checkbox]")];
+				d.checked = boxes.map(b => !!b.checked);
+				check(boxes.length === 6 && boxes.every(b => b.checked), `checkboxes ${JSON.stringify(d.checked)}`);
+				d.summary = String(root.querySelector(".zb-cl-summary").textContent);
+				eq(d.summary, "已勾選 6 項修正，會改動 1 篇文獻。", "summary line");
+				root.querySelector(".zb-cl-apply").click();
+				let picks = await result;
+				check(Array.isArray(picks) && picks.length === 6, `review() resolved with ${JSON.stringify(picks)}`);
+				await waitFor(() => win.closed, "the review window to close after 套用", 10000);
+				let applied = await Z.apply(plan, picks);
+				d.apply = plain(applied);
+				eq(applied.errors.length, 0, `apply() errors: ${applied.errors.join("; ")}`);
+				eq(applied.fixes, 6, "fixes applied");
+
+				let fixed = {};
+				for (let f of ["date", "volume", "issue", "pages", "DOI", "extra", "language"]) fixed[f] = String(messy.getField(f));
+				d.fixed = fixed;
+				let wantFixed = { date: "2023", volume: "70", issue: "2", pages: "45-56", DOI: "10.6224/JN.202304_70(2).07", extra: "", language: "zh-TW" };
+				check(JSON.stringify(fixed) === JSON.stringify(wantFixed), `fields after apply ${JSON.stringify(fixed)}`);
+				eq(await stored("pages"), "45-56", "pages in the database");
+				eq(await stored("language"), "zh-TW", "language in the database");
+				d.creators = names();
+				eq(JSON.stringify(d.creators), JSON.stringify(["陳美玲", "林小華"]), "creators after apply");
+				eq(Z.findingsFor(messy).length, 0, "findings left after apply");
+				check(Z.readLastRun(), "zhMeta.lastRun after apply");
+
+				// 復原上一次中文文獻修正
+				let undo = await Z.undoLast({ silent: true });
+				d.undo = plain(undo);
+				check(undo && undo.items === 1 && !undo.kept.length, `undoLast() returned ${JSON.stringify(undo)}`);
+				let restored = {};
+				for (let f of ["date", "volume", "issue", "pages", "DOI", "extra", "language"]) restored[f] = String(messy.getField(f));
+				d.restored = restored;
+				let wantRestored = { date: "民國112年", volume: "70(2)", issue: "", pages: "４５－５６頁", DOI: "", extra: EXTRA, language: "" };
+				check(JSON.stringify(restored) === JSON.stringify(wantRestored), `fields after undo ${JSON.stringify(restored)}`);
+				eq(await stored("pages"), "４５－５６頁", "pages in the database after undo");
+				eq(JSON.stringify(names()), JSON.stringify(["陳美玲、林小華"]), "creators after undo");
+				eq(Z.readLastRun(), null, "zhMeta.lastRun after undo");
+			}
+			finally {
+				if (win && !win.closed) win.close();
+				if (Z.readLastRun()) await Z.undoLast({ silent: true });
+				await messy.eraseTx();
 			}
 		},
 	},

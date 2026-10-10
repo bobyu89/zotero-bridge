@@ -406,6 +406,8 @@
 	return {
 		DEFAULTS, options,
 		isChineseText, isChineseItem, zhPersonName, referenceName, joinAuthors,
+		// for zh-meta.js (中文文獻補強)
+		COMPOUND_SURNAMES, isSurname, yearOf, pageRange, bareDOI,
 		formatReference, shortCitation, sortReferences, adjustCSL,
 	};
 });

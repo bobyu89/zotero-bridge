@@ -1,0 +1,87 @@
+@namespace html url("http://www.w3.org/1999/xhtml");
+
+/*
+ * 中文文獻補強 review window: the finding rows. Everything else (tokens, head, list, foot, focus) comes
+ * from classify-review.css; the root carries both classes (.zb-classify .zb-zhmeta). DESIGN.md (Review window).
+ */
+#zotero-bridge-zh-meta-window {
+	background: var(--material-background, Canvas);
+	color: var(--fill-primary, CanvasText);
+}
+
+.zb-zm-findings {
+	margin: var(--zb-space-2) 0 0;
+	padding: 0;
+	list-style: none;
+}
+.zb-zm-finding {
+	padding: var(--zb-space-2) 0;
+}
+.zb-zm-finding + .zb-zm-finding {
+	border-top: 1px solid var(--zb-tint);
+}
+
+/* checkbox (or an empty cell of the same width) · field and problem · tag */
+.zb-zm-row {
+	display: grid;
+	grid-template-columns: 1.5em minmax(0, 1fr) auto;
+	align-items: baseline;
+	gap: 0 var(--zb-space-2);
+}
+.zb-zm-row > html|input {
+	margin: 0;
+	align-self: center;
+}
+.zb-zm-what {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0 var(--zb-space-2);
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+html|label.zb-zm-what {
+	cursor: pointer;
+}
+.zb-zm-field {
+	font-weight: 600;
+}
+.zb-zm-tag {
+	padding: 0 0.45em;
+	border: 1px solid var(--zb-line);
+	border-radius: var(--zb-radius-sm);
+	color: var(--zb-text-muted);
+	font-size: 0.92em;
+	white-space: nowrap;
+}
+.zb-zm-finding[data-confidence="sure"] .zb-zm-tag {
+	color: var(--zb-text);
+}
+
+/* current → suggested, and the why, under the problem (indented past the checkbox column) */
+.zb-zm-change,
+.zb-zm-hint {
+	margin: 2px 0 0;
+	padding-inline-start: calc(1.5em + var(--zb-space-2));
+	max-width: var(--zb-measure);
+	overflow-wrap: anywhere;
+}
+.zb-zm-was {
+	color: var(--zb-text-muted);
+}
+.zb-zm-arrow {
+	color: var(--zb-text-muted);
+}
+.zb-zm-now {
+	font-weight: 600;
+}
+.zb-zm-finding:has(html|input:not(:checked)) .zb-zm-now {
+	font-weight: 400;
+}
+.zb-zm-finding[data-confidence="missing"] .zb-zm-change {
+	color: var(--zb-text-muted);
+}
+
+.zb-zhmeta .zb-cl-dims {
+	gap: var(--zb-space-2);
+}

@@ -549,3 +549,13 @@ zotero-bridge-stats-saved-to = 已存到文獻筆記的「統計筆記」。
 zotero-bridge-stats-no-vault = 還沒設定 Obsidian vault，沒地方存：設定 → 同步 → Obsidian。
 zotero-bridge-stats-not-synced = 這篇還沒同步到 Obsidian。先同步一次，再按「存到筆記」。
 zotero-bridge-stats-save-failed = 存到筆記失敗：{ $error }
+
+## 中文文獻補強 (content/zh-meta.js): the switch, the commands and the line in the ZotMax panel's 狀態
+zotero-bridge-feature-zh-meta = 中文文獻補強
+zotero-bridge-feature-zh-meta-desc = 檢查華藝、博碩士論文等匯入的中文文獻資料（作者拆錯、民國年、卷期頁、DOI、語言），列出建議讓你勾選後才修正，也能復原。不連網，也不呼叫 AI。
+zotero-bridge-cmd-zh-meta =
+    .label = 檢查中文文獻資料（選取項目或分類）…
+zotero-bridge-cmd-zh-meta-undo =
+    .label = 復原上一次中文文獻修正
+zotero-bridge-pane-zh-meta = 中文資料：{ $count } 個地方要檢查
+zotero-bridge-pane-zh-meta-review = 檢查並修正…
