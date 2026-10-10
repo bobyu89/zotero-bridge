@@ -1671,6 +1671,9 @@ const TESTS = [
 				let obsidianBox = doc.querySelector('[data-zb-box="obsidian"]');
 				d.afterObsidian = { checked: !!$("zb-su-notes-obsidian").checked, boxHidden: obsidianBox ? !!obsidianBox.hidden : "none", input: !!vaultInput };
 				check(vaultInput && obsidianBox && !obsidianBox.hidden, `the Obsidian fields did not show after choosing Obsidian (${JSON.stringify(d.afterObsidian)})`);
+				// The step already checked the profile's vault path when it rendered; forget that result
+				// (a check of an older value is never applied once the field changes)
+				$("zb-su-vault-check").removeAttribute("data-zb-state");
 				vaultInput.value = vault;
 				vaultInput.dispatchEvent(new dialog.Event("change", { bubbles: true }));
 				d.vaultCheck = await waitFor(() => $("zb-su-vault-check").getAttribute("data-zb-state"), "the vault check", 10000);
