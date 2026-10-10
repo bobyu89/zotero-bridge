@@ -378,7 +378,7 @@ test("catalog: unique IDs, every command and variant runnable, real switches, ke
 	}
 	// Every command is gated by a real switch except the ones that must stay reachable
 	let ungated = C.COMMANDS.filter(c => !c.features.length).map(c => c.id);
-	same(ungated, ["stop", "discard", "classify-undo", "ai-batch-check", "ai-batch-cancel"]);
+	same(ungated, ["stop", "discard", "classify-undo", "zh-meta-undo", "ai-batch-check", "ai-batch-cancel"]);
 	// The list variants fill as many slots as the modules allow
 	assert.equal(C.get("screen-ft-exclude").max, env.ZB.screening.MAX_MENU_REASONS);
 	assert.equal(C.get("search-db").max, env.ZB.searchLinks.MENU_SLOTS);
@@ -452,7 +452,7 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 		"# zotero-bridge-toolbar-group-sync",
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
 		"—", "# zotero-bridge-toolbar-group-organize",
-		"zotero-bridge-classify-tools",
+		"zotero-bridge-classify-tools", "zotero-bridge-cmd-zh-meta",
 		"—", "# zotero-bridge-toolbar-group-search",
 		"zotero-bridge-search-menu ▸",
 		"—", "# zotero-bridge-toolbar-group-appraise",
@@ -471,7 +471,7 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 		"# zotero-bridge-toolbar-group-sync",
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
 		"—", "# zotero-bridge-toolbar-group-organize",
-		"zotero-bridge-classify-tools", "zotero-bridge-cmd-export-collection",
+		"zotero-bridge-classify-tools", "zotero-bridge-cmd-export-collection", "zotero-bridge-cmd-zh-meta",
 		"—", "# zotero-bridge-toolbar-group-appraise",
 		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary",
 		"—", "# zotero-bridge-toolbar-group-ai",
@@ -481,13 +481,13 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 	env.ZB.features.applyPreset("advanced");
 	same(shown(itemMenu, ctx).filter(x => !x.startsWith("#") && x !== "—"), [
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
-		"zotero-bridge-classify-tools", "zotero-bridge-search-menu ▸", "zotero-bridge-toolbar-chase-items", "zotero-bridge-toolbar-screen ▸",
+		"zotero-bridge-classify-tools", "zotero-bridge-cmd-zh-meta", "zotero-bridge-search-menu ▸", "zotero-bridge-toolbar-chase-items", "zotero-bridge-toolbar-screen ▸",
 		"zotero-bridge-cmd-appraisal-coach",
 		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-menu-ebhc-report",
 	]);
 	same(shown(collMenu, cctx).filter(x => !x.startsWith("#") && x !== "—"), [
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
-		"zotero-bridge-classify-tools", "zotero-bridge-cmd-export-collection",
+		"zotero-bridge-classify-tools", "zotero-bridge-cmd-export-collection", "zotero-bridge-cmd-zh-meta",
 		"zotero-bridge-chase-tools-included", "zotero-bridge-chase-tools-import",
 		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary",
 		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-menu-ebhc-report",
@@ -529,6 +529,7 @@ test("gating is live: switched-off commands, empty groups and empty submenus hid
 	assert.ok(!shown(itemMenu, ctx).includes("zotero-bridge-menu-regenerate"));
 	// The first group that shows has no separator above it
 	F.setEnabled("autoClassify", false);
+	F.setEnabled("zhMeta", false);
 	F.setEnabled("searchLinks", false);
 	same(shown(itemMenu, ctx), ["# zotero-bridge-toolbar-group-ai", "zotero-bridge-menu-synthesis"]);
 	// Nothing left: the whole submenu hides
@@ -552,7 +553,7 @@ test("right-click commands act on what was right-clicked, as the old entries did
 	let env = await setup();
 	env.ZB.features.applyPreset("advanced");
 	let { a, b, note, collection, other } = papers(env);
-	let calls = spies(env, ["main.run", "main.runSynthesis", "reviewDraft.run", "classify.run", "screening.setDecision", "screening.dedupCollection",
+	let calls = spies(env, ["main.run", "main.runSynthesis", "reviewDraft.run", "classify.run", "zhMeta.run", "screening.setDecision", "screening.dedupCollection",
 		"screening.generateReport", "citationChase.chaseItems", "citationChase.chaseCollection", "citationChase.importChecked",
 		"bibliography.exportCollections", "appraisalForm.exportCollections", "searchLinks.showMore", "searchLinks.openTarget"]);
 	let itemMenu = zbSubmenu(env, "zotero-bridge-item");
@@ -576,6 +577,8 @@ test("right-click commands act on what was right-clicked, as the old entries did
 	assert.equal(context.collectionTreeRows.length, 2, "the menu's own context is handed on");
 	same(await fire(entry(itemMenu, "zotero-bridge-classify-tools"), ctx), ["classify.run", [a, note, b]]);
 	same(await fire(entry(collMenu, "zotero-bridge-classify-tools"), cctx), ["classify.run", [a, b, b]]);
+	same(await fire(entry(itemMenu, "zotero-bridge-cmd-zh-meta"), ctx), ["zhMeta.run", [a, note, b]]);
+	same(await fire(entry(collMenu, "zotero-bridge-cmd-zh-meta"), cctx), ["zhMeta.run", [a, b, b]]);
 	same(await fire(entry(itemMenu, "zotero-bridge-toolbar-chase-items"), ctx), ["citationChase.chaseItems", [a, note, b], collection]);
 	same(await fire(entry(collMenu, "zotero-bridge-chase-tools-included"), cctx), ["citationChase.chaseCollection", collection]);
 	same(await fire(entry(collMenu, "zotero-bridge-chase-tools-import"), cctx), ["citationChase.importChecked", collection]);

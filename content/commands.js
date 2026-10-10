@@ -7,7 +7,8 @@
  *     holding the commands whose `menus` name that surface, with the same groups
  *   - the Tools menu (menus.js): 設定…, 快速指令… and the commands marked `tools` (batch entries that
  *     only show while there is something to stop, resume, discard, check or cancel)
- *   - 快速指令, the command palette (palette.js): every command plus 設定精靈… and the settings destinations
+ *   - 快速指令, the command palette (palette.js): every command plus 設定精靈…, 回報問題…, 試用回饋… and the
+ *     settings destinations
  *
  * A command: id, group, l10n (a Fluent message with a .label) and label (its zh-TW text, identical to
  * the FTL), features (switches in features.js; shown while any is on, none = always), needs (what it
@@ -343,6 +344,24 @@
 				}
 				return ZB().bibliography.exportCollections(cols);
 			} },
+		// 中文文獻補強 (zh-meta.js): the selected items, else the selected collection's
+		{ id: "zh-meta", group: "organize", l10n: "zotero-bridge-cmd-zh-meta", label: "檢查中文文獻資料（選取項目或分類）…",
+			features: ["zhMeta"], needs: "itemsOrCollection", menus: ["item", "collection"],
+			keywords: ["中文文獻", "中文", "補強", "檢查", "資料", "華藝", "airiti", "博碩士", "ndltd", "民國", "卷期", "頁碼", "doi", "作者", "姓名",
+				"語言", "zh-tw", "apa", "metadata", "chinese", "fix", "check"],
+			run: (sel) => {
+				let items;
+				if (sel.surface === "item") items = sel.items;
+				else if (sel.surface === "collection") items = itemsInCollections(sel.collections);
+				else items = regular(sel).length ? sel.items : sel.collection ? ZB().adapter.itemsInCollection(sel.collection, true) : [];
+				return ZB().zhMeta.run(items);
+			} },
+		// Not gated: what was applied can always be taken back, also after the switch went off
+		{ id: "zh-meta-undo", group: "organize", l10n: "zotero-bridge-cmd-zh-meta-undo", label: "復原上一次中文文獻修正",
+			features: [], needs: null, menus: [],
+			when: () => !!ZB().zhMeta.readLastRun(),
+			keywords: ["復原", "還原", "undo", "revert", "中文文獻", "補強", "修正", "chinese"],
+			run: () => ZB().zhMeta.undoLast() },
 
 		// ---------- 找文獻 ----------
 		{ id: "quick-search", group: "search", l10n: "zotero-bridge-search-tools", label: "醫學文獻快速搜尋…",
@@ -528,6 +547,17 @@
 	const SETUP = { id: "setup-wizard", l10n: "zotero-bridge-cmd-setup-wizard", label: "設定精靈…", features: [], needs: null, menus: [],
 		keywords: ["設定精靈", "精靈", "首次設定", "第一次", "入門", "開始使用", "setup", "wizard", "onboarding", "getting started", "first run"],
 		run: sel => ZB().setup.open(sel && sel.window) };
+	/**
+	 * 回報問題… and 試用回饋… (report.js): never switched off, like 設定精靈…. In the toolbar menu above
+	 * 設定精靈…, in 快速指令's 設定 group right after it, and at the foot of 設定 → 功能.
+	 */
+	const REPORT = { id: "report-issue", l10n: "zotero-bridge-cmd-report-issue", label: "回報問題…", features: [], needs: null, menus: [],
+		keywords: ["回報問題", "回報", "問題", "錯誤", "壞掉", "當掉", "bug", "report", "issue", "error", "github", "help"],
+		run: sel => ZB().report.reportIssue(sel && sel.window) };
+	const FEEDBACK = { id: "trial-feedback", l10n: "zotero-bridge-cmd-trial-feedback", label: "試用回饋…", features: [], needs: null, menus: [],
+		keywords: ["試用回饋", "試用", "回饋", "意見", "問卷", "建議", "feedback", "trial", "survey", "github"],
+		run: sel => ZB().report.trialFeedback(sel && sel.window) };
+	const HELP = [REPORT, FEEDBACK];
 
 	/**
 	 * Settings destinations (快速指令 results 「設定：…」): the sections of the settings pane by their
@@ -564,7 +594,7 @@
 	}
 
 	const BY_ID = new Map();
-	for (let c of [...COMMANDS, PALETTE, SETTINGS, SETUP]) {
+	for (let c of [...COMMANDS, PALETTE, SETTINGS, SETUP, ...HELP]) {
 		c.features = c.features || [];
 		c.menus = c.menus || [];
 		BY_ID.set(c.id, c);
@@ -777,6 +807,11 @@
 		// 設定精靈… first in the 設定 group: always runnable
 		out.push({ id: SETUP.id, kind: "command", group: "settings", l10n: SETUP.l10n, args: null, label: SETUP.label,
 			keywords: SETUP.keywords, availability: { ok: true }, command: SETUP, run: SETUP.run });
+		// Then 回報問題… and 試用回饋…: always runnable
+		for (let c of HELP) {
+			out.push({ id: c.id, kind: "command", group: "settings", l10n: c.l10n, args: null, label: c.label,
+				keywords: c.keywords, availability: { ok: true }, command: c, run: c.run });
+		}
 		for (let s of SECTIONS) {
 			let feature = featureToTurnOn(s.features);
 			out.push({
@@ -865,7 +900,7 @@
 	}
 
 	return {
-		PANE_ID, GROUPS, COMMANDS, PALETTE, SETTINGS, SETUP, SECTIONS, NEED_ITEMS, NEED_COLLECTION, NEED_REVIEW_COLLECTION,
+		PANE_ID, GROUPS, COMMANDS, PALETTE, SETTINGS, SETUP, REPORT, FEEDBACK, HELP, SECTIONS, NEED_ITEMS, NEED_COLLECTION, NEED_REVIEW_COLLECTION,
 		get, groupCommands, variantEntries, fillLabel,
 		fromContext, fromWindow, writingTarget, actionItems,
 		featureOn, featureToTurnOn, isVisible, isVisibleIn, availability, hasTarget,

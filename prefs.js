@@ -112,7 +112,8 @@ pref("extensions.zotero-bridge.searchLinks.meshHelper", true);
 // an enable pref before use it instead: llm.enabled, llm.batchAPI, status.enabled, apaZh.enabled,
 // images.export. features.version: the one-time migrations done (0 = none yet; 1 turns everything on for
 // profiles that used the plugin before the switches existed; 2 gives 進階 profiles the v0.10.0 switches:
-// 全文筆記, 文獻自動分類, 工具列按鈕, AI 標重點 and AI 主題分類; 3 the v0.12.0 switches: 評讀陪練)
+// 全文筆記, 文獻自動分類, 工具列按鈕, AI 標重點 and AI 主題分類; 3 the v0.12.0 switches: 評讀陪練;
+// 4 the v0.14.0 switch: 中文文獻補強)
 pref("extensions.zotero-bridge.features.version", 0);
 pref("extensions.zotero-bridge.feature.sync", true);
 pref("extensions.zotero-bridge.feature.bibliography", true);
@@ -135,6 +136,7 @@ pref("extensions.zotero-bridge.feature.classifyAI", false);
 pref("extensions.zotero-bridge.feature.toolbarButton", true);
 pref("extensions.zotero-bridge.feature.appraisalCoach", false);
 pref("extensions.zotero-bridge.feature.statsExplainer", false);
+pref("extensions.zotero-bridge.feature.zhMeta", true);
 // Settings pane (content/preferences.js): the tab chosen last, and a section (data-zb-section ID, e.g.
 // "notion") to open the next time the pane is on screen; the pane clears it once it has opened it
 pref("extensions.zotero-bridge.prefs.lastTab", "features");
@@ -161,3 +163,6 @@ pref("extensions.zotero-bridge.statsExplainer.confirmAbove", "0.05");
 // 設定精靈 (content/setup.js): true once the wizard was finished or closed, or set silently for a profile
 // that was already configured; while false and nothing is configured, the wizard opens by itself once
 pref("extensions.zotero-bridge.setup.done", false);
+// 中文文獻補強 (content/zh-meta.js): what the last 套用勾選的修正 changed (JSON: per item the fields,
+// authors and item type before and after), for 復原上一次中文文獻修正
+pref("extensions.zotero-bridge.zhMeta.lastRun", "");

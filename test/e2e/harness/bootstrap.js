@@ -358,6 +358,7 @@ const TESTS = [
 				dashboard: ["update", "afterSync", "runFromMenu"],
 				concepts: ["update", "afterSync", "dashboardSection", "runFromMenu", "synthesizeFromMenu"],
 				classify: ["parseRules", "evaluate", "parseTopics", "suggest", "defaultPicks", "planApply", "apply", "undoLast", "readLastRun", "review", "renderReview", "run"],
+				zhMeta: ["analyze", "itemData", "findingsFor", "paneCount", "buildPlan", "defaultPicks", "review", "renderReview", "apply", "undoLast", "readLastRun", "run"],
 				citationChase: ["chaseCollection", "chaseItems", "importChecked"],
 				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "menuTargets", "relatedFor", "showMore", "openTarget"],
 				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "batchParams", "parseResults"],
@@ -1603,6 +1604,92 @@ const TESTS = [
 		},
 	},
 	{
+		name: "中文文獻補強: a messy Chinese record is analyzed, fixed through the review window from chrome://zotero-bridge/, and undone (ZB.zhMeta)",
+		needs: ["Zotero.ZoteroBridge is set and has every module"],
+		timeout: 60000,
+		async fn(d) {
+			let Z = zb().zhMeta;
+			let EXTRA = "DOI: 10.6224/JN.202304_70(2).07";
+			let messy = await createItem("journalArticle", {
+				title: "護理人員跌倒預防衛教之成效：補強測試", date: "民國112年", publicationTitle: "護理雜誌", volume: "70(2)",
+				pages: "４５－５６頁", extra: EXTRA, language: "",
+			}, [{ name: "陳美玲、林小華", creatorType: "author" }]);
+			let win = null;
+			// Straight from the database, not the item's cache
+			let stored = async (field) => String(await Zotero.DB.valueQueryAsync(
+				"SELECT value FROM itemData JOIN itemDataValues USING (valueID) JOIN fields USING (fieldID) WHERE itemID=? AND fieldName=?", [messy.id, field]) || "");
+			let names = () => messy.getCreatorsJSON().map(c => String(c.name || `${c.lastName}/${c.firstName}`));
+			try {
+				// What the module sees in the real item (Zotero's date, creators in single-field mode, field validity)
+				let findings = Z.findingsFor(messy);
+				d.findings = findings.map(f => `${f.id}:${f.confidence}`);
+				let want = ["creators-0:sure", "date:sure", "volume:sure", "pages:sure", "DOI:sure", "language:sure"];
+				check(JSON.stringify(d.findings) === JSON.stringify(want), `findings ${JSON.stringify(d.findings)}, expected ${JSON.stringify(want)}`);
+				eq(Z.paneCount(messy), 6, "paneCount() for the ZotMax panel");
+
+				// The review window: every finding sure, so every box starts ticked; 套用勾選的修正
+				let plan = Z.buildPlan([messy]);
+				let opened = null;
+				let result = Z.review(plan, { onOpen: (w) => {
+					opened = w;
+				} });
+				win = await waitFor(() => opened, "the review window (chrome://zotero-bridge/content/zh-meta-review.xhtml) to show the plan", 30000);
+				let doc = win.document;
+				eq(doc.documentURI, Z.DIALOG_URL, "review window URL");
+				let root = doc.getElementById(Z.DIALOG_ROOT);
+				// classify-review.css and zh-meta-review.css are applied (registered chrome package)
+				d.rootDisplay = win.getComputedStyle(root).display;
+				eq(d.rootDisplay, "flex", "display of #zb-zhmeta (is classify-review.css loaded?)");
+				let row = root.querySelector(".zb-zm-row");
+				d.rowDisplay = row ? win.getComputedStyle(row).display : "";
+				eq(d.rowDisplay, "grid", "display of .zb-zm-row (is zh-meta-review.css loaded?)");
+				let boxes = [...root.querySelectorAll("input[type=checkbox]")];
+				d.checked = boxes.map(b => !!b.checked);
+				check(boxes.length === 6 && boxes.every(b => b.checked), `checkboxes ${JSON.stringify(d.checked)}`);
+				d.summary = String(root.querySelector(".zb-cl-summary").textContent);
+				eq(d.summary, "已勾選 6 項修正，會改動 1 篇文獻。", "summary line");
+				root.querySelector(".zb-cl-apply").click();
+				let picks = await result;
+				check(Array.isArray(picks) && picks.length === 6, `review() resolved with ${JSON.stringify(picks)}`);
+				await waitFor(() => win.closed, "the review window to close after 套用", 10000);
+				let applied = await Z.apply(plan, picks);
+				d.apply = plain(applied);
+				eq(applied.errors.length, 0, `apply() errors: ${applied.errors.join("; ")}`);
+				eq(applied.fixes, 6, "fixes applied");
+
+				let fixed = {};
+				for (let f of ["date", "volume", "issue", "pages", "DOI", "extra", "language"]) fixed[f] = String(messy.getField(f));
+				d.fixed = fixed;
+				let wantFixed = { date: "2023", volume: "70", issue: "2", pages: "45-56", DOI: "10.6224/JN.202304_70(2).07", extra: "", language: "zh-TW" };
+				check(JSON.stringify(fixed) === JSON.stringify(wantFixed), `fields after apply ${JSON.stringify(fixed)}`);
+				eq(await stored("pages"), "45-56", "pages in the database");
+				eq(await stored("language"), "zh-TW", "language in the database");
+				d.creators = names();
+				eq(JSON.stringify(d.creators), JSON.stringify(["陳美玲", "林小華"]), "creators after apply");
+				eq(Z.findingsFor(messy).length, 0, "findings left after apply");
+				check(Z.readLastRun(), "zhMeta.lastRun after apply");
+
+				// 復原上一次中文文獻修正
+				let undo = await Z.undoLast({ silent: true });
+				d.undo = plain(undo);
+				check(undo && undo.items === 1 && !undo.kept.length, `undoLast() returned ${JSON.stringify(undo)}`);
+				let restored = {};
+				for (let f of ["date", "volume", "issue", "pages", "DOI", "extra", "language"]) restored[f] = String(messy.getField(f));
+				d.restored = restored;
+				let wantRestored = { date: "民國112年", volume: "70(2)", issue: "", pages: "４５－５６頁", DOI: "", extra: EXTRA, language: "" };
+				check(JSON.stringify(restored) === JSON.stringify(wantRestored), `fields after undo ${JSON.stringify(restored)}`);
+				eq(await stored("pages"), "４５－５６頁", "pages in the database after undo");
+				eq(JSON.stringify(names()), JSON.stringify(["陳美玲、林小華"]), "creators after undo");
+				eq(Z.readLastRun(), null, "zhMeta.lastRun after undo");
+			}
+			finally {
+				if (win && !win.closed) win.close();
+				if (Z.readLastRun()) await Z.undoLast({ silent: true });
+				await messy.eraseTx();
+			}
+		},
+	},
+	{
 		name: "設定精靈 opens from its command, points Obsidian at a vault, syncs one item (試一次, no AI), 完成 sets setup.done and closes it",
 		needs: ["create items with PDF attachments in the real library"],
 		timeout: 120000,
@@ -1715,6 +1802,72 @@ const TESTS = [
 				ZBm.features.restore(before.features);
 			}
 		},
+	},
+	{
+		name: "回報問題 opens the bug form with the real profile's environment: versions in it, no profile or vault path (launchURL and the dialog stubbed)",
+		needs: ["Zotero.ZoteroBridge is set and has every module"],
+		async fn(d) {
+			let ZBm = zb();
+			let R = ZBm.report;
+			check(R && typeof R.reportIssue === "function" && R.runtime, "ZB.report is missing");
+			let cmd = ZBm.commands.get("report-issue");
+			check(cmd && !cmd.features.length, "the catalog has no ungated report-issue command");
+			let vault = PathUtils.join(workDir, "vault-report", "My Thesis Vault");
+			let beforeVault = Zotero.Prefs.get(ZB_PREF + "obsidian.vaultPath", true);
+			let launchURL = Zotero.launchURL;
+			let confirm = R.runtime.confirm;
+			let launched = [];
+			let shown = [];
+			let result = null;
+			try {
+				setPref("obsidian.vaultPath", vault);
+				// A ZotMax error with the vault path in it, in the real error console
+				Zotero.logError(new Error(`ZotMax e2e: could not write ${vault}/Zotero/Lin 2019.md`));
+				await delay(200);
+				R.runtime.confirm = (win, title, text) => {
+					shown.push(String(text));
+					return "open";
+				};
+				Zotero.launchURL = (url) => {
+					launched.push(String(url));
+				};
+				result = await ZBm.commands.execute(cmd, ZBm.commands.fromWindow(mainWindow(), "palette"));
+			}
+			finally {
+				Zotero.launchURL = launchURL;
+				R.runtime.confirm = confirm;
+				if (beforeVault) setPref("obsidian.vaultPath", beforeVault);
+				else Zotero.Prefs.clear(ZB_PREF + "obsidian.vaultPath", true);
+			}
+			check(Zotero.launchURL === launchURL, "Zotero.launchURL was not restored");
+			d.action = result ? String(result.action) : "none";
+			eq(d.action, "open", "result of the command");
+			eq(launched.length, 1, "URLs opened");
+			let url = launched[0];
+			d.urlLength = url.length;
+			d.urlStart = url.slice(0, 80);
+			check(url.startsWith("https://github.com/bobyu89/zotero-bridge/issues/new?template=bug.yml&env="), `URL ${d.urlStart}`);
+			check(url.length <= 6000, `URL is ${url.length} characters`);
+			let env = new URL(url).searchParams.get("env") || "";
+			d.env = env;
+			eq(env, String(result.env), "the env in the URL and the one the command returned");
+			check(shown.length === 1 && shown[0].includes(env), "the dialog did not show the env text that went into the URL");
+			check(env.split("\n").includes(`ZotMax：${ctx.expectedVersion}`), `no ZotMax version line in\n${env}`);
+			check(env.split("\n").includes(`Zotero：${Zotero.version}`), `no Zotero version line in\n${env}`);
+			check(/^系統：.+/m.test(env) && /^文獻數：(<100|100–1000|>1000)$/m.test(env), `OS or library bucket missing in\n${env}`);
+			check(env.split("\n").includes("筆記：Obsidian 有設定，Notion 沒有"), `note targets in\n${env}`);
+			check(/ZotMax e2e: could not write /.test(env), `the e2e error is not listed in\n${env}`);
+			let privateValues = [vault, "My Thesis Vault", "Lin 2019", workDir, PathUtils.profileDir, Zotero.DataDirectory.dir];
+			try {
+				if (PathUtils.homeDir && PathUtils.homeDir.length > 5) privateValues.push(PathUtils.homeDir);
+			}
+			catch (e) {}
+			let leaked = privateValues.filter(v => v && (env.includes(v) || url.includes(encodeURIComponent(v)) || shown[0].includes(v)));
+			d.leaked = leaked.map(String);
+			check(!leaked.length, `private values in the report: ${leaked.join(", ")}`);
+		},
+		// The error the test logs itself, in case its path happens to look like the plugin's
+		allow: /ZotMax e2e: could not write/,
 	},
 	{
 		name: "control: Zotero's own preferences window opens and closes cleanly",

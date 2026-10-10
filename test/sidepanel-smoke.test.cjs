@@ -645,3 +645,51 @@ test("shutdown: the section, the Notifier and pref observers and the stylesheet 
 	assert.equal(env.window.document.getElementById("zotero-bridge-sidepanel-css"), null);
 	assert.deepEqual(env.errors, []);
 });
+
+test("狀態: a Chinese item whose data needs a look gets one line and a button that opens 中文文獻補強; quiet otherwise", async () => {
+	let env = await setup({ [P + "features.version"]: 1 });
+	let F = env.ZB.features;
+	let messy = new env.MockItem("journalArticle", {
+		title: "護理人員跌倒預防衛教之成效", date: "民國112年", publicationTitle: "護理雜誌", volume: "70(2)", pages: "４５－５６頁", language: "",
+		creators: [{ name: "陳美玲、林小華", creatorType: "author" }],
+	});
+	let { doc, body } = dom();
+	let render = item => env.section.onRender({ doc, body, item, setSectionSummary: () => {} });
+	render(messy);
+	let status = sub(body, "status");
+	assert.equal(status.hidden, false);
+	let line = status.querySelector("[data-zb-zhmeta]");
+	assert.ok(line, "the 中文資料 line");
+	assert.equal(line.dataset.zbZhmeta, "5");
+	let label = line.querySelector("span");
+	assert.equal(label.textContent, "中文資料：5 個地方要檢查");
+	assert.equal(label.getAttribute("data-l10n-id"), "zotero-bridge-pane-zh-meta");
+	assert.deepEqual(JSON.parse(label.getAttribute("data-l10n-args")), { count: 5 });
+	assert.match(status.querySelector(".zb-sp-peek").textContent, /中文資料：5 個地方要檢查/, "visible while 狀態 is closed");
+	let calls = [];
+	env.ZB.zhMeta.run = async (items) => {
+		calls.push(items.map(i => i.id));
+		return { cancelled: true };
+	};
+	let button = line.querySelector("button[data-zb-action=zh-meta]");
+	assert.equal(button.textContent, "檢查並修正…");
+	button.click();
+	assert.deepEqual(plain(calls), [[messy.id]]);
+	assert.equal(button.getAttribute("aria-busy"), "true");
+	await until(() => !button.hasAttribute("aria-busy"), "the button to come back");
+
+	// Quiet: a clean Chinese item, an English item, the switch off
+	for (let item of [
+		new env.MockItem("journalArticle", { title: "加護病房護理人員之睡眠品質", date: "2020", publicationTitle: "長庚護理", volume: "31", issue: "1", pages: "1-12", language: "zh-TW",
+			creators: [{ lastName: "王", firstName: "大明", creatorType: "author" }] }),
+		new env.MockItem("journalArticle", { title: "Exercise and falls", date: "民國112年", pages: "45~56", creators: [{ name: "陳美玲、林小華", creatorType: "author" }] }),
+	]) {
+		render(item);
+		assert.equal(body.querySelector("[data-zb-zhmeta]"), null);
+		assert.doesNotMatch(body.textContent, /中文資料/);
+	}
+	F.setEnabled("zhMeta", false);
+	render(messy);
+	assert.equal(body.querySelector("[data-zb-zhmeta]"), null);
+	assert.deepEqual(env.errors, []);
+});

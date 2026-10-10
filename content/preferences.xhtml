@@ -36,6 +36,11 @@
 				<html:span id="zb-open-setup-hint" class="zb-hint" data-l10n-id="zotero-bridge-prefs-open-setup-hint">第一次用？精靈會帶你接上 Obsidian 或 Notion，再同步一篇看看。</html:span>
 			</html:p>
 			<html:div id="zb-features" class="zb-features"/>
+			<html:p id="zb-report-links" class="zb-setup-link zb-report-links">
+				<html:button type="button" id="zb-report-issue" data-l10n-id="zotero-bridge-prefs-report-issue" aria-describedby="zb-report-hint" onclick="ZoteroBridgePrefs.reportIssue()">回報問題…</html:button>
+				<html:button type="button" id="zb-trial-feedback" data-l10n-id="zotero-bridge-prefs-trial-feedback" aria-describedby="zb-report-hint" onclick="ZoteroBridgePrefs.trialFeedback()">試用回饋…</html:button>
+				<html:span id="zb-report-hint" class="zb-hint" data-l10n-id="zotero-bridge-prefs-report-hint">在瀏覽器打開 GitHub（需要帳號）；送出前會先讓你看要附上的環境資訊。</html:span>
+			</html:p>
 		</groupbox>
 	</vbox>
 

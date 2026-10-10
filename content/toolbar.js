@@ -7,7 +7,7 @@
  * buttons next to it (content/toolbar.css only adds the icon).
  *
  * Clicking it opens 快速指令… first, then every command of the command catalog (commands.js) grouped
- * by research workflow (同步／整理／找文獻／篩選與評讀／AI 輔助與寫作), then 設定精靈… and 設定…. The right-click menus
+ * by research workflow (同步／整理／找文獻／篩選與評讀／AI 輔助與寫作), then 回報問題… and 試用回饋…, 設定精靈… and 設定…. The right-click menus
  * (menus.js) and the palette (palette.js) come from the same catalog, so an entry reads and acts the
  * same everywhere; here it acts on the main window's current selection (and the selected collection
  * where a collection command expects one). Visibility is decided each time the menu opens: entries of
@@ -142,8 +142,10 @@
 		}
 		let sep = xul(doc, "menuseparator");
 		sep.setAttribute("data-zb-group-separator", "settings");
-		// 設定精靈… (always there, so it can be found again), then 設定… last
-		popup.append(sep, menuitem(doc, win, C().SETUP), menuitem(doc, win, C().SETTINGS));
+		// 回報問題… and 試用回饋… (report.js), then 設定精靈… (always there, so it can be found again), then 設定… last
+		let helpSep = xul(doc, "menuseparator");
+		helpSep.setAttribute("data-zb-help-separator", "true");
+		popup.append(sep, ...C().HELP.map(entry => menuitem(doc, win, entry)), helpSep, menuitem(doc, win, C().SETUP), menuitem(doc, win, C().SETTINGS));
 		popup.addEventListener("popupshowing", (ev) => {
 			if (ev.target === popup) update(popup);
 		});

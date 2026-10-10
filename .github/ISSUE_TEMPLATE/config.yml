@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 安裝與設定說明
+    url: https://bobyu89.github.io/zotero-bridge/#install
+    about: 還沒裝好或不知道從哪開始？網站上的安裝精靈一步一步帶你做。

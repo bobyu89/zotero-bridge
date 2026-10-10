@@ -1,0 +1,96 @@
+name: 試用回饋
+description: 試用 ZotMax 一週後的問卷，大約 5 分鐘；只有「整體來說有沒有用」必填。
+title: "[試用回饋] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        謝謝你試用 ZotMax！照你實際用到的回答就好，沒用到的可以空著。
+        **這裡是公開的，任何人都看得到**：請不要寫進未發表的研究資料、病人資訊、API key 或 Notion token。
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 從 Zotero 的「試用回饋…」打開時會自動填好。
+      placeholder: ZotMax 0.14 · Zotero 10
+  - type: input
+    id: preset
+    attributes:
+      label: 用的是哪個模式
+      description: 研究生引導、進階或自訂；不確定可以空著。
+      placeholder: 研究生引導
+  - type: dropdown
+    id: setup-finished
+    attributes:
+      label: 設定精靈有走完嗎？
+      options:
+        - 走完了
+        - 走到一半就關掉
+        - 沒有打開過
+        - 不記得
+  - type: dropdown
+    id: setup-stuck
+    attributes:
+      label: 設定精靈卡在哪一步？
+      description: 沒有卡住就選第一個。
+      options:
+        - 沒有卡住
+        - 1 歡迎
+        - 2 選模式
+        - 3 筆記放哪裡
+        - 4 AI（選填）
+        - 5 試一次
+        - 6 完成
+        - 其他
+  - type: checkboxes
+    id: features
+    attributes:
+      label: 這週用過哪些功能？
+      options:
+        - label: 同步到 Obsidian／Notion
+        - label: 側邊面板（ZotMax 面板）
+        - label: 快速指令
+        - label: 閱讀狀態
+        - label: 文獻自動分類
+        - label: 評讀表
+        - label: 篩選／PRISMA
+        - label: 中文文獻補強
+        - label: AI 筆記
+        - label: 評讀陪練
+        - label: 讀懂統計
+        - label: 其他
+  - type: textarea
+    id: confusing
+    attributes:
+      label: 哪裡讓你看不懂或卡住？
+      description: 哪個畫面、哪句話、哪個按鈕。
+  - type: textarea
+    id: remove
+    attributes:
+      label: 有什麼是你覺得可以拿掉的？
+  - type: dropdown
+    id: usefulness
+    attributes:
+      label: 整體來說有沒有用？
+      options:
+        - 5 很有用
+        - 4 有用
+        - 3 普通
+        - 2 不太有用
+        - 1 沒有用
+    validations:
+      required: true
+  - type: dropdown
+    id: keep-using
+    attributes:
+      label: 試用結束後還會繼續用嗎？
+      options:
+        - 會
+        - 可能會
+        - 不會
+        - 還不確定
+  - type: textarea
+    id: comments
+    attributes:
+      label: 還想說的
+      description: 想要的功能、喜歡或不喜歡的地方，都可以。
