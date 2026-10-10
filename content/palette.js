@@ -159,6 +159,33 @@
 	}
 
 	/**
+	 * A window's own messages (name → [l10n ID, zh-TW text with { $arg } placeholders]), formatted once
+	 * through a document's Fluent with markers where the arguments go; the zh-TW text where Fluent
+	 * isn't there. Resolves to string(name, args). Shared with the setup wizard (setup.js).
+	 */
+	async function localizeStrings(doc, strings) {
+		let found = new Map();
+		let l10n = doc && doc.l10n;
+		let names = Object.keys(strings);
+		if (l10n && l10n.formatValues) {
+			try {
+				let values = await l10n.formatValues(names.map(n => ({ id: strings[n][0], args: markers(strings[n][1]) })));
+				names.forEach((n, i) => {
+					if (values[i]) found.set(n, values[i]);
+				});
+			}
+			catch (e) {
+				log(e);
+			}
+		}
+		return (name, args) => {
+			let raw = found.get(name);
+			if (raw) return raw.replace(/\u2068?§(\w+)§\u2069?/g, (m, k) => (args && args[k] !== undefined ? String(args[k]) : ""));
+			return fill(strings[name][1], args);
+		};
+	}
+
+	/**
 	 * Localized texts for the palette, from the main window's Fluent (it carries zotero-bridge.ftl);
 	 * the zh-TW catalog text where Fluent isn't there. Returns { label(entry), group(entry), feature(id),
 	 * string(name, args) }.
@@ -190,31 +217,17 @@
 			catch (e) {
 				log(e);
 			}
-			// The palette's own messages, formatted with markers where their arguments go
-			let names = Object.keys(STRINGS);
-			try {
-				let values = await l10n.formatValues(names.map(n => ({ id: STRINGS[n][0], args: markers(STRINGS[n][1]) })));
-				names.forEach((n, i) => {
-					if (values[i]) found.set(`string:${n}`, values[i]);
-				});
-			}
-			catch (e) {
-				log(e);
-			}
 		}
 		let get = (id, args, fallback) => found.get(argsKey(id, args)) || fallback;
-		let string = (name, args) => {
-			let raw = found.get(`string:${name}`);
-			if (raw) return raw.replace(/\u2068?§(\w+)§\u2069?/g, (m, k) => (args && args[k] !== undefined ? String(args[k]) : ""));
-			return fill(STRINGS[name][1], args);
-		};
+		let string = await localizeStrings(doc, STRINGS);
 		let label = (e) => {
 			if (e.kind === "settings") return string("settingsEntry", { name: get(e.l10n, null, e.name) });
 			let own = get(e.l10n, e.args, C().fillLabel(e.label, e.args));
 			return e.parentL10n ? `${get(e.parentL10n, null, e.parentLabel)} › ${own}` : own;
 		};
 		let group = (e) => {
-			if (e.kind === "settings") return string("groupSettings");
+			// 設定精靈… sits with the settings destinations
+			if (e.kind === "settings" || e.group === "settings") return string("groupSettings");
 			let g = C().GROUPS.find(x => x.id === e.group);
 			return g ? get(g.l10n, null, g.label) : "";
 		};
@@ -418,14 +431,17 @@
 
 	// ---------- the window ----------
 
-	/** Wait for the dialog document (not the initial about:blank) to be ready. */
-	function waitForDialog(win, timeoutMs = 15000) {
+	/**
+	 * Wait for the dialog document (not the initial about:blank) to be ready; resolves with its root
+	 * element (opts.root, default the palette's). Shared with the setup wizard (setup.js).
+	 */
+	function waitForDialog(win, { root: rootID = DIALOG_ROOT, what = "快速指令視窗沒有開啟", timeoutMs = 15000 } = {}) {
 		return new Promise((resolve, reject) => {
 			let start = Date.now();
 			let check = () => {
 				try {
 					let doc = win.document;
-					let rootEl = doc && doc.getElementById(DIALOG_ROOT);
+					let rootEl = doc && doc.getElementById(rootID);
 					if (rootEl && doc.readyState === "complete") {
 						resolve(rootEl);
 						return;
@@ -433,7 +449,7 @@
 				}
 				catch (e) {}
 				if (win.closed || Date.now() - start > timeoutMs) {
-					reject(new Error("快速指令視窗沒有開啟"));
+					reject(new Error(what));
 					return;
 				}
 				setTimeout(check, 50);
@@ -532,7 +548,7 @@
 
 	(root.ZB = root.ZB || {}).palette = {
 		DIALOG_URL, DIALOG_ROOT, STRINGS, ZOTERO_KEYS,
-		open, close, render, localize, runEntry, attach, detach, shutdown, isShortcut, shortcutConflict, shortcutLabel,
+		open, close, render, localize, localizeStrings, waitForDialog, runEntry, attach, detach, shutdown, isShortcut, shortcutConflict, shortcutLabel,
 		get isOpen() { return !!(current && !current.closed); },
 		get windowCount() { return attached.size; },
 	};

@@ -60,6 +60,9 @@ user_pref("extensions.zotero.sync.autoSync", false);
 user_pref("extensions.zotero.automaticScraperUpdates", false);
 user_pref("extensions.zotero.firstRunGuidance", false);
 user_pref("extensions.zotero.reportTranslationFailure", false);
+// The ZotMax setup wizard (content/setup.js) opens by itself on a fresh install (ADDON_INSTALL here); the
+// tests open it themselves, so it must not pop up over them
+user_pref("extensions.zotero-bridge.setup.done", true);
 user_pref("extensions.zb-e2e.workDir", "$WORK");
 user_pref("extensions.zb-e2e.mode", "$2");
 user_pref("extensions.zb-e2e.expectedVersion", "$VERSION");

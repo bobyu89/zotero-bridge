@@ -114,6 +114,16 @@ components:
     # one item where the AI answered differently, inside the open 文獻評讀表; a Hairline above, no box
     textColor: "{colors.text}"
     padding: "6px 0"
+  setup-step:
+    # one name in the 設定精靈's step list; the current one Ink with a 2px {colors.accent} rule, like settings-tab-selected
+    textColor: "{colors.text-muted}"
+    padding: "0.25em 0 0.5em"
+  setup-option:
+    # a choice in the 設定精靈 (mode, where notes go): the preset-option component
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.md}"
+    padding: "0.5em 0.75em"
 ---
 
 # Design System: ZotMax
@@ -131,7 +141,7 @@ The surface is **Operate** mode. A nursing graduate student opens settings to ge
 - Sizes in `em`, so Zotero's font-size setting scales the whole pane.
 - Settings by workflow: a search box, then six tabs in research order (功能 · 同步 · 整理 · 找文獻 · 篩選與評讀 · AI); every section has a stable ID other code can open.
 - Progressive disclosure twice over: sections of a switched-off feature disappear, and expert options sit behind a closed `<details>`.
-- Standard controls only: native checkboxes, radios, buttons, XUL menulists. No custom switches, no modals; the plugin's own windows are the 文獻自動分類 review and 快速指令, both opened on request.
+- Standard controls only: native checkboxes, radios, buttons, XUL menulists. No custom switches, no modals; the plugin's own windows are the 文獻自動分類 review, 快速指令 and the 設定精靈 (opened by itself once on a fresh install, otherwise on request), all non-modal.
 - One command catalog: the toolbar menu, the right-click menus and 快速指令 show the same commands, in the same groups, with the same words; the ZotMax panel's 動作 runs a few of the same commands for one item.
 - Traditional Chinese copy; method terms (PICO, MeSH, CASP, JBI, PRISMA) stay in English.
 
@@ -276,14 +286,14 @@ The mouse way into every command, next to the items it acts on. It is a guest in
 - **Shape and states:** a XUL `toolbarbutton` with Zotero's `zotero-tb-button` class, `type="menu"` and a dropmarker, so size (40 × 28px), 5px radius, hover (Hairline fill), active and open (`--fill-quarternary`), disabled and the focus ring are Zotero's own rules. `toolbar.css` sets only the icon: `bridge.svg` as `list-style-image`, filled with `currentColor` through `-moz-context-properties`, drawn at Zotero's 20px. No colors of its own, so light, dark and high-contrast themes follow the neighbouring buttons.
 - **Name:** tooltip and `aria-label` 「ZotMax」 (the product name, the same in every language); no visible text, like its neighbours.
 - **Keyboard:** Zotero's toolbar is one arrow-key row (`tabindex="-1"` on every button); the button joins it: ArrowRight from 「新增筆記」 reaches it, ArrowLeft goes back, Tab goes on to the search box. Enter, Space and ArrowDown open the menu.
-- **Menu:** 「快速指令…」 first (with its shortcut as accelerator text) and a separator, then the catalog's groups in the order of the research workflow, each under a caption (Label weight 600, Pencil; a XUL `menucaption`, never clickable): 同步 → 整理 → 找文獻 → 篩選與評讀 → AI 輔助與寫作, separated by native separators, then 「設定…」 always last. Commands with variants (篩選所選文獻, 在醫學資料庫搜尋) are a submenu, filled each time it opens; nothing goes deeper than that. No icons in the menu: the button carries the only one.
+- **Menu:** 「快速指令…」 first (with its shortcut as accelerator text) and a separator, then the catalog's groups in the order of the research workflow, each under a caption (Label weight 600, Pencil; a XUL `menucaption`, never clickable): 同步 → 整理 → 找文獻 → 篩選與評讀 → AI 輔助與寫作, separated by native separators, then 「設定精靈…」 and 「設定…」 always last. Commands with variants (篩選所選文獻, 在醫學資料庫搜尋) are a submenu, filled each time it opens; nothing goes deeper than that. No icons in the menu: the button carries the only one.
 - **Live:** checked each time the menu opens: entries of switched-off features hide, conditional entries (繼續／停止／放棄同步, 復原上次分類, 檢查／取消 AI 批次) appear only when there is something to do, and a group with nothing left hides with its caption. The switch 「工具列按鈕」 hides the button itself without a restart; 快速指令 stays available.
 - **Selection:** commands act on the items selected in the list; collection commands (找重複, PRISMA, 評讀總表, 引文追蹤納入研究, 匯出此分類的參考文獻) on the collection selected on the left; with nothing suitable selected they say so in the same words as everywhere else (「請先選取文獻。」).
 
 ### Command catalog (`content/commands.js`)
 The single list of everything the plugin can be asked to do; every surface is generated from it, so a command reads and acts the same wherever it is found.
 - **Entry:** id, l10n ID and its zh-TW label (identical to the FTL), workflow group, the feature switches that show it (any of them), what it acts on (selected items, the selected collection, either, or nothing), the right-click surfaces it belongs to, an extra live condition (a batch to resume, a run to undo), Chinese and English search keywords, and the function it runs, or variants (decisions, databases, exclusion reasons).
-- **Surfaces:** the toolbar menu and 快速指令 offer every command; the ZotMax panel's 動作 a fixed few item commands (with short labels of their own); the item menu the ones that act on items; the collection menu the ones that act on a collection; the Tools menu only 「ZotMax 設定…」, 「ZotMax 快速指令…」 and the batch entries while they apply.
+- **Surfaces:** the toolbar menu and 快速指令 offer every command, plus 「設定精靈…」 (outside the groups, never switched off: next to 設定… in the menu, first in 快速指令's 設定 group); the ZotMax panel's 動作 a fixed few item commands (with short labels of their own); the item menu the ones that act on items; the collection menu the ones that act on a collection; the Tools menu only 「ZotMax 設定…」, 「ZotMax 快速指令…」 and the batch entries while they apply.
 - **Settings destinations:** the sections of the settings pane by their stable IDs (`features, sync, obsidian, notion, routing, autosync, status, apaZh, bibliography, concepts, fulltext, colors, classify, searchLinks, ncbi, pubmedWatch, citationChase, screening, ai, usage`), opened through `prefs.pendingSection`, which the pane reads.
 
 ### Right-click menus (`content/menus.js`)
@@ -300,6 +310,19 @@ The keyboard way to everything, and the way to find a feature by name. A non-mod
 - **Search:** label and keywords in Chinese and English; case-, width- (full-width letters) and space-insensitive; every word must match; substring first, then letters in order (prsma → PRISMA); a label the query covers more of ranks higher; settings destinations a little below commands.
 - **Bottom** (sidepane material, Hairline above): a `role="status"` line (result count, 「沒有符合「…」的指令。…」, why a choice can't run) and the keys in Pencil: 「上下鍵選擇 · Enter 執行 · Esc 關閉」 and the shortcut.
 - **Keys:** ArrowUp/ArrowDown move (wrapping), PageUp/PageDown by five, Enter chooses, Esc closes. Choosing closes the palette first; the command then runs on the main window's selection at that moment.
+
+### Setup wizard (設定精靈, `setup.xhtml`, `setup.css`, `content/setup.js`)
+From "just installed" to "first literature note synced" without the settings pane. A non-modal Zotero window (about 640 × 620) with the same borrowed palette, spacing and flat surfaces as 快速指令; the plugin's code draws everything into `#zb-setup`.
+- **Opens:** by itself once, 1.5 s after the main window is ready (`uiReadyPromise`), on a profile that has never finished it (`extensions.zotero-bridge.setup.done` false) and has nothing configured (no vault, Notion database, stored key or other earlier use from features.js `PRIOR_USE`); a configured profile (an upgrade, a reinstall) is marked done silently and never sees it. On request from 「設定精靈…」 (toolbar menu, 快速指令) and 「開啟設定精靈」 at the top of 設定 → 功能. A second open brings the open one to the front; each opening gets a fresh window name.
+- **Head** (sidepane material, Hairline below): 「ZotMax 設定精靈」 (600) with 「第 2 步，共 6 步」 (Pencil, 0.92em) on the same line, then the six step names as an ordered list (歡迎 · 選模式 · 筆記放哪裡 · AI（選填） · 試一次 · 完成), Pencil, the current one Ink with a 2px Accent rule under it and `aria-current="step"`, like the settings tabs. Not clickable: the order is the flow.
+- **Body** (scrolls, measure 40em): the step's heading (1.3em, 600; focus moves to it on every step change), a lead sentence, then the step's controls. Choices (mode, where notes go) are preset options (the whole option is the radio's label; Accent border and Wash when checked; a 2px Accent outline around the option on focus); 「建議新手」 is a marker-tag chip. The fields of a choice sit under a Hairline with a 600 legend and appear only for that choice (Obsidian: folder field + 「選擇資料夾…」 (Zotero's FilePicker) and a live check line; Notion: three how-to steps, a text link to the site's illustrated steps, token (password field) and database link, 「測試連線」 with main.testNotion's lines under it).
+- **Words carry the state:** checks and errors are Pencil 0.92em lines (`role="status"`); an error is Ink at 600 with `aria-invalid` on its field, never red. Secrets are never shown back: a stored token or key reads 「已經存了一組…；留空就沿用。」.
+- **AI step:** says it costs money and is optional before any field; 「先不用 AI」 is the prominent button (600), 「儲存並繼續」 stays disabled until a key is typed. The key is checked for its format only (no API call that costs money), stored with secrets.js, never logged.
+- **試一次:** names the item (selected, else first in the list), 「同步這一篇」 runs the catalog's `sync-no-ai` (no AI, no cost), then one line where the note went and 「在 Obsidian 開啟」／「在 Notion 開啟」. Without a destination it says so and the button stays disabled.
+- **完成:** where things are, as a list (toolbar button, ZotMax panel, 快速指令 with its shortcut, 設定 → ZotMax, how to reopen the wizard), then 「目前的設定」 (mode, notes, AI) and 「打開 ZotMax 設定」.
+- **Bottom** (sidepane material, Hairline above): a `role="status"` line (what the step saved, or why it can't go on), then 上一步 on the left, 略過 and the primary 下一步 (600; 開始設定 on step 1, 完成 on the last) on the right, then one Pencil line: Esc closes and nothing is lost.
+- **Writes:** only 下一步 (and 測試連線) write, and only that step's settings; 略過 and 上一步 write nothing. 完成, Esc and the window's close button set `setup.done`; Zotero quitting or the plugin shutting down closes the window without it.
+- **Keys:** Tab through native controls (radios move with the arrow keys inside their group), Enter in a text field confirms the step, Esc closes. Focus rings are 2px Accent.
 
 ### ZotMax panel (`content/sidepanel.js`, `sidepanel.css`)
 The paper at a glance, next to it: one section of Zotero's item pane, so it sits beside the selected item in the library and beside the PDF in the reader's side pane (ItemPaneManager sections appear in both; for an attachment or a note it shows the parent item, a standalone PDF has none). It is the literature note's 「重點」 brought back into Zotero, plus the item's state and its commands. Always available, not a feature switch: Zotero's own header collapses it and remembers that (`extensions.zotero.panes.<pane>.open`; the pane ID `zotero-bridge-ai-note` is kept from the earlier 「AI 文獻筆記」 section so that state survives).

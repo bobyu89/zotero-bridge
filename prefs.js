@@ -158,3 +158,6 @@ pref("extensions.zotero-bridge.pane.open", "{}");
 // is over statsExplainer.confirmAbove US$; otherwise the estimate shows in the panel), "always" or "never"
 pref("extensions.zotero-bridge.statsExplainer.confirm", "above");
 pref("extensions.zotero-bridge.statsExplainer.confirmAbove", "0.05");
+// 設定精靈 (content/setup.js): true once the wizard was finished or closed, or set silently for a profile
+// that was already configured; while false and nothing is configured, the wizard opens by itself once
+pref("extensions.zotero-bridge.setup.done", false);

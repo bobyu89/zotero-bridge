@@ -31,6 +31,10 @@
 		<groupbox data-zb-section="features" id="zb-features-box" class="zb-features-box">
 			<label data-search-strings-raw="features, feature switches, presets, guided, advanced, custom, toolbar button, 開關, 模式, 研究生引導, 進階, 自訂, 工具列按鈕"><html:h2 data-l10n-id="zotero-bridge-features-heading">功能</html:h2></label>
 			<html:p class="zb-lead" data-l10n-id="zotero-bridge-features-intro">先選一個起點，再逐項調整。開關馬上生效；關掉的功能，其他分頁裡它的設定也會收起來。</html:p>
+			<html:p class="zb-setup-link">
+				<html:button type="button" id="zb-open-setup" data-l10n-id="zotero-bridge-prefs-open-setup" aria-describedby="zb-open-setup-hint" onclick="ZoteroBridgePrefs.openSetup()">開啟設定精靈</html:button>
+				<html:span id="zb-open-setup-hint" class="zb-hint" data-l10n-id="zotero-bridge-prefs-open-setup-hint">第一次用？精靈會帶你接上 Obsidian 或 Notion，再同步一篇看看。</html:span>
+			</html:p>
 			<html:div id="zb-features" class="zb-features"/>
 		</groupbox>
 	</vbox>

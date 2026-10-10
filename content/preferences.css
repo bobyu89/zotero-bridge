@@ -43,6 +43,19 @@
 	color: var(--zb-text-muted);
 	margin: 2px 0;
 }
+/* 「開啟設定精靈」 under the 功能 intro */
+.zotero-bridge-prefs .zb-setup-link {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--zb-space-2);
+	max-width: var(--zb-measure);
+	margin: 0 0 var(--zb-space-3);
+}
+.zotero-bridge-prefs .zb-setup-link html|button:focus-visible {
+	outline: 2px solid var(--zb-accent);
+	outline-offset: 1px;
+}
 .zotero-bridge-prefs .zb-lead {
 	margin: 0 0 var(--zb-space-3);
 	max-width: var(--zb-measure);

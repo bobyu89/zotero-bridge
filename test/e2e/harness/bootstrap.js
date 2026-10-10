@@ -368,7 +368,8 @@ const TESTS = [
 				features: ["isEnabled", "rawValue", "applyPreset", "currentPreset", "snapshot", "restore", "migrate", "gateMenus"],
 				commands: ["get", "execute", "fromWindow", "fromContext", "isVisible", "availability", "paletteEntries", "search", "normalize", "openSettings"],
 				menus: ["register", "buildEntries", "toolsEntries"],
-				palette: ["open", "close", "render", "localize", "attach", "detach", "shutdown", "shortcutLabel"],
+				palette: ["open", "close", "render", "localize", "localizeStrings", "waitForDialog", "attach", "detach", "shutdown", "shortcutLabel"],
+				setup: ["init", "shutdown", "open", "close", "render", "decide", "evidence", "checkVault", "checkNotion", "checkKey", "findItem"],
 				toolbar: ["init", "add", "remove", "shutdown", "update"],
 				sidepanel: ["init", "register", "render", "refreshAll", "addStylesheet", "removeStylesheet", "shutdown", "targetItem"],
 				statsExplainer: ["init", "register", "shutdown", "explain", "explainCurrentSelection", "simplify", "saveToNote", "paneView", "renderPane", "onSelectionPopup", "methodsExcerpt", "checkExplanation", "appendStatsNote"],
@@ -1602,6 +1603,115 @@ const TESTS = [
 		},
 	},
 	{
+		name: "設定精靈 opens from its command, points Obsidian at a vault, syncs one item (試一次, no AI), 完成 sets setup.done and closes it",
+		needs: ["create items with PDF attachments in the real library"],
+		timeout: 120000,
+		async fn(d) {
+			let ZBm = zb();
+			let S = ZBm.setup;
+			let C = ZBm.commands;
+			let win = mainWindow();
+			let before = {
+				vaultPath: Zotero.Prefs.get(ZB_PREF + "obsidian.vaultPath", true),
+				done: Zotero.Prefs.get(ZB_PREF + "setup.done", true),
+				features: ZBm.features.snapshot(),
+			};
+			// test/e2e/run.sh sets setup.done in user.js, so the wizard did not open by itself over the tests
+			d.doneAtStart = before.done;
+			eq(before.done, true, "extensions.zotero-bridge.setup.done at the start (user.js)");
+			check(!S.isOpen, "the setup wizard opened by itself during the e2e run");
+			let vault = PathUtils.join(workDir, "vault-setup");
+			await IOUtils.makeDirectory(PathUtils.join(vault, ".obsidian"), { createAncestors: true, ignoreExisting: true });
+			let setupWindows = () => {
+				let out = [];
+				let all = Services.wm.getEnumerator(null);
+				while (all.hasMoreElements()) {
+					let w = all.getNext();
+					try {
+						if (w.document.documentURI === S.DIALOG_URL && !w.closed) out.push(w);
+					}
+					catch (e) {}
+				}
+				return out;
+			};
+			let dialog = null;
+			try {
+				Zotero.Prefs.set(ZB_PREF + "setup.done", false, true);
+				await win.ZoteroPane.selectItem(ctx.english.id);
+				// The command, as 快速指令 and the toolbar menu run it
+				let cmd = C.get("setup-wizard");
+				check(cmd && !cmd.features.length, "the catalog has no ungated setup-wizard command");
+				C.execute(cmd, C.fromWindow(win, "palette"));
+				dialog = await waitFor(() => setupWindows()[0], `the setup wizard window (${S.DIALOG_URL})`, 30000);
+				let doc = dialog.document;
+				let root = await waitFor(() => doc.querySelector("#zb-setup .zb-su-step") && doc.getElementById(S.DIALOG_ROOT), "the wizard's first step", 15000);
+				d.rootDisplay = dialog.getComputedStyle(root).display;
+				eq(d.rootDisplay, "flex", "display of #zb-setup (is setup.css loaded?)");
+				d.title = String(doc.title);
+				check(/ZotMax/.test(d.title), `wizard title ${d.title}`);
+				check(!/\{ ?\$/.test(root.textContent), "a Fluent placeholder shows in the wizard");
+				let step = () => {
+					let el = doc.querySelector(".zb-su-step");
+					return el && el.getAttribute("data-zb-step");
+				};
+				let $ = id => doc.getElementById(id);
+				let advance = async (buttonID, to) => {
+					$(buttonID).click();
+					await waitFor(() => step() === to, `the wizard step ${to} (after #${buttonID}; status: ${$("zb-su-status") && $("zb-su-status").textContent})`, 30000);
+				};
+				d.steps = [step()];
+				eq(step(), "welcome", "first step");
+				await advance("zb-su-next", "mode");
+				d.steps.push(step());
+				// Keep the profile's preset: 下一步 with the radio the wizard checked writes nothing new
+				await advance("zb-su-next", "notes");
+				d.steps.push(step());
+				$("zb-su-notes-obsidian").click();
+				let vaultInput = $("zb-su-vault");
+				check(vaultInput && !doc.querySelector('[data-zb-box="obsidian"]').hidden, "the Obsidian fields did not show after choosing Obsidian");
+				vaultInput.value = vault;
+				vaultInput.dispatchEvent(new dialog.Event("change", { bubbles: true }));
+				d.vaultCheck = await waitFor(() => $("zb-su-vault-check").getAttribute("data-zb-state"), "the vault check", 10000);
+				eq(d.vaultCheck, "vault", "vault check of a folder with .obsidian (real IOUtils)");
+				await advance("zb-su-next", "ai");
+				d.steps.push(step());
+				eq(Zotero.Prefs.get(ZB_PREF + "obsidian.vaultPath", true), vault, "obsidian.vaultPath after 下一步");
+				// AI: skipped (nothing stored, nothing spent)
+				await advance("zb-su-skip", "try");
+				d.steps.push(step());
+				let itemLine = await waitFor(() => $("zb-su-try-item").textContent, "the item to try", 10000);
+				d.item = itemLine;
+				check(itemLine.includes("Exercise and falls"), `the wizard picked ${JSON.stringify(itemLine)}, not the selected e2e item`);
+				await waitFor(() => !$("zb-su-try-run").disabled, "「同步這一篇」 to be enabled", 10000);
+				$("zb-su-try-run").click();
+				d.result = await waitFor(() => $("zb-su-try-result").getAttribute("data-zb-result"), "the 試一次 sync to finish", 90000);
+				d.resultText = $("zb-su-try-result").textContent;
+				eq(d.result, "ok", `試一次 result (${d.resultText})`);
+				let note = await findNote(PathUtils.join(vault, "Zotero"), ctx.english.key);
+				check(note, `no literature note for the e2e item in ${PathUtils.join(vault, "Zotero")}`);
+				d.note = PathUtils.filename(note.path);
+				check(d.resultText.includes(d.note.replace(/\.md$/, "")), `the result line does not name the note: ${d.resultText}`);
+				check($("zb-su-try-open-obsidian"), "no 「在 Obsidian 開啟」 button after the sync");
+				await advance("zb-su-next", "done");
+				d.steps.push(step());
+				d.summary = [...doc.querySelectorAll("#zb-su-summary li")].map(li => li.textContent);
+				eq(Zotero.Prefs.get(ZB_PREF + "setup.done", true), false, "setup.done before 完成");
+				$("zb-su-next").click();
+				await waitFor(() => dialog.closed, "the wizard window to close after 完成", 10000);
+				eq(Zotero.Prefs.get(ZB_PREF + "setup.done", true), true, "setup.done after 完成");
+				check(!S.isOpen, "ZB.setup.isOpen after 完成");
+				eq(setupWindows().length, 0, "setup wizard windows after 完成");
+			}
+			finally {
+				if (dialog && !dialog.closed) dialog.close();
+				if (before.vaultPath) setPref("obsidian.vaultPath", before.vaultPath);
+				else Zotero.Prefs.clear(ZB_PREF + "obsidian.vaultPath", true);
+				setPref("setup.done", true);
+				ZBm.features.restore(before.features);
+			}
+		},
+	},
+	{
 		name: "control: Zotero's own preferences window opens and closes cleanly",
 		timeout: 60000,
 		async fn(d) {
@@ -2014,9 +2124,11 @@ const TESTS = [
 			let count = () => Zotero.MenuManager._menuManager.options.filter(o => o.pluginID === PLUGIN_ID).length;
 			let menus = count();
 			eq(menus, 3, "menu registrations before the cycle (item, collection, Tools)");
-			// An open 快速指令 window goes with the plugin
+			// An open 快速指令 window goes with the plugin, and so does an open 設定精靈
 			let palette = await before.palette.open(mainWindow());
 			check(palette, "the palette did not open before the cycle");
+			let wizard = await before.setup.open(mainWindow());
+			check(wizard, "the setup wizard did not open before the cycle");
 			await addon.disable();
 			await waitFor(() => !Zotero.ZoteroBridge, "Zotero.ZoteroBridge to be deleted by shutdown()", 20000);
 			await waitFor(() => count() === 0, "the plugin's menus to be unregistered", 10000);
@@ -2027,6 +2139,8 @@ const TESTS = [
 			check(!mainWindow().document.getElementById("zotero-bridge-toolbar-css"), "toolbar stylesheet still in the main window after shutdown");
 			check(!mainWindow().document.getElementById("zotero-bridge-sidepanel-css"), "ZotMax panel stylesheet still in the main window after shutdown");
 			await waitFor(() => palette.closed, "the 快速指令 window to close at shutdown", 10000);
+			await waitFor(() => wizard.closed, "the 設定精靈 window to close at shutdown", 10000);
+			eq(Zotero.Prefs.get(ZB_PREF + "setup.done", true), true, "setup.done after the cycle");
 			// The shortcut went with it: Ctrl/Cmd+Shift+P opens nothing
 			let win = mainWindow();
 			win.document.documentElement.dispatchEvent(new win.KeyboardEvent("keydown", {

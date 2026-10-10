@@ -18,7 +18,7 @@
 ## 5 分鐘開始
 
 1. **安裝**：下載 `zotero-bridge-x.y.z.xpi`（用 Firefox 下載請在連結上按右鍵 →「另存連結」，不然 Firefox 會把它當成自己的擴充功能），然後 Zotero → 工具 → 插件 → 右上角齒輪 → **Install Plugin From File…**。
-2. **接上筆記工具**（至少一個）：Zotero → 設定 → **ZotMax** →「同步」分頁。
+2. **接上筆記工具**（至少一個）：第一次安裝後自動打開的[設定精靈](#首次設定精靈)會一步一步帶你做；要自己來，就到 Zotero → 設定 → **ZotMax** →「同步」分頁。
    - **Obsidian**：「Vault 資料夾路徑」選 vault 的根目錄。筆記預設放在 `Zotero/` 子資料夾。
    - **Notion**：建立一個 integration，把資料庫分享給它，貼上 token 和「預設資料庫連結」，按 **測試連線並補齊資料庫欄位**，欄位會自動建好。
 3. **AI（選用）**：在「AI 服務」選 Anthropic（Claude）或 OpenAI，貼上 API key。API 另外計費，ChatGPT／Claude 的訂閱方案不能用在這裡。先不想用 AI，就到「功能」關掉「AI 文獻筆記」，或同步時選「同步但不呼叫 AI」。
@@ -26,6 +26,19 @@
 5. **看結果**：Obsidian 的 `Zotero/` 裡每篇一份文獻筆記，最上面是「重點」；Notion 資料庫每篇一頁，欄位可以排序、篩選。
 
 Notion integration 怎麼建、API key 去哪裡拿，[安裝精靈](https://bobyu89.github.io/zotero-bridge/)有逐步說明。以下是設定頁的細節，需要時再展開。
+
+### 首次設定精靈
+
+第一次安裝 ZotMax 後，Zotero 會打開一個「ZotMax 設定精靈」視窗，不必自己去找設定頁，大約 3 分鐘：
+
+1. **歡迎**：ZotMax 做什麼、不做什麼（找文獻和寫作留給你；AI 只在你打開後出現；每個功能都能關）。
+2. **選模式**：研究生引導（建議新手）或進階，之後可在 設定 → 功能 改。
+3. **筆記放哪裡**：Obsidian（選 vault 資料夾，精靈會檢查它是不是資料夾、有沒有 `.obsidian`）、Notion（貼 token 和資料庫連結，按「測試連線」）、兩個都要，或先不用。
+4. **AI（選填）**：選 Claude 或 OpenAI、貼 API key。key 存在系統的登入管理員，不寫進設定檔；精靈只檢查格式，不會為了測試去呼叫 API 花你的錢。不確定就按「先不用 AI」。
+5. **試一次**：用你選取的文獻（沒選就用清單第一篇）同步一次，不呼叫 AI、不花錢，完成後顯示筆記寫到哪裡，可以直接「在 Obsidian 開啟」。
+6. **完成**：告訴你工具列按鈕、右側面板、快速指令和設定頁在哪。
+
+每一步按「下一步」才會存，「略過」和「上一步」什麼都不改；中途按 Esc 或關掉視窗，已經存下的設定都會留著。之後想再跑一次：快速指令（`Ctrl+Shift+P`，macOS `⇧⌘P`）搜「設定精靈」、工具列 ZotMax 按鈕選單的 **設定精靈…**，或 設定 → ZotMax → 功能 最上面的 **開啟設定精靈**。從舊版更新、已經設定過的人不會看到它跳出來。
 
 <details>
 <summary><b>Notion</b>：建立 integration，以及外掛自動建立的欄位</summary>
@@ -1050,6 +1063,7 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi，並更新 updates.j
 | `content/commands.js` | 指令目錄：每個指令的分組、開關、作用對象、搜尋關鍵字；工具列、右鍵選單、快速指令都由它產生 |
 | `content/menus.js` | 條目與分類右鍵的「ZotMax ▸」子選單、工具選單（設定、快速指令、批次項目） |
 | `content/palette.js`／`palette.xhtml`／`.css` | 快速指令視窗：搜尋、鍵盤操作、不能用的原因、快捷鍵 |
+| `content/setup.js`／`setup.xhtml`／`.css` | 首次設定精靈：第一次安裝時自動開啟一次、每步確認才存、試同步一篇 |
 | `content/toolbar.js`／`.css` | 工具列的 ZotMax 按鈕：快速指令、依研究流程分組、依開關即時隱藏、方向鍵焦點 |
 | `content/features.js` | 功能開關目錄、兩種模式、自訂判斷、一次性升級遷移、依開關隱藏選單 |
 | `content/preferences.xhtml`／`.js`／`.css` | 設定頁（「功能」區塊、依開關收合的區段） |

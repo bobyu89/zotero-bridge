@@ -349,7 +349,7 @@ test("catalog: unique IDs, every command and variant runnable, real switches, ke
 	let env = await setup();
 	let C = env.ZB.commands;
 	let F = env.ZB.features;
-	let all = [...C.COMMANDS, C.PALETTE, C.SETTINGS];
+	let all = [...C.COMMANDS, C.PALETTE, C.SETTINGS, C.SETUP];
 	let ids = [];
 	for (let c of all) {
 		ids.push(c.id);
@@ -359,7 +359,7 @@ test("catalog: unique IDs, every command and variant runnable, real switches, ke
 	let zh = ftl("zh-TW");
 	let en = ftl("en-US");
 	for (let c of all) {
-		assert.ok(C.GROUPS.some(g => g.id === c.group) || c === C.PALETTE || c === C.SETTINGS, `${c.id}: a workflow group`);
+		assert.ok(C.GROUPS.some(g => g.id === c.group) || c === C.PALETTE || c === C.SETTINGS || c === C.SETUP, `${c.id}: a workflow group`);
 		for (let f of c.features) assert.doesNotThrow(() => F.get(f), `${c.id}: switch ${f} exists`);
 		assert.ok((c.keywords || []).length >= 3, `${c.id}: keywords`);
 		assert.ok(c.keywords.some(k => /[一-鿿]/.test(k)) && c.keywords.some(k => /^[\x20-\x7e]+$/.test(k)), `${c.id}: Chinese and English keywords`);

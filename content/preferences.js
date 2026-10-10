@@ -1206,6 +1206,13 @@
 			renderRules();
 		},
 
+		/** 「開啟設定精靈」 at the top of 功能: the wizard window (setup.js), over the main window. */
+		openSetup() {
+			let bridge = Zotero.ZoteroBridge;
+			if (!bridge || !bridge.setup) return null;
+			return bridge.setup.open(Zotero.getMainWindow());
+		},
+
 		async pickVault() {
 			const { FilePicker } = ChromeUtils.importESModule("chrome://zotero/content/modules/filePicker.mjs");
 			let fp = new FilePicker();
