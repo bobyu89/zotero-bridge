@@ -95,6 +95,8 @@
 .proof b { color: var(--ink); }
 
 /* ---------- 安裝精靈 ---------- */
+/* 分工：網站精靈負責 Zotero 外面的準備（下載、vault、Notion、API 金鑰）和把 .xpi 裝進 Zotero；
+   裝好後 Zotero 裡的「首次設定精靈」接手選模式、指定筆記位置、試同步一篇。 */
 #install { scroll-margin-top: 12px; }
 .wiz { max-width: 1120px; margin: 0 auto; padding: 48px var(--gutter) 24px; display: grid; gap: 18px; }
 .wiz-head { display: grid; gap: 6px; }
@@ -108,6 +110,8 @@
 .progress-label { font-size: 13px; color: var(--ink-2); display: flex; justify-content: space-between; padding: 0 6px; }
 .rail ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; position: relative; }
 .rail ol::before { content: ""; position: absolute; left: 25px; top: 18px; bottom: 18px; width: 2px; background: var(--line); }
+.rail li.phase { font-size: 12px; font-weight: 600; letter-spacing: .06em; color: var(--ink-2); padding: 8px 8px 2px 48px; position: relative; }
+.rail li.phase:first-child { padding-top: 0; }
 .rail button {
   all: unset; cursor: pointer; display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: center; position: relative;
   padding: 7px 8px 7px 12px; border-radius: 8px; width: 100%; box-sizing: border-box; font-size: 15px; line-height: 1.4; color: var(--ink-2);
@@ -124,10 +128,15 @@
 .rail .reset { all: unset; cursor: pointer; font-size: 13px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; justify-self: start; margin: 2px 6px 0; }
 .rail .reset:hover { color: var(--ink); }
 .rail .reset:focus-visible { outline: 2px solid var(--pen); outline-offset: 2px; }
+.rail .nostore { font-size: 12px; color: var(--ink-2); line-height: 1.55; margin: 0 6px; }
 
 .stage { position: relative; }
 .stage .seal.step-seal { position: absolute; top: 18px; right: 18px; font-size: 16px; z-index: 2; }
+.step-of { font-size: 13px; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; padding-right: 96px; }
+.step-of b { color: var(--pen); font-weight: 700; }
 .step { display: grid; gap: 18px; }
+.step > *, details.more .body > * { min-width: 0; }
+.step > ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
 .step h2 { font-size: 24px; line-height: 1.35; margin: 0; padding-right: 96px; }
 .step h2:focus { outline: none; }
 .lead { font-size: 16px; max-width: 62ch; }
@@ -140,7 +149,11 @@ ol.how > li::before {
   content: counter(how); font-size: 13px; font-weight: 700; width: 26px; height: 26px; margin-top: 1px;
   border-radius: 50%; background: var(--pen-soft); color: var(--pen); display: grid; place-items: center;
 }
+ol.how > li > span { min-width: 0; }
 ol.how ul { margin: 6px 0 0; padding-left: 1.2em; }
+ol.how .sub { display: block; margin-top: 6px; }
+ol.how .copyline { margin-top: 8px; }
+ol.how .btn.act { display: flex; width: fit-content; margin-top: 10px; }
 ol.how ul li { margin: 3px 0; }
 
 /* 選單路徑：像真的點選單一樣 */
@@ -149,10 +162,19 @@ kbd {
   font-family: var(--font-ui); font-size: 14px; font-weight: 500; padding: 0 7px; border-radius: 6px;
   background: var(--surface); border: 1px solid var(--line-strong); border-bottom-width: 2px; white-space: nowrap; color: var(--ink);
 }
+kbd.long { white-space: normal; }
 .menu .gt { color: var(--ink-2); font-size: 13px; }
 .zh { color: var(--ink-2); font-size: 14px; }
 
+/* 要複製的網址、名稱：一列，左邊可點，右邊「複製」 */
+.copyline { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 34rem; background: var(--panel); border-radius: var(--r-s); padding: 4px 4px 4px 12px; }
+.copyline > a, .copyline > code { flex: 1 1 auto; min-width: 0; font-family: var(--font-mono); font-size: 14px; overflow-wrap: anywhere; line-height: 1.5; background: none; padding: 0; }
+.copyline .btn { flex: none; }
+.copy-inline { display: inline-flex; align-items: center; gap: 6px; vertical-align: baseline; }
+
 /* 分歧選擇 */
+fieldset.pick { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 10px; }
+fieldset.pick > legend { font-size: 16px; font-weight: 700; padding: 0; margin: 6px 0 10px; }
 .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
 .choice { position: relative; }
 .choice input { position: absolute; opacity: 0; pointer-events: none; }
@@ -167,10 +189,12 @@ kbd {
 .choice input:focus-visible + label { outline: 2px solid var(--pen); outline-offset: 2px; }
 .tag { justify-self: start; font-size: 12px; font-weight: 700; color: var(--pen); }
 
-/* 打勾確認 */
-.check { border-top: 1px dashed var(--line-strong); padding-top: 18px; display: grid; gap: 12px; }
-.check h3 { font-size: 14px; color: var(--ink-2); font-weight: 600; margin: 0; }
+/* 打勾確認：原生核取方塊（看不見但可聚焦、可用空白鍵切換）＋畫出來的方框 */
+fieldset.check { border: 0; border-top: 1px dashed var(--line-strong); margin: 0; padding: 18px 0 0; min-width: 0; }
+fieldset.check > legend { float: left; width: 100%; padding: 0; margin: 0 0 12px; font-size: 14px; color: var(--ink-2); font-weight: 600; }
+fieldset.check > legend + * { clear: both; }
 .check label { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; cursor: pointer; align-items: start; position: relative; }
+.check label + label { margin-top: 12px; }
 .check input { position: absolute; opacity: 0; width: 22px; height: 22px; margin: 3px 0 0; }
 .check .box {
   width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--line-strong); margin-top: 3px;
@@ -182,7 +206,18 @@ kbd {
 .check input:checked + .box::after { content: ""; width: 10px; height: 6px; border-left: 2px solid var(--pen-ink); border-bottom: 2px solid var(--pen-ink); transform: rotate(-45deg) translate(1px, -1px); }
 .check input:checked ~ span { color: var(--ink-2); }
 
-/* 疑難排解 */
+/* 每一步只有一個主要動作：打完勾後，步驟裡的主要按鈕退成次要，主角換成「下一步」 */
+.step.is-done .btn.act { background: var(--surface); color: var(--ink); border-color: var(--line-strong); }
+.step.is-done .btn.act:hover { border-color: var(--pen); color: var(--pen); filter: none; }
+
+/* 交棒給 Zotero 裡的首次設定精靈 */
+.note.next { background: var(--pen-soft); border-color: color-mix(in srgb, var(--pen) 35%, transparent); grid-template-columns: 22px minmax(0, 1fr); gap: 10px; font-size: 15px; }
+.note.next .ico { width: 20px; height: 20px; color: var(--pen); margin-top: 3px; fill: currentColor; stroke: none; }
+.note.next strong { color: var(--ink); }
+
+/* 手動設定（精靈沒有出現時）與疑難排解 */
+details.more .body h4 { font-size: 15px; margin: 8px 0 0; }
+details.more .body ol.how { gap: 10px; }
 details.trouble dl { margin: 0; display: grid; gap: 12px; }
 details.trouble dt { font-weight: 700; }
 details.trouble dd { margin: 2px 0 0; }
@@ -193,12 +228,15 @@ details.trouble dd { margin: 2px 0 0; }
 
 nav.pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 18px; margin-top: 4px; }
 nav.pager .hint { font-size: 13px; color: var(--ink-2); }
+#nextBtn { gap: 0; white-space: normal; text-align: center; }
 
 /* 依選擇顯示／隱藏：只做隱藏，不覆寫元素原本的 display */
 #app:not([data-os="win"]) .only-win,
 #app:not([data-os="mac"]) .only-mac,
 #app[data-dest="obsidian"] .only-notion,
 #app[data-dest="notion"] .only-obsidian,
+#app[data-dest="obsidian"] .only-both,
+#app[data-dest="notion"] .only-both,
 #app:not([data-ai="anthropic"]) .only-anthropic,
 #app:not([data-ai="openai"]) .only-openai,
 #app[data-ai="none"] .only-ai,
@@ -214,6 +252,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
   .rail { position: static; padding: 12px 10px; gap: 10px; }
   .rail ol { grid-auto-flow: column; grid-auto-columns: minmax(36px, 1fr); overflow-x: auto; padding: 2px; }
   .rail ol::before { left: 20px; right: 20px; top: 21px; bottom: auto; width: auto; height: 2px; }
+  .rail li.phase { display: none; }
   .rail button { grid-template-columns: 28px; padding: 6px; justify-items: center; justify-content: center; }
   .rail button .t { display: none; }
   .rail button[aria-current="step"] { box-shadow: none; background: transparent; }
@@ -226,10 +265,13 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
   nav.pager .hint { order: -1; flex-basis: 100%; }
   nav.pager .btn { flex: 1 1 0; }
 }
+@media (max-width: 560px) { #nextBtn .nt { display: none; } }
 @media (max-width: 420px) {
   .step h2 { font-size: 21px; padding-right: 0; }
+  .step-of { padding-right: 0; }
   .stage .seal.step-seal { position: static; justify-self: end; margin: -6px 4px -4px 0; order: -1; }
   .stage { display: grid; }
+  .copyline { padding-left: 10px; }
 }
 </style>
 </head>
@@ -240,6 +282,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7.5"/><path d="m20.5 20.5-4.2-4.2"/></symbol>
   <symbol id="i-sheet" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
   <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></symbol>
+  <symbol id="i-bridge" viewBox="0 0 16 16"><path d="M1 11h1.5V8.6A5.6 5.6 0 0 1 8 4.5a5.6 5.6 0 0 1 5.5 4.1V11H15v1.5H1zm3 0h1.5V9.2a2.6 2.6 0 0 1 5 0V11H12V8.8A4.1 4.1 0 0 0 8 6a4.1 4.1 0 0 0-4 2.8z"/></symbol>
 </svg>
 <a class="skip" href="#install">跳到安裝步驟</a>
 
@@ -287,7 +330,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
       </section>
     </div>
     <div class="sheet-foot">
-      <a class="btn" href="#install" id="heroCta">開始安裝（約 20 分鐘）<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      <a class="btn" href="#install" id="heroCta">開始安裝（約 15 分鐘）<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
       <a class="btn ghost" href="https://github.com/bobyu89/zotero-bridge/releases/latest" target="_blank" rel="noopener">下載最新版 .xpi</a>
       <p class="spec">Zotero 10（Windows／macOS）· Obsidian 1.14 以上或 Notion 免費版 · AI 功能要自備 API 金鑰，依用量付費</p>
     </div>
@@ -345,7 +388,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
 <section class="wiz" id="install" aria-labelledby="h-install">
   <div class="wiz-head">
     <h2 id="h-install">安裝精靈</h2>
-    <p>全程用滑鼠點選，大約 20 分鐘。每一步打勾確認後再往下；進度只存在這台裝置的瀏覽器。</p>
+    <p>這裡帶你做完 Zotero 外面的準備，再把 ZotMax 裝進 Zotero，大約 15 分鐘。裝好後，Zotero 會打開 ZotMax 自己的首次設定精靈接手。進度只存在這台裝置的瀏覽器。</p>
   </div>
 <div id="app" data-os="win" data-dest="both" data-ai="anthropic">
   <div class="layout">
@@ -354,247 +397,287 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
       <div class="progress-label"><span id="stepOf">整體進度</span><span id="pct">0%</span></div>
       <ol id="railList"></ol>
       <button class="reset" id="resetBtn" type="button">清除進度重新開始</button>
+      <p class="nostore" id="noStore" hidden>這個瀏覽器不能儲存進度（例如無痕視窗），重新整理後要再打一次勾。</p>
     </aside>
 
     <div class="card stage" id="stage">
       <span class="seal step-seal" id="stepSeal" hidden>已確認</span>
+      <p class="step-of" id="stepLabel" aria-live="polite"></p>
+      <p class="note info" id="migNote" hidden>精靈改版了：沿用你上次選的電腦、筆記工具和 AI，打勾要重新確認一次。</p>
 
-      <!-- 1 準備 -->
-      <section class="step" data-title="開始前準備" hidden>
+      <!-- 1 選擇 -->
+      <section class="step" data-id="choose" data-title="選擇你的環境" data-phase="out" hidden>
         <h2>先選好你的使用方式</h2>
-        <p class="lead">ZotMax 裝在 Zotero 裡。先告訴精靈你的環境，後面的步驟會跟著調整。</p>
+        <p class="lead">選完後，後面只留下跟你有關的步驟。之後想改，回到這一步重選就好。</p>
 
-        <h3>你用的是哪一種電腦？</h3>
-        <div class="choices" role="radiogroup" aria-label="作業系統">
-          <div class="choice"><input type="radio" name="os" id="os-win" value="win"><label for="os-win"><b>Windows</b><span>選單在視窗上方：File、Edit、Tools…</span></label></div>
-          <div class="choice"><input type="radio" name="os" id="os-mac" value="mac"><label for="os-mac"><b>Mac</b><span>選單在螢幕最上方的選單列</span></label></div>
-        </div>
+        <fieldset class="pick">
+          <legend>你用的是哪一種電腦？</legend>
+          <div class="choices">
+            <div class="choice"><input type="radio" name="os" id="os-win" value="win"><label for="os-win"><b>Windows</b><span>選單在視窗上方：File、Edit、Tools…</span></label></div>
+            <div class="choice"><input type="radio" name="os" id="os-mac" value="mac"><label for="os-mac"><b>Mac</b><span>選單在螢幕最上方的選單列</span></label></div>
+          </div>
+        </fieldset>
 
-        <h3>文獻要同步到哪裡？</h3>
-        <div class="choices" role="radiogroup" aria-label="同步目的地">
-          <div class="choice"><input type="radio" name="dest" id="dest-both" value="both"><label for="dest-both"><span class="tag">推薦</span><b>Notion + Obsidian</b><span>Notion 當文獻總表，Obsidian 建立知識連結</span></label></div>
-          <div class="choice"><input type="radio" name="dest" id="dest-notion" value="notion"><label for="dest-notion"><b>只用 Notion</b><span>一篇一頁，欄位可排序、篩選</span></label></div>
-          <div class="choice"><input type="radio" name="dest" id="dest-obsidian" value="obsidian"><label for="dest-obsidian"><b>只用 Obsidian</b><span>Markdown 筆記存在自己的電腦</span></label></div>
-        </div>
+        <fieldset class="pick">
+          <legend>文獻筆記要放在哪裡？</legend>
+          <div class="choices">
+            <div class="choice"><input type="radio" name="dest" id="dest-both" value="both"><label for="dest-both"><span class="tag">推薦</span><b>Notion + Obsidian</b><span>Notion 當文獻總表，Obsidian 建立知識連結</span></label></div>
+            <div class="choice"><input type="radio" name="dest" id="dest-obsidian" value="obsidian"><label for="dest-obsidian"><b>只用 Obsidian</b><span>Markdown 筆記存在自己的電腦</span></label></div>
+            <div class="choice"><input type="radio" name="dest" id="dest-notion" value="notion"><label for="dest-notion"><b>只用 Notion</b><span>一篇一頁，欄位可排序、篩選</span></label></div>
+          </div>
+        </fieldset>
 
-        <h3>AI 筆記要用哪一家？</h3>
-        <div class="choices" role="radiogroup" aria-label="AI 服務商">
-          <div class="choice"><input type="radio" name="ai" id="ai-anthropic" value="anthropic"><label for="ai-anthropic"><span class="tag">推薦</span><b>Claude</b><span>Anthropic 的 API，自備金鑰、依用量付費</span></label></div>
-          <div class="choice"><input type="radio" name="ai" id="ai-openai" value="openai"><label for="ai-openai"><b>OpenAI</b><span>OpenAI 的 API，自備金鑰、依用量付費</span></label></div>
-          <div class="choice"><input type="radio" name="ai" id="ai-none" value="none"><label for="ai-none"><b>先不用 AI</b><span>只同步書目、劃線與筆記，之後隨時可加</span></label></div>
-        </div>
+        <fieldset class="pick">
+          <legend>AI 要用哪一家？</legend>
+          <div class="choices">
+            <div class="choice"><input type="radio" name="ai" id="ai-anthropic" value="anthropic"><label for="ai-anthropic"><span class="tag">推薦</span><b>Claude</b><span>Anthropic 的 API，自備金鑰、依用量付費</span></label></div>
+            <div class="choice"><input type="radio" name="ai" id="ai-openai" value="openai"><label for="ai-openai"><b>OpenAI</b><span>OpenAI 的 API，自備金鑰、依用量付費</span></label></div>
+            <div class="choice"><input type="radio" name="ai" id="ai-none" value="none"><label for="ai-none"><b>先不用 AI</b><span>只同步書目、劃線與筆記，之後隨時可加</span></label></div>
+          </div>
+        </fieldset>
 
-        <div class="check">
-          <h3>打勾確認</h3>
-          <label><input type="checkbox" id="c1a"><span class="box"></span><span>電腦上有 <b>Zotero 10</b> 桌面版。確認方式：<span class="only-win"><span class="menu"><kbd>Help</kbd><span class="gt">›</span><kbd>About Zotero</kbd></span></span><span class="only-mac"><span class="menu"><kbd>Zotero</kbd><span class="gt">›</span><kbd>About Zotero</kbd></span></span>，版本號要是 10 開頭。還沒有請到 <a href="https://www.zotero.org/download/" target="_blank" rel="noopener">zotero.org/download</a> 下載。</span></label>
-          <label class="only-notion"><input type="checkbox" id="c1b"><span class="box"></span><span>我有 <b>Notion 帳號</b>（免費版即可）。</span></label>
-          <label class="only-obsidian"><input type="checkbox" id="c1c"><span class="box"></span><span>電腦上有 <b>Obsidian</b>，而且已經建立一個 vault（筆記庫）。版本建議 <b>1.14 以上</b>，才有彩色劃線與看板：<span class="menu"><kbd>設定</kbd><span class="gt">›</span><kbd>關於</kbd></span> 可查版本。</span></label>
-        </div>
+        <fieldset class="check">
+          <legend>打勾確認</legend>
+          <label><input type="checkbox" id="k-zotero"><span class="box"></span><span>電腦上有 <b>Zotero 10</b> 桌面版。確認方式：<span class="only-win"><span class="menu"><kbd>Help</kbd><span class="gt">›</span><kbd>About Zotero</kbd></span></span><span class="only-mac"><span class="menu"><kbd>Zotero</kbd><span class="gt">›</span><kbd>About Zotero</kbd></span></span>，版本號要是 10 開頭。還沒有請到 <a href="https://www.zotero.org/download/" target="_blank" rel="noopener">zotero.org/download</a> 下載。</span></label>
+        </fieldset>
       </section>
 
-      <!-- 2 安裝 -->
-      <section class="step" data-title="安裝外掛" hidden>
-        <h2>下載並安裝 ZotMax</h2>
+      <!-- 2 下載 -->
+      <section class="step" data-id="download" data-title="下載 ZotMax" data-phase="out" hidden>
+        <h2>下載 ZotMax 的 .xpi 檔</h2>
         <ol class="how">
-          <li><span>打開 <a href="https://github.com/bobyu89/zotero-bridge/releases/latest" target="_blank" rel="noopener">最新版下載頁</a>，在 <b>Assets</b> 底下找到 <code>zotero-bridge-x.y.z.xpi</code>。
-            <ul><li>用 <b>Firefox</b> 的話，請在連結上按右鍵 →「另存連結為…」，不要直接點，否則 Firefox 會把它當成自己的擴充功能來裝。</li>
-            <li>其他瀏覽器直接點就會下載。</li></ul></span></li>
-          <li><span>打開 Zotero，點 <span class="menu"><kbd>Tools</kbd><span class="gt">›</span><kbd>Plugins</kbd></span> <span class="zh">（工具 › 外掛）</span>。</span></li>
-          <li><span>點右上角的 <b>齒輪</b> › <kbd>Install Plugin From File…</kbd>，選剛剛下載的 <code>.xpi</code>。</span></li>
-          <li><span>清單裡出現 <b>ZotMax</b> 就安裝完成。之後有新版本，Zotero 會自動更新。</span></li>
+          <li><span>打開最新版的下載頁。
+            <a class="btn act" href="https://github.com/bobyu89/zotero-bridge/releases/latest" target="_blank" rel="noopener">打開最新版下載頁<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+            <span class="copyline"><a href="https://github.com/bobyu89/zotero-bridge/releases/latest" target="_blank" rel="noopener">https://github.com/bobyu89/zotero-bridge/releases/latest</a><button type="button" class="btn small ghost" data-copy="https://github.com/bobyu89/zotero-bridge/releases/latest" data-what="下載頁網址">複製</button></span></span></li>
+          <li><span>在 <b>Assets</b> 底下點 <code>zotero-bridge-x.y.z.xpi</code>（x.y.z 是版本號）下載。
+            <span class="zh sub">用 <b>Firefox</b> 的話，請在連結上按右鍵 →「另存連結為…」。直接點的話，Firefox 會把它當成自己的擴充功能來裝。</span></span></li>
+          <li><span>檔案通常在「下載」資料夾。不用解壓縮，也不要改副檔名，等一下直接裝進 Zotero。</span></li>
         </ol>
-        <div class="note info"><p>Zotero 介面如果是中文，選單位置相同，只是名稱換成中文。</p></div>
-        <div class="note tip"><p><strong>功能組合：</strong>第一次打開設定頁，組合是「研究生引導」：自動找文獻（PubMed 追蹤、引文追蹤）、AI 寫作（文獻比較表、草稿、概念卡片 AI 綜整、AI 主題分類、批次 API、AI 標重點）、評讀陪練、讀懂統計和進度報告先關著，其他照常可用。需要時再逐一打開，或直接選「進階」全部打開。</p></div>
-        <div class="check">
-          <h3>打勾確認</h3>
-          <label><input type="checkbox" id="c2a"><span class="box"></span><span>外掛清單裡看得到 <b>ZotMax</b>，而且是啟用狀態。</span></label>
-          <label><input type="checkbox" id="c2b"><span class="box"></span><span>打開設定頁看得到 <b>ZotMax</b> 分頁：<span class="only-win"><span class="menu"><kbd>Edit</kbd><span class="gt">›</span><kbd>Settings</kbd></span></span><span class="only-mac"><span class="menu"><kbd>Zotero</kbd><span class="gt">›</span><kbd>Settings…</kbd></span></span>，左側最下面。也可以從 <span class="menu"><kbd>Tools</kbd><span class="gt">›</span><kbd>ZotMax 設定…</kbd></span> 直接打開。</span></label>
-        </div>
+        <fieldset class="check">
+          <legend>打勾確認</legend>
+          <label><input type="checkbox" id="k-xpi"><span class="box"></span><span>我下載了 <code>.xpi</code>，也知道它存在哪個資料夾。</span></label>
+        </fieldset>
       </section>
 
-      <!-- 3 AI -->
-      <section class="step" data-title="AI 金鑰" hidden>
-        <h2 class="only-ai">申請 AI 的 API 金鑰</h2>
-        <h2 class="only-noai">先不用 AI：關掉 AI 筆記</h2>
-        <p class="lead only-ai">AI 會讀書目、摘要、PDF 全文和你的劃線，寫成固定格式的文獻筆記：研究設計、樣本、結果、限制、證據等級、對你研究的啟發。每篇只產生一次，之後同步會沿用。筆記是幫你回想，不是替你讀。</p>
-
-        <div class="note warn only-ai"><p><strong>注意：</strong>Claude Pro／ChatGPT Plus 這類「訂閱方案」不能用在這裡。這裡要的是 <b>API 金鑰</b>，依用量另外計費，需要先在平台儲值或綁卡。</p></div>
-
-        <div class="stack only-anthropic">
-          <h3>Claude 金鑰</h3>
-          <ol class="how">
-            <li><span>到 <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a> 登入，先在 <b>Billing</b> 儲值。</span></li>
-            <li><span>到 <b>API Keys</b> › <kbd>Create Key</kbd>，複製 <code>sk-ant-</code> 開頭的金鑰（只會顯示一次）。</span></li>
-            <li><span>在 Zotero 設定 › ZotMax 的「AI 文獻筆記」區塊：服務商選 <b>Anthropic（Claude）</b>，把金鑰貼到「Claude API key」。</span></li>
-            <li><span>「思考深度（effort）」保持 <b>medium</b> 即可；想要更仔細的分析可改 high，但比較慢也比較貴。</span></li>
-          </ol>
-        </div>
-        <div class="stack only-openai">
-          <h3>OpenAI 金鑰</h3>
-          <ol class="how">
-            <li><span>到 <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a> 登入，先在 <b>Billing</b> 儲值。</span></li>
-            <li><span>按 <kbd>Create new secret key</kbd>，複製 <code>sk-</code> 開頭的金鑰（只會顯示一次）。</span></li>
-            <li><span>在 Zotero 設定 › ZotMax 的「AI 文獻筆記」區塊：服務商選 <b>OpenAI（GPT / Codex）</b>，把金鑰貼到「OpenAI API key」。</span></li>
-            <li><span>模型保持預設即可。Codex 系列是寫程式用的模型，整理文獻用一般模型效果較好。</span></li>
-          </ol>
-        </div>
-        <div class="note info only-ai"><p><b>全文最多送出字元數</b>預設 150,000。設成 0 就只送摘要與劃線，比較省錢；全文被截斷時，筆記會標記 <code>fulltext_truncated</code>。</p></div>
-
-        <div class="stack only-noai">
-          <p>在 Zotero 設定 › ZotMax 的「功能」區塊，<b>關掉</b>「AI 文獻筆記」。之後想用 AI，回到這一步重新選 Claude 或 OpenAI 即可。</p>
-        </div>
-
-        <div class="check">
-          <h3>打勾確認</h3>
-          <label class="only-ai"><input type="checkbox" id="c3a"><span class="box"></span><span>已在 API 平台儲值，並取得金鑰。</span></label>
-          <label class="only-ai"><input type="checkbox" id="c3b"><span class="box"></span><span>金鑰已貼進 ZotMax 設定，服務商選對了。</span></label>
-          <label class="only-noai"><input type="checkbox" id="c3c"><span class="box"></span><span>已在「功能」區塊關掉「AI 文獻筆記」。</span></label>
-        </div>
+      <!-- 3 Obsidian -->
+      <section class="step only-obsidian" data-id="obsidian" data-title="準備 Obsidian vault" data-phase="out" data-needs="obsidian" hidden>
+        <h2>準備一個 Obsidian vault</h2>
+        <p class="lead">Vault 就是 Obsidian 存筆記的資料夾。ZotMax 會把文獻筆記寫進 vault 裡的 <code>Zotero</code> 子資料夾，你自己的筆記不會被動到。</p>
+        <ol class="how">
+          <li><span>還沒有 Obsidian：到官網下載安裝（免費）。版本要 <b>1.14 以上</b>才有彩色劃線與閱讀進度看板，可在 <span class="menu"><kbd>設定</kbd><span class="gt">›</span><kbd>關於</kbd></span> 查版本。
+            <span class="copyline"><a href="https://obsidian.md/download" target="_blank" rel="noopener">https://obsidian.md/download</a><button type="button" class="btn small ghost" data-copy="https://obsidian.md/download" data-what="Obsidian 下載網址">複製</button></span></span></li>
+          <li><span>打開 Obsidian，按 <kbd>建立新的 vault</kbd>（Create new vault），取個名字，例如 <span class="copy-inline"><code>研究筆記</code><button type="button" class="btn small ghost" data-copy="研究筆記" data-what="vault 名稱">複製</button></span>，選好要放在哪裡，按建立。已經有 vault 就直接用。</span></li>
+          <li><span>記下 vault 資料夾的位置，等一下 Zotero 裡的精靈會請你選它。要選的是 vault 的<b>根目錄</b>（裡面有 <code>.obsidian</code> 隱藏資料夾的那一層），例如 <span class="only-win"><code>C:\Users\你的名字\Documents\研究筆記</code></span><span class="only-mac"><code>~/Documents/研究筆記</code></span>。
+            <span class="zh sub">忘了放哪裡：在 Obsidian 左下角按 vault 名稱 › <kbd>管理 vault…</kbd>，清單裡每個 vault 下面就是它的位置。</span></span></li>
+        </ol>
+        <fieldset class="check">
+          <legend>打勾確認</legend>
+          <label><input type="checkbox" id="k-vault"><span class="box"></span><span>我有一個 Obsidian vault（Obsidian 1.14 以上）。</span></label>
+          <label><input type="checkbox" id="k-vaultpath"><span class="box"></span><span>我知道 vault 的資料夾在哪裡。</span></label>
+        </fieldset>
       </section>
 
       <!-- 4 Notion -->
-      <section class="step only-notion" data-title="連接 Notion" data-needs="notion" hidden>
-        <h2>建立 Notion integration 並連上資料庫</h2>
-        <p class="lead">Integration 是 Notion 給外部程式的「通行證」。外掛拿著它，才能寫進你指定的資料庫。</p>
+      <section class="step only-notion" data-id="notion" data-title="準備 Notion" data-phase="out" data-needs="notion" hidden>
+        <h2>建立 Notion integration 和文獻資料庫</h2>
+        <p class="lead">Integration 是 Notion 給外部程式的通行證，ZotMax 拿著它才能寫進你分享給它的資料庫。這一步要準備好兩樣東西：<b>token</b> 和<b>資料庫連結</b>，先貼在記事本裡。</p>
 
         <h3>A. 建立 integration</h3>
         <ol class="how">
-          <li><span>打開 <a href="https://www.notion.so/profile/integrations" target="_blank" rel="noopener">notion.so/profile/integrations</a>，按 <kbd>New integration</kbd>。</span></li>
-          <li><span>名稱填 <code>ZotMax</code>，類型選 <b>Internal</b>，按儲存。</span></li>
-          <li><span>在 <b>Internal Integration Secret</b> 按 Show › 複製 <code>ntn_</code> 開頭的 token。</span></li>
-          <li><span>貼到 Zotero 設定 › ZotMax 的「Integration token」。</span></li>
+          <li><span>打開 Notion 的 integration 頁面，按 <kbd class="long">New integration</kbd>。
+            <span class="copyline"><a href="https://www.notion.so/profile/integrations" target="_blank" rel="noopener">https://www.notion.so/profile/integrations</a><button type="button" class="btn small ghost" data-copy="https://www.notion.so/profile/integrations" data-what="Notion integration 網址">複製</button></span></span></li>
+          <li><span>名稱填 <span class="copy-inline"><code>ZotMax</code><button type="button" class="btn small ghost" data-copy="ZotMax" data-what="integration 名稱">複製</button></span>，類型選 <b>Internal</b>，選你的工作區，按儲存。</span></li>
+          <li><span>在 <b>Internal Integration Secret</b> 按 Show，複製 <code>ntn_</code> 開頭的 token。它跟密碼一樣，不要貼到公開的地方。</span></li>
         </ol>
 
-        <h3>B. 準備文獻資料庫</h3>
+        <h3>B. 建立資料庫並分享給 integration</h3>
         <ol class="how">
-          <li><span>在 Notion 新增一個空白的 <b>Database（Table）</b>，例如命名「Zotero 文獻資料庫」。已經有就直接用。</span></li>
-          <li><span>打開資料庫，右上角 <kbd>•••</kbd> › <kbd>Connections</kbd>，加入剛剛建立的 <b>ZotMax</b> integration。<b>少了這一步，外掛會沒有權限寫入。</b></span></li>
-          <li><span>右上角 <kbd>•••</kbd> › <kbd>Copy link</kbd>，把資料庫連結貼到「預設資料庫連結」。</span></li>
-          <li><span>按 <kbd>測試連線並補齊資料庫欄位</kbd>。看到 ✅ 就完成了，外掛會自動建立 作者、年份、期刊、DOI、摘要、閱讀狀態、研究設計、證據等級 等中文欄位。</span></li>
+          <li><span>在 Notion 新增一個空白的 <b>Database（Table）</b>，例如命名 <span class="copy-inline"><code>Zotero 文獻資料庫</code><button type="button" class="btn small ghost" data-copy="Zotero 文獻資料庫" data-what="資料庫名稱">複製</button></span>。欄位不用自己建，ZotMax 之後會自動補齊。已經有就直接用。</span></li>
+          <li><span>打開資料庫，右上角 <kbd>•••</kbd> › <kbd>Connections</kbd>，加入剛剛的 <b>ZotMax</b>。<b>少了這一步，ZotMax 沒有權限寫入。</b></span></li>
+          <li><span>右上角 <kbd>•••</kbd> › <kbd>Copy link</kbd>，把資料庫連結也貼到記事本。</span></li>
         </ol>
-        <div class="note warn"><p><strong>欄位可以改名，但不要刪除或改類型：</strong>同步過一次後，外掛會記住每個欄位，改名後照樣寫得進去。你可以自由新增自己的欄位（例如「評分」），外掛不會動它們。以前用英文欄位（Authors、Year…）的資料庫照常可用；想換成中文，在設定按 <kbd>把 Notion 欄位改成中文…</kbd>，確認要改的欄位後才會改名。</p></div>
+        <fieldset class="check">
+          <legend>打勾確認</legend>
+          <label><input type="checkbox" id="k-token"><span class="box"></span><span>我複製好 <code>ntn_</code> 開頭的 token。</span></label>
+          <label><input type="checkbox" id="k-share"><span class="box"></span><span>資料庫已用 <kbd>Connections</kbd> 加入 ZotMax。</span></label>
+          <label><input type="checkbox" id="k-dblink"><span class="box"></span><span>我複製好資料庫連結。</span></label>
+        </fieldset>
+      </section>
 
-        <details class="more trouble">
-          <summary>選用：文獻比較表也要放進 Notion</summary>
-          <div class="body"><p>在 Notion 建一個一般頁面（例如「文獻比較」），同樣用 <kbd>Connections</kbd> 加入 integration，再把頁面連結貼到「文獻比較表的 Notion 父頁面」。之後每份比較表都會成為它的子頁面。</p></div>
+      <!-- 5 AI 金鑰 -->
+      <section class="step only-ai" data-id="ai" data-title="申請 API 金鑰" data-phase="out" data-needs-ai hidden>
+        <h2>申請 AI 的 API 金鑰</h2>
+        <p class="lead">AI 會讀書目、摘要、全文和你的劃線，寫成固定格式的研讀筆記；每篇只產生一次，之後同步會沿用。筆記是幫你回想，不是替你讀。</p>
+        <div class="note warn"><p><strong>這會花錢：</strong>Claude Pro、ChatGPT Plus 這類訂閱方案不能用在這裡。這裡要的是 <b>API 金鑰</b>，依用量另外計費，要先在平台儲值或綁卡。ZotMax 一次替超過 5 篇產生 AI 筆記前會先問你，花了多少看 設定 › ZotMax › AI ›「本月 AI 用量」（估計值，以平台帳單為準）。</p></div>
+
+        <ol class="how only-anthropic">
+          <li><span>到 Claude 的 API 平台登入，先在 <b>Billing</b> 儲值。
+            <span class="copyline"><a href="https://console.anthropic.com" target="_blank" rel="noopener">https://console.anthropic.com</a><button type="button" class="btn small ghost" data-copy="https://console.anthropic.com" data-what="Claude API 平台網址">複製</button></span></span></li>
+          <li><span>到 <b>API Keys</b> › <kbd>Create Key</kbd>，複製 <code>sk-ant-</code> 開頭的金鑰。它只會顯示一次，先存在密碼管理程式或記事本。</span></li>
+        </ol>
+        <ol class="how only-openai">
+          <li><span>到 OpenAI 的 API 平台登入，先在 <b>Billing</b> 儲值。
+            <span class="copyline"><a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">https://platform.openai.com/api-keys</a><button type="button" class="btn small ghost" data-copy="https://platform.openai.com/api-keys" data-what="OpenAI API 平台網址">複製</button></span></span></li>
+          <li><span>按 <kbd class="long">Create new secret key</kbd>，複製 <code>sk-</code> 開頭的金鑰。它只會顯示一次，先存在密碼管理程式或記事本。</span></li>
+        </ol>
+        <p class="zh">裝好 ZotMax 後，金鑰貼在 設定 › ZotMax ›「AI」分頁的「AI 服務」。它會存進 Zotero 的密碼管理，不寫進一般設定檔。</p>
+        <fieldset class="check">
+          <legend>打勾確認</legend>
+          <label><input type="checkbox" id="k-billing"><span class="box"></span><span>我已在 API 平台儲值或綁卡，知道依用量付費。</span></label>
+          <label><input type="checkbox" id="k-key"><span class="box"></span><span>我拿到金鑰，也存好了。</span></label>
+        </fieldset>
+      </section>
+
+      <!-- 6 裝進 Zotero -->
+      <section class="step" data-id="install" data-title="裝進 Zotero" data-phase="in" hidden>
+        <h2>把 ZotMax 裝進 Zotero</h2>
+        <ol class="how">
+          <li><span>打開 Zotero，點 <span class="menu"><kbd>Tools</kbd><span class="gt">›</span><kbd>Plugins</kbd></span> <span class="zh">（中文介面：工具 › 附加元件）</span>。</span></li>
+          <li><span>點右上角的 <b>齒輪</b> › <kbd class="long">Install Plugin From File…</kbd>，選剛剛下載的 <code>.xpi</code>。也可以直接把 <code>.xpi</code> 拖進這個視窗。</span></li>
+          <li><span>清單裡出現 <b>ZotMax</b> 就裝好了。之後有新版本，Zotero 會自動更新。</span></li>
+        </ol>
+        <div class="note next"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><use href="#i-bridge"/></svg><p><strong>裝好後 Zotero 會自動打開 ZotMax 的首次設定精靈，接下來在那裡選模式、指定筆記位置、試同步一篇。</strong></p></div>
+        <fieldset class="check">
+          <legend>打勾確認</legend>
+          <label><input type="checkbox" id="k-installed"><span class="box"></span><span>外掛清單裡看得到 <b>ZotMax</b>，而且是啟用狀態。</span></label>
+        </fieldset>
+      </section>
+
+      <!-- 7 首次設定精靈 -->
+      <section class="step" data-id="setup" data-title="首次設定精靈" data-phase="in" hidden>
+        <h2>跟著 Zotero 裡的首次設定精靈走</h2>
+        <p class="lead">剛剛準備的東西，在這裡用上。精靈裡有四件事，每一步都可以略過：</p>
+        <ol class="how">
+          <li><span><b>選模式：</b>新使用者建議「研究生引導」：自動找文獻、AI 寫草稿、評讀陪練和讀懂統計先關著，整理、評讀、搜尋照常可用。想全部打開就選「進階」。之後在 設定 › ZotMax ›「功能」隨時改。</span></li>
+          <li><span><b>指定筆記位置：</b><span class="only-obsidian">選剛剛那個 Obsidian vault 的資料夾</span><span class="only-both">；</span><span class="only-notion">貼上 Notion 的 token 和資料庫連結</span>。</span></li>
+          <li><span><b>AI（選填）：</b><span class="only-ai">貼上剛剛申請的 API 金鑰，<span class="only-anthropic">服務商選 <b>Claude</b></span><span class="only-openai">服務商選 <b>OpenAI</b></span>；金鑰存進 Zotero 的密碼管理。</span><span class="only-noai">選「先不用 AI」，之後想用再回來。</span></span></li>
+          <li><span><b>試同步一篇：</b>挑一篇有 PDF、最好有劃線的文獻，先試一篇確認都接上了。</span></li>
+        </ol>
+        <p class="only-ai">之後想換金鑰或服務商：設定 › ZotMax ›「AI」分頁 › AI 服務，服務商選 <span class="only-anthropic"><b>Anthropic（Claude）</b>，貼到「Claude API key」</span><span class="only-openai"><b>OpenAI（GPT / Codex）</b>，貼到「OpenAI API key」</span>。</p>
+        <p class="only-noai">先不用 AI：同步時選「同步但不呼叫 AI」，或在 設定 › ZotMax ›「功能」關掉「AI 文獻筆記」。</p>
+        <p class="zh">想再打開精靈：按 <span class="only-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></span><span class="only-mac"><kbd>⇧⌘P</kbd></span> 開快速指令，輸入「設定精靈」，選 <b>設定精靈…</b>。</p>
+
+        <details class="more" id="manual">
+          <summary>精靈沒有出現？手動設定</summary>
+          <div class="body">
+            <p>打開設定：<span class="only-win"><span class="menu"><kbd>Edit</kbd><span class="gt">›</span><kbd>Settings</kbd></span></span><span class="only-mac"><span class="menu"><kbd>Zotero</kbd><span class="gt">›</span><kbd>Settings…</kbd></span></span>，左側最下面的 <b>ZotMax</b>；也可以從 <span class="menu"><kbd>Tools</kbd><span class="gt">›</span><kbd>ZotMax 設定…</kbd></span> 直接打開。設定分成六個分頁：功能 · 同步 · 整理 · 找文獻 · 篩選與評讀 · AI；不知道在哪一頁，就在最上面的「找設定」打關鍵字。</p>
+
+            <h4 class="only-obsidian">Obsidian（「同步」分頁 › Obsidian）</h4>
+            <ol class="how only-obsidian">
+              <li><span>「Vault 資料夾路徑」按 <kbd>選擇資料夾…</kbd>，選 vault 的根目錄。</span></li>
+              <li><span>「預設子資料夾」保持 <code>Zotero</code>；「檔名格式」建議用 <b>Citation key</b>，沒有 citation key 的文獻會改用「作者 年份 - 標題」。</span></li>
+              <li><span>保持勾選「建立『Zotero 文獻庫.base』總表」：第一次同步後，vault 裡會出現文獻總表與閱讀進度看板。</span></li>
+            </ol>
+            <p class="only-obsidian zh">重新同步不會蓋掉你的筆記：外掛只更新 <code>%% zotero-bridge:start %%</code> 到 <code>%% zotero-bridge:end %%</code> 之間的內容，你的心得寫在最下面的「✍️ 我的筆記」。</p>
+
+            <h4 class="only-notion">Notion（「同步」分頁 › Notion）</h4>
+            <ol class="how only-notion">
+              <li><span>token 貼到「Integration token」，資料庫連結貼到「預設資料庫連結」。</span></li>
+              <li><span>按 <kbd>測試連線並補齊資料庫欄位</kbd>。看到 ✅ 就完成了，外掛會自動建立 作者、年份、期刊、DOI、摘要、閱讀狀態、研究設計、證據等級 等中文欄位。</span></li>
+            </ol>
+            <div class="note warn only-notion"><p><strong>欄位可以改名，但不要刪除或改類型：</strong>外掛記得每個欄位，改名後照樣寫得進去；你自己加的欄位（例如「評分」）外掛不會動。以前用英文欄位（Authors、Year…）的資料庫照常可用；想換成中文，按 <kbd class="long">把 Notion 欄位改成中文…</kbd>，確認後才會改名。文獻比較表也要放進 Notion 的話，另建一個頁面、同樣用 <kbd>Connections</kbd> 加入 integration，再把連結貼到「文獻比較表的 Notion 父頁面」。</p></div>
+
+            <h4 class="only-ai">AI（「AI」分頁 › AI 服務）</h4>
+            <ol class="how only-ai">
+              <li><span>「服務商」選 <span class="only-anthropic"><b>Anthropic（Claude）</b>，金鑰貼到「Claude API key」。「思考深度（effort）」保持 <b>medium</b> 即可；high 比較仔細，也比較慢、比較貴。</span><span class="only-openai"><b>OpenAI（GPT / Codex）</b>，金鑰貼到「OpenAI API key」。模型保持預設即可；Codex 系列是寫程式用的模型，整理文獻用一般模型效果較好。</span></span></li>
+              <li><span>「全文最多送出字元數」預設 150,000；設成 0 就只送摘要與劃線，比較省錢。</span></li>
+            </ol>
+            <p class="only-noai">先不用 AI：在「功能」分頁關掉「AI 文獻筆記」。</p>
+
+            <h4>分流規則（選用，「同步」分頁）</h4>
+            <p>只有一個資料庫或 vault 資料夾就不用設。想把碩論、實驗室群組的文獻分開放：按 <kbd>新增規則</kbd>，選<b>文獻庫</b>、需要的話填<b>分類路徑</b>（例如 <code>碩論/文獻回顧</code>，包含子分類），再填這類文獻要去的 <span class="only-notion">Notion 資料庫連結</span><span class="only-both">與</span><span class="only-obsidian">Obsidian 子資料夾</span>，留空就用預設值。規則由上往下比對，第一條符合的生效。</p>
+            <div class="table-wrap">
+              <table>
+                <tr><th>名稱</th><th>文獻庫</th><th>分類路徑</th><th>去處</th></tr>
+                <tr><td>碩論</td><td>我的文獻庫</td><td>碩論</td><td>碩論資料庫／Zotero/碩論</td></tr>
+                <tr><td>實驗室</td><td>群組：XX Lab</td><td>（空白）</td><td>實驗室資料庫／Zotero/Lab</td></tr>
+              </table>
+            </div>
+
+            <h4>試同步一篇</h4>
+            <ol class="how">
+              <li><span>選一篇有 PDF 的文獻，按文獻清單上方工具列（<kbd>新增筆記</kbd> 右邊）的 <b>ZotMax</b> 按鈕，或在文獻上按右鍵 › <kbd>ZotMax</kbd>，選 <kbd class="long">同步但不呼叫 AI（沿用既有 AI 筆記）</kbd>，先確認連線正常（不花錢）。</span></li>
+              <li><span>右下角會出現進度視窗，完成後檢查：
+                <ul>
+                  <li class="only-notion">Notion 資料庫多了一頁，書目欄位都有值。</li>
+                  <li class="only-obsidian">Obsidian 的 <code>Zotero/</code> 資料夾多了一篇筆記，劃線以彩色 highlight 呈現。</li>
+                </ul></span></li>
+              <li class="only-ai"><span>再選 <kbd class="long">同步到 Notion + Obsidian（沒有 AI 筆記才產生）</kbd>，等 AI 寫好筆記（約半分鐘到兩分鐘）。</span></li>
+            </ol>
+          </div>
         </details>
 
-        <div class="check">
-          <h3>打勾確認</h3>
-          <label><input type="checkbox" id="c4a"><span class="box"></span><span>Token 已貼進設定。</span></label>
-          <label><input type="checkbox" id="c4b"><span class="box"></span><span>資料庫已用 Connections 加入 integration，連結已貼進設定。</span></label>
-          <label><input type="checkbox" id="c4c"><span class="box"></span><span>按「測試連線」看到 ✅。</span></label>
-        </div>
-      </section>
-
-      <!-- 5 Obsidian -->
-      <section class="step only-obsidian" data-title="連接 Obsidian" data-needs="obsidian" hidden>
-        <h2>告訴外掛你的 Obsidian vault 在哪裡</h2>
-        <ol class="how">
-          <li><span>在 Zotero 設定 › ZotMax 的「Obsidian」區塊，按 <kbd>選擇資料夾…</kbd>，選 vault 的<b>根目錄</b>（裡面有 <code>.obsidian</code> 隱藏資料夾的那一層）。</span></li>
-          <li><span>「預設子資料夾」保持 <code>Zotero</code>，文獻筆記會集中放在這裡。</span></li>
-          <li><span>「檔名格式」建議用 <b>Citation key</b>；沒有 citation key 的文獻會自動改用「作者 年份 - 標題」。</span></li>
-          <li><span>保持勾選「建立『Zotero 文獻庫.base』總表」：第一次同步後，vault 裡會出現文獻總表與閱讀進度看板（需要 Obsidian 1.14）。</span></li>
-        </ol>
-        <div class="note tip"><p><strong>重新同步不會蓋掉你的筆記：</strong>外掛只會更新 <code>%% zotero-bridge:start %%</code> 到 <code>%% zotero-bridge:end %%</code> 之間的內容。你的心得請寫在最下面的「✍️ 我的筆記」。</p></div>
-        <div class="check">
-          <h3>打勾確認</h3>
-          <label><input type="checkbox" id="c5a"><span class="box"></span><span>Vault 資料夾路徑已設定。</span></label>
-          <label><input type="checkbox" id="c5b"><span class="box"></span><span>子資料夾與檔名格式已確認。</span></label>
-        </div>
-      </section>
-
-      <!-- 6 分流 -->
-      <section class="step" data-title="分流規則（選用）" hidden>
-        <h2>不同的文獻，放到不同的地方</h2>
-        <p class="lead">只有一個資料庫的話，這一步可以直接跳過。想把碩論、實驗室群組等文獻分開放，就在這裡設定規則。</p>
-        <ol class="how">
-          <li><span>在設定的「分流規則」區塊按 <kbd>新增規則</kbd>。</span></li>
-          <li><span>選擇<b>文獻庫</b>（個人或群組），需要的話填<b>分類路徑</b>，例如 <code>碩論/文獻回顧</code>（會包含子分類）。</span></li>
-          <li><span>填上這類文獻要去的 <span class="only-notion">Notion 資料庫連結</span><span class="only-notion only-obsidian"> 與 </span><span class="only-obsidian">Obsidian 子資料夾</span>。留空就使用預設值。</span></li>
-        </ol>
-        <div class="table-wrap">
-          <table>
-            <tr><th>名稱</th><th>文獻庫</th><th>分類路徑</th><th>去處</th></tr>
-            <tr><td>碩論</td><td>我的文獻庫</td><td>碩論</td><td>碩論資料庫／Zotero/碩論</td></tr>
-            <tr><td>實驗室</td><td>群組：XX Lab</td><td>（空白）</td><td>實驗室資料庫／Zotero/Lab</td></tr>
-          </table>
-        </div>
-        <p class="zh">規則由上往下比對，第一條符合的規則生效。</p>
-        <div class="check">
-          <h3>打勾確認</h3>
-          <label><input type="checkbox" id="c6a"><span class="box"></span><span>我設定好分流規則，或確定不需要。</span></label>
-        </div>
-      </section>
-
-      <!-- 7 試跑 -->
-      <section class="step" data-title="第一次同步" hidden>
-        <h2>先拿一篇文獻試試看</h2>
-        <p class="lead">挑一篇已經有 PDF、最好有劃線的文獻。</p>
-        <ol class="how">
-          <li><span>在文獻上按右鍵 › <kbd>ZotMax</kbd> › <kbd>同步但不呼叫 AI（沿用既有 AI 筆記）</kbd>，先確認連線都正常（不花錢）。</span></li>
-          <li><span>右下角會出現進度視窗；完成後檢查：
-            <ul>
-              <li class="only-notion">Notion 資料庫多了一頁，書目欄位都有值。</li>
-              <li class="only-obsidian">Obsidian 的 <code>Zotero/</code> 資料夾多了一篇筆記，劃線以彩色 highlight 呈現。</li>
-            </ul></span></li>
-          <li class="only-ai"><span>再按右鍵 › <kbd>ZotMax</kbd> › <kbd>同步到 Notion + Obsidian（沒有 AI 筆記才產生）</kbd>，等 AI 寫好筆記（約半分鐘到兩分鐘）。</span></li>
-          <li class="only-ai"><span>點選這篇文獻，Zotero 右側面板的 <b>ZotMax</b> 區塊（右緣直排圖示裡的橋形圖示）會顯示一句話摘要與主要發現。</span></li>
-          <li><span>不想每次按右鍵：文獻清單上方的工具列、<kbd>新增筆記</kbd> 右邊有一個 <b>ZotMax</b> 按鈕（橋形圖示）。選好文獻後按它，「同步」那一組有一樣的選項。</span></li>
-        </ol>
         <details class="more trouble">
           <summary>出錯了怎麼辦？</summary>
           <div class="body">
             <dl>
-              <dt>右鍵選單沒有 ZotMax</dt>
-              <dd>確認 Zotero 是 10 版，且外掛已啟用；重新啟動 Zotero 再試。</dd>
-              <dt>Notion：401 或 unauthorized</dt>
-              <dd>Token 貼錯或多了空白，請重新複製。</dd>
-              <dt>Notion：404 或 object_not_found</dt>
-              <dd>資料庫還沒用 <kbd>Connections</kbd> 加入 integration，或貼的不是資料庫連結。</dd>
-              <dt>Obsidian：寫入失敗</dt>
-              <dd>確認 vault 路徑存在，而且選的是 vault 根目錄。</dd>
-              <dt>AI：401、402 或 insufficient credit</dt>
-              <dd>金鑰錯誤或 API 帳戶餘額不足，請到 API 平台確認。</dd>
+              <dt>精靈、選單或面板裡都沒有 ZotMax</dt>
+              <dd>確認 Zotero 是 10 版，外掛清單裡 ZotMax 是啟用的；重新啟動 Zotero 再試。</dd>
+              <dt>選單裡找不到某個功能</dt>
+              <dd>到 設定 › ZotMax ›「功能」看開關是不是關著（研究生引導有些預設關閉），或按快速指令打功能名稱，它會告訴你去哪裡打開。</dd>
+              <dt class="only-notion">Notion：401 或 unauthorized</dt>
+              <dd class="only-notion">Token 貼錯或多了空白，請重新複製。</dd>
+              <dt class="only-notion">Notion：404 或 object_not_found</dt>
+              <dd class="only-notion">資料庫還沒用 <kbd>Connections</kbd> 加入 integration，或貼的不是資料庫連結。</dd>
+              <dt class="only-obsidian">Obsidian：寫入失敗</dt>
+              <dd class="only-obsidian">確認 vault 路徑存在，而且選的是 vault 根目錄。</dd>
+              <dt class="only-ai">AI：401、402 或 insufficient credit</dt>
+              <dd class="only-ai">金鑰錯誤或 API 帳戶餘額不足，請到 API 平台確認。</dd>
               <dt>想看詳細錯誤</dt>
-              <dd><span class="menu"><kbd>Help</kbd><span class="gt">›</span><kbd>Debug Output Logging</kbd><span class="gt">›</span><kbd>View Output</kbd></span>，把內容貼給協助你的人。</dd>
+              <dd><span class="menu"><kbd>Help</kbd><span class="gt">›</span><kbd class="long">Debug Output Logging</kbd><span class="gt">›</span><kbd>View Output</kbd></span>，把內容貼給協助你的人，或到 <a href="https://github.com/bobyu89/zotero-bridge/issues" target="_blank" rel="noopener">GitHub Issues</a> 回報。</dd>
             </dl>
           </div>
         </details>
-        <div class="check">
-          <h3>打勾確認</h3>
-          <label><input type="checkbox" id="c7a"><span class="box"></span><span>第一次同步成功（進度視窗顯示完成）。</span></label>
-          <label class="only-ai"><input type="checkbox" id="c7b"><span class="box"></span><span>AI 文獻筆記已產生，Zotero 右側的 ZotMax 面板看得到。</span></label>
-        </div>
+
+        <fieldset class="check">
+          <legend>打勾確認</legend>
+          <label><input type="checkbox" id="k-setup"><span class="box"></span><span>選好模式，也指定好筆記位置（精靈或手動都可以）。</span></label>
+          <label class="only-obsidian"><input type="checkbox" id="k-sync-obsidian"><span class="box"></span><span>試同步的那篇出現在 Obsidian 的 <code>Zotero/</code> 資料夾。</span></label>
+          <label class="only-notion"><input type="checkbox" id="k-sync-notion"><span class="box"></span><span>試同步的那篇出現在 Notion 資料庫。</span></label>
+          <label class="only-ai"><input type="checkbox" id="k-keyset"><span class="box"></span><span>API 金鑰已貼進 設定 › ZotMax ›「AI」分頁，服務商選對了。</span></label>
+        </fieldset>
       </section>
 
-      <!-- 8 完成 -->
-      <section class="step" data-title="完成！日常使用" hidden>
+      <!-- 8 開始使用 -->
+      <section class="step" data-id="done" data-title="開始使用" data-phase="in" hidden>
         <div class="done-hero">
           <span class="seal">設定完成</span>
           <h2 class="big">從現在起，雜事交給它</h2>
-          <p class="lead">讀完一篇文獻、劃完線，按一次右鍵，整理好的筆記就送到你的筆記系統。要怎麼讀、怎麼寫，還是你的。</p>
+          <p class="lead">讀完一篇、劃完線，同步一次，整理好的筆記就送到你的筆記空間。要怎麼讀、怎麼寫，還是你的。</p>
         </div>
 
-        <h3>右鍵選單速查</h3>
-        <p class="zh">同樣的功能也在文獻清單上方工具列的 <b>ZotMax</b> 按鈕裡，依「同步、整理、找文獻、篩選與評讀、AI 輔助與寫作」分組，最下面是設定；關掉的功能不會出現。</p>
+        <h3>先認識這三個入口</h3>
+        <ol class="how">
+          <li><span><b>側邊面板：</b>選一篇文獻（或在 PDF 閱讀器裡），按右側面板右緣的<b>橋形圖示</b>，就是這一篇的 ZotMax 面板：重點、你的劃線、閱讀狀態與評讀，下面的「動作」直接同步這一篇。</span></li>
+          <li><span><b>快速指令：</b>按 <span class="only-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></span><span class="only-mac"><kbd>⇧⌘P</kbd></span>，打字找功能，中英文都可以（例如「評讀」、「PRISMA」、「sync」）。關著的功能也找得到，會告訴你去哪裡打開。</span></li>
+          <li><span><b>工具列按鈕：</b>文獻清單上方、<kbd>新增筆記</kbd> 右邊的 <b>ZotMax</b> 按鈕（右鍵 › <kbd>ZotMax</kbd> 也一樣），依「同步、整理、找文獻、篩選與評讀、AI 輔助與寫作」分組，最下面是設定。</span></li>
+        </ol>
+
+        <h3>同步選項速查</h3>
         <div class="table-wrap">
           <table>
             <tr><th>選項</th><th>什麼時候用</th></tr>
             <tr><td>同步到 Notion + Obsidian</td><td>日常使用；沒有 AI 筆記才會產生</td></tr>
-            <tr><td>重新產生 AI 筆記並同步</td><td>讀完、劃完線後想重新整理</td></tr>
             <tr><td>同步但不呼叫 AI</td><td>只更新書目、劃線與筆記，不花錢</td></tr>
-            <tr><td>產生文獻比較表（AI）</td><td>選 2 篇以上，或在分類上按右鍵。「研究生引導」組合預設關閉，要用請在設定打開</td></tr>
+            <tr><td>重新產生 AI 筆記並同步</td><td>讀完、劃完線後想重新整理；舊的 AI 筆記會另存</td></tr>
+            <tr><td>只同步到 Obsidian ／ Notion</td><td>只想更新其中一邊</td></tr>
           </table>
         </div>
 
-        <h3>進階功能</h3>
+        <h3>自己做完，再請 AI 對照</h3>
+        <p class="zh">這兩個在「研究生引導」預設關著，要用時到 設定 › ZotMax ›「功能」打開<span class="only-noai">，也要先有 API 金鑰</span>。都會呼叫 AI、依用量付費。</p>
         <ol class="how">
-          <li><span><b>側邊面板：</b>選一篇文獻，或在 PDF 閱讀器裡，按右緣的橋形圖示打開 <b>ZotMax</b> 面板：重點、你的劃線、閱讀狀態與評讀都在這裡，下面的按鈕直接同步這一篇。</span></li>
-          <li><span><b>自動同步：</b>在設定頁的「自動同步」區塊勾選後，條目、劃線或筆記一變更就自動同步（不會自動呼叫 AI）。</span></li>
-          <li class="only-obsidian"><span><b>閱讀進度看板：</b>打開 <code>Zotero/Zotero 文獻庫.base</code>，在「閱讀進度」看板拖曳卡片，就能更新待讀／閱讀中／已讀／已引用。</span></li>
-          <li><span><b>研究大腦（選用）：</b>用 Claude Code 或 Codex 讀你的文獻筆記，幫你比對文獻、找研究缺口。請看 <a href="https://github.com/bobyu89/zotero-bridge/tree/main/research-brain" target="_blank" rel="noopener">研究大腦說明</a>。</span></li>
+          <li><span><b>評讀陪練：</b>在文獻評讀表自己答完 CASP／JBI 每一題，按「對照 AI」。AI 只看原文、看不到你的答案，ZotMax 只列出跟你不同的題目，改不改由你決定。</span></li>
+          <li><span><b>讀懂統計：</b>在 PDF 選一段看不懂的統計（OR、95% CI、p 值…），按選取框裡的 <kbd>ZotMax：解釋統計</kbd>，面板多出「統計解釋」；AI 寫的每個數字都和原文核對。</span></li>
         </ol>
+
+        <h3>之後可以再看</h3>
+        <ul>
+          <li><b>自動同步：</b>設定 ›「同步」分頁 › 自動同步，條目、劃線或筆記一變更就同步（不會自動呼叫 AI）。</li>
+          <li class="only-obsidian"><b>閱讀進度看板：</b>打開 <code>Zotero/Zotero 文獻庫.base</code>，在「閱讀進度」拖曳卡片，就能更新待讀／閱讀中／已讀／已引用。</li>
+          <li><b>分流規則：</b>不同文獻庫或分類放到不同地方，見上一步的「手動設定」。</li>
+          <li><b>研究大腦（選用）：</b>用 Claude Code 或 Codex 讀你的文獻筆記，比對文獻、找研究缺口：<a href="https://github.com/bobyu89/zotero-bridge/tree/main/research-brain" target="_blank" rel="noopener">研究大腦說明</a>。</li>
+        </ul>
 
         <div class="note info"><p><b>安全提醒：</b>API 金鑰與 Notion token 存在 Zotero 的密碼管理（登入管理員），不寫進一般設定檔；還是請不要把 Zotero 的 profile 資料夾分享給別人。</p></div>
 
@@ -613,6 +696,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
     </div>
   </div>
 </div>
+<div id="toast" role="status" aria-live="polite"></div>
 </section>
 </main>
 
@@ -622,26 +706,61 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
 
 <script>
 (function () {
-  var KEY = 'zotero-bridge-wizard-v1';
+  // 進度存在這台裝置的瀏覽器。v2 依步驟 id 記錄目前在哪一步；v1（舊版精靈）只沿用三個選擇，
+  // 舊的打勾對不上新的步驟，所以不搬，讀完就刪掉。無痕視窗等不能存的情況照常可用，只是不記住。
+  var KEY = 'zotero-bridge-wizard-v2', OLD_KEY = 'zotero-bridge-wizard-v1';
+  var OPTS = { os: ['win', 'mac'], dest: ['both', 'notion', 'obsidian'], ai: ['anthropic', 'openai', 'none'] };
+  var store = (function () {
+    try { var s = window.localStorage, t = '__zb_test'; s.setItem(t, t); s.removeItem(t); return s; } catch (e) { return null; }
+  })();
+  function read(k) {
+    if (!store) return null;
+    try { var v = JSON.parse(store.getItem(k) || 'null'); return v && typeof v === 'object' ? v : null; } catch (e) { return null; }
+  }
+  function clean(src) {
+    var s = { v: 2, step: '', os: '', dest: 'both', ai: 'anthropic', checks: {} };
+    if (!src) return s;
+    Object.keys(OPTS).forEach(function (k) { if (OPTS[k].indexOf(src[k]) >= 0) s[k] = src[k]; });
+    if (typeof src.step === 'string') s.step = src.step;
+    if (src.checks && typeof src.checks === 'object') {
+      Object.keys(src.checks).forEach(function (id) { if (src.checks[id] === true) s.checks[id] = true; });
+    }
+    return s;
+  }
+  function save() { if (store) { try { store.setItem(KEY, JSON.stringify(state)); } catch (e) {} } }
+
   var app = document.getElementById('app');
   var allSteps = Array.prototype.slice.call(document.querySelectorAll('.step'));
   var railList = document.getElementById('railList');
   var seal = document.getElementById('stepSeal');
   var cta = document.getElementById('heroCta');
   var ctaLabel = cta.firstChild;
-  var state = { step: 0, os: '', dest: 'both', ai: 'anthropic', checks: {} };
+  var PHASE = { out: '在 Zotero 外準備', 'in': '在 Zotero 裡' };
 
-  try { var saved = JSON.parse(localStorage.getItem(KEY) || 'null'); if (saved) state = Object.assign(state, saved); } catch (e) {}
+  var saved = read(KEY), migrated = false, state;
+  if (saved && saved.v === 2) state = clean(saved);
+  else {
+    var old = read(OLD_KEY);
+    state = clean(old ? { os: old.os, dest: old.dest, ai: old.ai } : null);
+    if (old) { migrated = true; try { store.removeItem(OLD_KEY); } catch (e) {} save(); }
+  }
   if (!state.os) state.os = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? 'mac' : 'win';
+  document.getElementById('noStore').hidden = !!store;
+  document.getElementById('migNote').hidden = !migrated;
 
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
-
-  // Steps that apply to the chosen destinations (Notion / Obsidian steps can drop out)
+  // 依選擇留下的步驟（Notion／Obsidian／AI 金鑰可能不需要）
   function steps() {
     return allSteps.filter(function (s) {
       var need = s.dataset.needs;
-      return !need || state.dest === 'both' || state.dest === need;
+      if (need && state.dest !== 'both' && state.dest !== need) return false;
+      if ('needsAi' in s.dataset && state.ai === 'none') return false;
+      return true;
     });
+  }
+  function indexOf(id) {
+    var list = steps();
+    for (var i = 0; i < list.length; i++) if (list[i].dataset.id === id) return i;
+    return -1;
   }
 
   function visibleChecks(sec) {
@@ -656,14 +775,21 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
 
   function buildRail() {
     railList.replaceChildren();
+    var phase = '';
     steps().forEach(function (sec, i) {
+      if (sec.dataset.phase !== phase) {
+        phase = sec.dataset.phase;
+        var ph = document.createElement('li');
+        ph.className = 'phase'; ph.setAttribute('aria-hidden', 'true'); ph.textContent = PHASE[phase];
+        railList.appendChild(ph);
+      }
       var li = document.createElement('li');
       var b = document.createElement('button');
       b.type = 'button';
+      b.dataset.idx = i;
       var n = document.createElement('span'); n.className = 'n'; n.textContent = i + 1;
       var t = document.createElement('span'); t.className = 't'; t.textContent = sec.dataset.title;
       b.append(n, t);
-      b.setAttribute('aria-label', '第 ' + (i + 1) + ' 步：' + sec.dataset.title);
       b.addEventListener('click', function () { go(i); });
       li.appendChild(b);
       railList.appendChild(li);
@@ -679,83 +805,131 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
 
   // 這一步全部打勾時蓋上「已確認」章；animate＝剛打完最後一個勾
   function updateSeal(animate) {
-    var list = steps(), total = list.length - 1;
-    var done = state.step < total && stepDone(list[state.step]);
+    var list = steps(), last = list.length - 1, i = indexOf(state.step);
+    var done = i < last && stepDone(list[i]);
     var was = !seal.hidden;
     seal.hidden = !done;
     if (done && !was && animate) { seal.classList.remove('press'); void seal.offsetWidth; seal.classList.add('press'); }
   }
 
   function refresh() {
-    var list = steps();
+    var list = steps(), i = indexOf(state.step), last = list.length - 1, doneCount = 0;
     var railBtns = railList.querySelectorAll('button');
-    var total = list.length - 1, doneCount = 0;
-    list.forEach(function (sec, i) {
-      var d = i < total && stepDone(sec);
+    list.forEach(function (sec, j) {
+      var d = j < last && stepDone(sec);
+      sec.classList.toggle('is-done', d);
       if (d) doneCount++;
-      railBtns[i].classList.toggle('done', d);
-      if (i === state.step) railBtns[i].setAttribute('aria-current', 'step'); else railBtns[i].removeAttribute('aria-current');
+      railBtns[j].classList.toggle('done', d);
+      railBtns[j].setAttribute('aria-label', '第 ' + (j + 1) + ' 步：' + sec.dataset.title + (d ? '（已完成）' : ''));
+      if (j === i) railBtns[j].setAttribute('aria-current', 'step'); else railBtns[j].removeAttribute('aria-current');
     });
-    if (state.step === total) doneCount = total;
-    var pct = Math.round(doneCount / total * 100);
+    if (i === last) doneCount = last;
+    var pct = Math.round(doneCount / last * 100);
+    var sec = list[i];
     document.getElementById('bar').style.width = pct + '%';
     document.getElementById('pct').textContent = pct + '%';
-    document.getElementById('stepOf').textContent = '第 ' + (state.step + 1) + '／' + list.length + ' 步';
-    ctaLabel.textContent = state.step > 0 && state.step < total ? '繼續安裝：第 ' + (state.step + 1) + ' 步 ' + list[state.step].dataset.title : state.step === total ? '看日常使用速查' : '開始安裝（約 20 分鐘）';
+    document.getElementById('stepOf').textContent = '第 ' + (i + 1) + '／' + list.length + ' 步';
+    var label = document.getElementById('stepLabel');
+    label.replaceChildren();
+    var b = document.createElement('b'); b.textContent = '第 ' + (i + 1) + '／' + list.length + ' 步';
+    var s = document.createElement('span'); s.textContent = PHASE[sec.dataset.phase];
+    label.append(b, s);
+    ctaLabel.textContent = i > 0 && i < last ? '繼續安裝：第 ' + (i + 1) + ' 步 ' + sec.dataset.title : i === last ? '看開始使用的入口' : '開始安裝（約 15 分鐘）';
 
     var prev = document.getElementById('prevBtn'), next = document.getElementById('nextBtn'), hint = document.getElementById('hint');
-    prev.disabled = state.step === 0;
-    if (state.step === total) {
+    prev.disabled = i === 0;
+    if (i === last) {
       next.hidden = true; hint.textContent = '';
     } else {
       next.hidden = false;
-      var cs = visibleChecks(list[state.step]);
+      var cs = visibleChecks(sec);
       var n = cs.filter(function (c) { return c.checked; }).length;
+      var nextTitle = list[i + 1].dataset.title;
       hint.textContent = n === cs.length ? '這一步完成了' : '已確認 ' + n + ' / ' + cs.length + ' 項';
-      next.textContent = n === cs.length ? '下一步 →' : '先跳過，下一步 →';
+      // 窄螢幕只顯示「下一步 →」「先跳過 →」，寬螢幕多寫下一步是什麼
+      var nt = document.createElement('span'); nt.className = 'nt';
+      nt.textContent = (n === cs.length ? '' : '，下一步') + '：' + nextTitle;
+      next.replaceChildren(n === cs.length ? '下一步' : '先跳過', nt, '\u00a0→');
       next.classList.toggle('ghost', n !== cs.length);
     }
   }
 
   function go(i, focus) {
     var list = steps();
-    state.step = Math.max(0, Math.min(list.length - 1, i));
-    allSteps.forEach(function (s) { s.hidden = s !== list[state.step]; });
+    i = Math.max(0, Math.min(list.length - 1, i));
+    state.step = list[i].dataset.id;
+    allSteps.forEach(function (s) { s.hidden = s !== list[i]; });
     save(); refresh(); updateSeal(false);
     if (focus !== false) {
-      var h = Array.prototype.find.call(list[state.step].querySelectorAll('h2'), function (e) { return e.offsetParent !== null; });
+      var h = Array.prototype.find.call(list[i].querySelectorAll('h2'), function (e) { return e.offsetParent !== null; });
       if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
       var top = document.getElementById('stage').getBoundingClientRect().top;
       if (top < 0) window.scrollTo({ top: window.scrollY + top - 16, behavior: 'smooth' });
     }
   }
 
+  // 複製按鈕：網址、名稱一鍵複製；不支援剪貼簿時改用選取文字的舊方法
+  var toast = document.getElementById('toast'), toastTimer;
+  function say(msg) {
+    toast.textContent = msg; toast.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2200);
+  }
+  function legacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) {}
+    ta.remove();
+    return ok;
+  }
+  document.querySelectorAll('[data-copy]').forEach(function (btn) {
+    var what = btn.dataset.what || btn.dataset.copy;
+    btn.setAttribute('aria-label', '複製' + what);
+    btn.addEventListener('click', function () {
+      var text = btn.dataset.copy;
+      function ok() {
+        btn.textContent = '已複製';
+        say('已複製' + what);
+        setTimeout(function () { btn.textContent = '複製'; }, 1600);
+      }
+      function fallback() { if (legacyCopy(text)) ok(); else say('沒辦法自動複製，請直接選取文字複製'); }
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(ok, fallback);
+      else fallback();
+    });
+  });
+
   document.querySelectorAll('.check input[type=checkbox]').forEach(function (c) {
     if (state.checks[c.id]) c.checked = true;
-    c.addEventListener('change', function () { state.checks[c.id] = c.checked; save(); refresh(); updateSeal(true); });
+    c.addEventListener('change', function () {
+      if (c.checked) state.checks[c.id] = true; else delete state.checks[c.id];
+      save(); refresh(); updateSeal(true);
+    });
   });
   document.querySelectorAll('input[type=radio]').forEach(function (r) {
     r.addEventListener('change', function () {
-      var current = steps()[state.step];
+      var id = state.step;
       state[r.name] = r.value;
       applyChoices(); buildRail();
-      // Stay on the same step after the step list changes
-      var idx = steps().indexOf(current);
+      // 步驟清單變了也停在同一步
+      var idx = indexOf(id);
       go(idx >= 0 ? idx : 0, false);
     });
   });
-  document.getElementById('prevBtn').addEventListener('click', function () { go(state.step - 1); });
-  document.getElementById('nextBtn').addEventListener('click', function () { go(state.step + 1); });
+  document.getElementById('prevBtn').addEventListener('click', function () { go(indexOf(state.step) - 1); });
+  document.getElementById('nextBtn').addEventListener('click', function () { go(indexOf(state.step) + 1); });
   document.getElementById('resetBtn').addEventListener('click', function () {
     var os = state.os;
-    state = { step: 0, os: os, dest: 'both', ai: 'anthropic', checks: {} };
+    state = clean(null); state.os = os;
     document.querySelectorAll('.check input[type=checkbox]').forEach(function (c) { c.checked = false; });
+    document.getElementById('migNote').hidden = true;
     applyChoices(); buildRail(); go(0);
   });
 
   applyChoices();
   buildRail();
-  go(state.step, false);
+  var start = indexOf(state.step);
+  go(start >= 0 ? start : 0, false);
 })();
 </script>
 </body>

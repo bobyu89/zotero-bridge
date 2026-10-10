@@ -7,7 +7,7 @@
  *     holding the commands whose `menus` name that surface, with the same groups
  *   - the Tools menu (menus.js): 設定…, 快速指令… and the commands marked `tools` (batch entries that
  *     only show while there is something to stop, resume, discard, check or cancel)
- *   - 快速指令, the command palette (palette.js): every command plus the settings destinations
+ *   - 快速指令, the command palette (palette.js): every command plus 設定精靈… and the settings destinations
  *
  * A command: id, group, l10n (a Fluent message with a .label) and label (its zh-TW text, identical to
  * the FTL), features (switches in features.js; shown while any is on, none = always), needs (what it
@@ -521,6 +521,13 @@
 		toolsLabel: "ZotMax 設定…", features: [], needs: null, menus: [],
 		keywords: ["設定", "偏好", "settings", "preferences", "options"],
 		run: () => openSettings() };
+	/**
+	 * 設定精靈… (setup.js): never switched off, so a new user can always get back to it. In the toolbar
+	 * menu next to 設定…, in 快速指令 at the top of the 設定 group.
+	 */
+	const SETUP = { id: "setup-wizard", l10n: "zotero-bridge-cmd-setup-wizard", label: "設定精靈…", features: [], needs: null, menus: [],
+		keywords: ["設定精靈", "精靈", "首次設定", "第一次", "入門", "開始使用", "setup", "wizard", "onboarding", "getting started", "first run"],
+		run: sel => ZB().setup.open(sel && sel.window) };
 
 	/**
 	 * Settings destinations (快速指令 results 「設定：…」): the sections of the settings pane by their
@@ -557,7 +564,7 @@
 	}
 
 	const BY_ID = new Map();
-	for (let c of [...COMMANDS, PALETTE, SETTINGS]) {
+	for (let c of [...COMMANDS, PALETTE, SETTINGS, SETUP]) {
 		c.features = c.features || [];
 		c.menus = c.menus || [];
 		BY_ID.set(c.id, c);
@@ -730,7 +737,7 @@
 
 	/**
 	 * Everything the palette offers for a selection: commands (variants as their own results, labelled
-	 * 「parent › variant」), then the settings destinations. Conditional commands appear only while
+	 * 「parent › variant」), then 設定精靈… and the settings destinations. Conditional commands appear only while
 	 * their condition holds; switched-off ones appear with the reason, so they can be found.
 	 * Entry: { id, kind, group, l10n, args, label, parentL10n, parentLabel, keywords, availability, run, section, name }.
 	 */
@@ -767,6 +774,9 @@
 				}
 			}
 		}
+		// 設定精靈… first in the 設定 group: always runnable
+		out.push({ id: SETUP.id, kind: "command", group: "settings", l10n: SETUP.l10n, args: null, label: SETUP.label,
+			keywords: SETUP.keywords, availability: { ok: true }, command: SETUP, run: SETUP.run });
 		for (let s of SECTIONS) {
 			let feature = featureToTurnOn(s.features);
 			out.push({
@@ -855,7 +865,7 @@
 	}
 
 	return {
-		PANE_ID, GROUPS, COMMANDS, PALETTE, SETTINGS, SECTIONS, NEED_ITEMS, NEED_COLLECTION, NEED_REVIEW_COLLECTION,
+		PANE_ID, GROUPS, COMMANDS, PALETTE, SETTINGS, SETUP, SECTIONS, NEED_ITEMS, NEED_COLLECTION, NEED_REVIEW_COLLECTION,
 		get, groupCommands, variantEntries, fillLabel,
 		fromContext, fromWindow, writingTarget, actionItems,
 		featureOn, featureToTurnOn, isVisible, isVisibleIn, availability, hasTarget,

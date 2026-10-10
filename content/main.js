@@ -1671,6 +1671,8 @@
 		ZB.aiBatch.init();
 		// 讀懂統計: the button in the PDF reader's text-selection popup (stats-explainer.js)
 		ZB.statsExplainer.init({ pluginID });
+		// 設定精靈 (setup.js): opens by itself once on a fresh profile, after the main window is ready
+		ZB.setup.init({ reason: opts.reason });
 	}
 
 	// A batch still marked running at startup was cut off by Zotero quitting or crashing

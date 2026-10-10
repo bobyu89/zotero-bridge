@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	設定精靈, the first-run setup wizard: content/setup.js open() opens it and render() fills it.
+	Layout and tokens: DESIGN.md (Setup wizard). The plugin's own code draws everything inside #zb-setup;
+	this file only provides the window, Zotero's stylesheets (theme variables) and the plugin's stylesheet.
+-->
+<?xml-stylesheet href="chrome://global/skin/global.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero/skin/zotero.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero-bridge/content/setup.css" type="text/css"?>
+<window id="zotero-bridge-setup-window"
+	xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+	xmlns:html="http://www.w3.org/1999/xhtml"
+	title="ZotMax 設定精靈"
+	width="640"
+	height="620"
+	persist="width height screenX screenY">
+	<html:div id="zb-setup" class="zb-setup"/>
+</window>

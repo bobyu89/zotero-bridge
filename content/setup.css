@@ -1,0 +1,390 @@
+@namespace html url("http://www.w3.org/1999/xhtml");
+
+/*
+ * 設定精靈, the first-run setup wizard window. Tokens and components: DESIGN.md (Setup wizard).
+ * Same borrowed palette as 快速指令 and the review window: every color is one of Zotero's theme
+ * variables with a fallback, sizes in em, flat (hairlines and the wash tint, no shadows).
+ */
+#zotero-bridge-setup-window {
+	background: var(--material-background, Canvas);
+	color: var(--fill-primary, CanvasText);
+}
+
+.zb-setup {
+	--zb-text: var(--fill-primary, CanvasText);
+	--zb-text-muted: var(--fill-secondary, GrayText);
+	--zb-line: var(--fill-quinary, rgba(0, 0, 0, 0.1));
+	--zb-tint: var(--fill-senary, rgba(0, 0, 0, 0.04));
+	--zb-surface: var(--material-background, Canvas);
+	--zb-sidepane: var(--material-sidepane, var(--zb-surface));
+	--zb-accent: var(--color-accent, AccentColor);
+	--zb-space-1: 0.25em;
+	--zb-space-2: 0.5em;
+	--zb-space-3: 0.75em;
+	--zb-space-4: 1em;
+	--zb-space-5: 1.5em;
+	--zb-radius: 6px;
+	--zb-radius-sm: 4px;
+	--zb-measure: 40em;
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+	min-height: 0;
+	box-sizing: border-box;
+	color: var(--zb-text);
+	line-height: 1.4;
+}
+
+/* ---------- head: title, step count, the steps ---------- */
+
+.zb-su-head {
+	flex: none;
+	padding: var(--zb-space-3) var(--zb-space-4) 0;
+	border-bottom: 1px solid var(--zb-line);
+	background: var(--zb-sidepane);
+}
+
+.zb-su-head-line {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: var(--zb-space-2);
+}
+
+.zb-su-title,
+.zb-su-count {
+	margin: 0;
+}
+
+.zb-su-title {
+	font-weight: 600;
+}
+
+.zb-su-count {
+	color: var(--zb-text-muted);
+	font-size: 0.92em;
+}
+
+/* Like the settings pane's tabs: Pencil, the current one Ink with a 2px Accent rule; weight never changes */
+.zb-su-steps {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0 var(--zb-space-3);
+	list-style: none;
+	margin: var(--zb-space-2) 0 0;
+	padding: 0;
+}
+
+.zb-su-steps-item {
+	padding: var(--zb-space-1) 0 var(--zb-space-2);
+	border-bottom: 2px solid transparent;
+	color: var(--zb-text-muted);
+	font-size: 0.92em;
+}
+
+.zb-su-steps-item.is-current {
+	color: var(--zb-text);
+	border-bottom-color: var(--zb-accent);
+}
+
+.zb-su-steps-num {
+	font-variant-numeric: tabular-nums;
+}
+
+/* ---------- body: one step ---------- */
+
+.zb-su-body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: var(--zb-space-4) var(--zb-space-4) var(--zb-space-5);
+}
+
+.zb-su-step {
+	max-width: var(--zb-measure);
+}
+
+.zb-su-heading {
+	margin: 0 0 var(--zb-space-2);
+	font-size: 1.3em;
+	font-weight: 600;
+}
+
+/* Focus lands here on every step change, for screen readers; it is not a control */
+.zb-su-heading:focus {
+	outline: none;
+}
+
+.zb-su-subheading {
+	margin: var(--zb-space-5) 0 var(--zb-space-2);
+	font-size: 1em;
+	font-weight: 600;
+}
+
+.zb-su-lead {
+	margin: 0 0 var(--zb-space-3);
+}
+
+.zb-su-hint {
+	margin: var(--zb-space-1) 0;
+	color: var(--zb-text-muted);
+	font-size: 0.92em;
+}
+
+.zb-su-points,
+.zb-su-howto,
+.zb-su-summary {
+	margin: 0 0 var(--zb-space-3);
+	padding-inline-start: 1.4em;
+}
+
+.zb-su-points > html|li,
+.zb-su-howto > html|li,
+.zb-su-summary > html|li {
+	margin: var(--zb-space-1) 0;
+}
+
+.zb-su-howto {
+	font-size: 0.92em;
+}
+
+/* ---------- options: the whole option is the radio's label (DESIGN.md › Preset options) ---------- */
+
+.zb-su-options {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(16em, 1fr));
+	gap: var(--zb-space-2);
+	margin: 0 0 var(--zb-space-3);
+}
+
+.zb-su-option {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--zb-space-2);
+	padding: var(--zb-space-2) var(--zb-space-3);
+	border: 1px solid var(--zb-line);
+	border-radius: var(--zb-radius);
+	background: var(--zb-surface);
+	cursor: pointer;
+}
+
+.zb-su-option:hover {
+	background: var(--zb-tint);
+}
+
+.zb-su-option:has(html|input:checked) {
+	border-color: var(--zb-accent);
+	background: var(--zb-tint);
+}
+
+.zb-su-option:has(html|input:focus-visible) {
+	outline: 2px solid var(--zb-accent);
+	outline-offset: 1px;
+}
+
+.zb-su-option html|input {
+	flex: none;
+	margin: 0.2em 0 0;
+}
+
+.zb-su-option html|input:focus-visible {
+	outline: none;
+}
+
+.zb-su-option-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.zb-su-option-name {
+	font-weight: 600;
+}
+
+.zb-su-option-desc {
+	color: var(--zb-text-muted);
+	font-size: 0.92em;
+}
+
+/* 建議新手: marker-tag style, words only */
+.zb-su-tag {
+	margin-inline-start: var(--zb-space-2);
+	padding: 0 0.45em;
+	border: 1px solid var(--zb-line);
+	border-radius: var(--zb-radius-sm);
+	color: var(--zb-text-muted);
+	font-size: 0.85em;
+	font-weight: 400;
+}
+
+/* ---------- the fields of a choice (Obsidian, Notion, AI) ---------- */
+
+.zb-su-box {
+	margin: 0 0 var(--zb-space-3);
+	padding: var(--zb-space-2) 0 0;
+	border: none;
+	border-top: 1px solid var(--zb-line);
+}
+
+.zb-su-box[hidden] {
+	display: none;
+}
+
+.zb-su-box > html|legend {
+	padding: 0 var(--zb-space-2) 0 0;
+	font-weight: 600;
+}
+
+.zb-su-label {
+	display: block;
+	margin: var(--zb-space-3) 0 var(--zb-space-1);
+	font-weight: 600;
+}
+
+.zb-su-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--zb-space-2);
+	margin: var(--zb-space-2) 0;
+}
+
+.zb-su-radio {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--zb-space-1);
+	margin-inline-end: var(--zb-space-3);
+}
+
+.zb-su-input {
+	box-sizing: border-box;
+	flex: 1;
+	min-width: 16em;
+	width: 100%;
+	margin: 0;
+	padding: var(--zb-space-1) var(--zb-space-2);
+	font: inherit;
+	color: var(--zb-text);
+	background: var(--zb-surface);
+	border: 1px solid var(--zb-line);
+	border-radius: var(--zb-radius-sm);
+}
+
+.zb-su-row > .zb-su-input {
+	width: auto;
+}
+
+.zb-su-input:focus,
+.zb-su-input:focus-visible {
+	outline: 2px solid var(--zb-accent);
+	outline-offset: -1px;
+	border-color: var(--zb-accent);
+}
+
+/* Live validation: the words carry it (Ink, 600), never red text */
+.zb-su-input[aria-invalid="true"] {
+	border-color: var(--zb-text);
+}
+
+.zb-su-check,
+.zb-su-result {
+	margin: var(--zb-space-1) 0;
+	color: var(--zb-text-muted);
+	font-size: 0.92em;
+	white-space: pre-wrap;
+}
+
+.zb-su-result {
+	font: inherit;
+	font-size: 0.92em;
+}
+
+.zb-su-check:empty,
+.zb-su-result:empty {
+	display: none;
+}
+
+.zb-su-check.is-error,
+.zb-su-status.is-error {
+	color: var(--zb-text);
+	font-weight: 600;
+}
+
+.zb-su-item {
+	margin: var(--zb-space-2) 0;
+	overflow-wrap: anywhere;
+}
+
+/* A link that opens the browser: a text button */
+.zb-su-link {
+	margin: 0;
+	padding: 0;
+	font: inherit;
+	color: var(--zb-text);
+	background: none;
+	border: none;
+	text-decoration: underline;
+	cursor: pointer;
+	appearance: none;
+}
+
+/* ---------- buttons ---------- */
+
+.zb-setup html|button {
+	font: inherit;
+}
+
+.zb-setup html|button:focus-visible {
+	outline: 2px solid var(--zb-accent);
+	outline-offset: 1px;
+}
+
+.zb-setup html|button.zb-su-primary {
+	font-weight: 600;
+}
+
+/* ---------- bottom: status, buttons, keys ---------- */
+
+.zb-su-bottom {
+	flex: none;
+	padding: var(--zb-space-2) var(--zb-space-4) var(--zb-space-3);
+	border-top: 1px solid var(--zb-line);
+	background: var(--zb-sidepane);
+}
+
+.zb-su-status {
+	margin: 0 0 var(--zb-space-2);
+	white-space: pre-wrap;
+}
+
+.zb-su-status:empty {
+	display: none;
+}
+
+.zb-su-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--zb-space-2);
+}
+
+.zb-su-spacer {
+	flex: 1;
+}
+
+.zb-su-actions html|button[hidden] {
+	display: none;
+}
+
+.zb-su-foot {
+	margin: var(--zb-space-2) 0 0;
+	color: var(--zb-text-muted);
+	font-size: 0.92em;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.zb-su-option {
+		transition: border-color 150ms ease-out, background-color 150ms ease-out;
+	}
+}
