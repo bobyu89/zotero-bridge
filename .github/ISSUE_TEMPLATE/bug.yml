@@ -1,0 +1,41 @@
+name: 回報問題
+description: ZotMax 出錯、跑不動或結果怪怪的，告訴我們發生了什麼事。
+title: "[問題] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        謝謝你回報！在 Zotero 裡用「ZotMax → 回報問題…」打開這頁，最下面的「環境」會自動填好。
+        **這裡是公開的，任何人都看得到**：請不要貼上未發表的研究資料、病人資訊、文獻全文、API key 或 Notion token。
+  - type: textarea
+    id: steps
+    attributes:
+      label: 你做了什麼
+      description: 一步一步寫，例如在哪個選單按了什麼。
+      placeholder: |
+        1. 選了一篇文獻
+        2. 按工具列的 ZotMax → 同步到 Notion + Obsidian
+  - type: textarea
+    id: actual
+    attributes:
+      label: 發生了什麼事
+      description: 看到的訊息可以照抄或截圖；跑出來的東西哪裡不對。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 你原本預期會怎樣
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截圖（選填）
+      description: 把圖片拖進這個框。截圖前先遮住文獻標題、病人資料等不想公開的內容。
+  - type: textarea
+    id: env
+    attributes:
+      label: 環境
+      description: 從 Zotero 的「回報問題…」打開時會自動填好，請保留。從網站來的話，寫 ZotMax 與 Zotero 的版本和作業系統就好。
+      placeholder: ZotMax 0.14、Zotero 10、Windows 11
+      render: text

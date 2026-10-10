@@ -1213,6 +1213,19 @@
 			return bridge.setup.open(Zotero.getMainWindow());
 		},
 
+		/** 「回報問題…」 and 「試用回饋…」 at the foot of 功能 (report.js); the dialog belongs to this window. */
+		reportIssue() {
+			let bridge = Zotero.ZoteroBridge;
+			if (!bridge || !bridge.report) return null;
+			return bridge.report.reportIssue(window);
+		},
+
+		trialFeedback() {
+			let bridge = Zotero.ZoteroBridge;
+			if (!bridge || !bridge.report) return null;
+			return bridge.report.trialFeedback(window);
+		},
+
 		async pickVault() {
 			const { FilePicker } = ChromeUtils.importESModule("chrome://zotero/content/modules/filePicker.mjs");
 			let fp = new FilePicker();

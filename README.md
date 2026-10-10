@@ -965,6 +965,17 @@ pandoc 論文.md --citeproc --bibliography Zotero/references.json --csl apa.csl 
 
 </details>
 
+## 回報問題與試用回饋
+
+遇到問題或想給意見，用 ZotMax 裡的這兩個指令最方便（都需要 GitHub 帳號；GitHub 上的內容是**公開的**）：
+
+- **回報問題…**：先跳出對話框，列出會附上的環境資訊，可以按「複製」，或「在瀏覽器開啟 GitHub」打開[回報問題表單](https://github.com/bobyu89/zotero-bridge/issues/new?template=bug.yml)並自動填進「環境」欄。你做了什麼、發生了什麼事，再自己寫。
+- **試用回饋…**：打開[試用問卷](https://github.com/bobyu89/zotero-bridge/issues/new?template=feedback.yml)（約 5 分鐘，只有「整體來說有沒有用」必填），版本和模式會先填好。
+
+**在哪裡**：工具列 ZotMax 按鈕選單的最下面（設定精靈…上方）、快速指令搜「回報」或「回饋」，以及 設定 → ZotMax →「功能」分頁最下面。
+
+**環境資訊有什麼**：ZotMax、Zotero 版本、作業系統、介面語言、模式（研究生引導／進階／自訂）與跟模式不同的開關、Obsidian／Notion／AI 有沒有設定（只有「有／沒有」）、設定精靈有沒有走完、文獻數的大概範圍（<100、100–1000、>1000），以及最近 5 則 ZotMax 錯誤訊息。錯誤訊息會先拿掉路徑、網址、email、token、Notion ID、引號裡的文字（常是標題）和你的 vault、分類、使用者名稱。**不會**附上文獻內容、筆記、API key、Notion token 或電腦裡的路徑；送出前在 GitHub 上也還能修改或刪掉。請不要在表單裡貼未發表的研究資料或病人資訊。
+
 ## 常見問題與疑難排解
 
 **沒有 API key 可以用嗎？** 可以。同步、閱讀狀態、評讀表、篩選與 PRISMA、儀表板、搜尋連結都不需要 AI。沒有 key 時按一般同步，外掛會提示「AI 筆記需要 API key」；請改用「同步但不呼叫 AI」，或到「功能」關掉「AI 文獻筆記」。
@@ -987,7 +998,7 @@ pandoc 論文.md --citeproc --bibliography Zotero/references.json --csl apa.csl 
 
 **Zotero 刪掉的文獻，筆記會怎樣？** Notion 頁面移到 Notion 垃圾桶；Obsidian 筆記不會刪，只把 `status` 改成「已刪除」。
 
-**出錯了去哪裡看？** 進度視窗會列出每一篇的結果；詳細記錄在 Zotero 的 說明 → 除錯輸出記錄。仍然有問題，請到 [GitHub Issues](https://github.com/bobyu89/zotero-bridge/issues) 回報。
+**出錯了去哪裡看？** 進度視窗會列出每一篇的結果；詳細記錄在 Zotero 的 說明 → 除錯輸出記錄。仍然有問題，請用「回報問題…」（見[回報問題與試用回饋](#回報問題與試用回饋)）或到 [GitHub Issues](https://github.com/bobyu89/zotero-bridge/issues) 回報。
 
 **Zotero 出新的大版本後外掛被停用？** 外掛宣告支援到 Zotero 10.x，依 Zotero 規定不能預先宣告未來版本。Zotero 11 推出時會先停用外掛，確認相容後會自動恢復，不用重新安裝。
 

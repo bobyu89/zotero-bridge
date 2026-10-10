@@ -52,6 +52,10 @@
 	max-width: var(--zb-measure);
 	margin: 0 0 var(--zb-space-3);
 }
+/* 回報問題… and 試用回饋… at the foot of 功能 */
+.zotero-bridge-prefs .zb-report-links {
+	margin: var(--zb-space-5) 0 0;
+}
 .zotero-bridge-prefs .zb-setup-link html|button:focus-visible {
 	outline: 2px solid var(--zb-accent);
 	outline-offset: 1px;

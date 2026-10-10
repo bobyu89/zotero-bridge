@@ -1717,6 +1717,72 @@ const TESTS = [
 		},
 	},
 	{
+		name: "回報問題 opens the bug form with the real profile's environment: versions in it, no profile or vault path (launchURL and the dialog stubbed)",
+		needs: ["Zotero.ZoteroBridge is set and has every module"],
+		async fn(d) {
+			let ZBm = zb();
+			let R = ZBm.report;
+			check(R && typeof R.reportIssue === "function" && R.runtime, "ZB.report is missing");
+			let cmd = ZBm.commands.get("report-issue");
+			check(cmd && !cmd.features.length, "the catalog has no ungated report-issue command");
+			let vault = PathUtils.join(workDir, "vault-report", "My Thesis Vault");
+			let beforeVault = Zotero.Prefs.get(ZB_PREF + "obsidian.vaultPath", true);
+			let launchURL = Zotero.launchURL;
+			let confirm = R.runtime.confirm;
+			let launched = [];
+			let shown = [];
+			let result = null;
+			try {
+				setPref("obsidian.vaultPath", vault);
+				// A ZotMax error with the vault path in it, in the real error console
+				Zotero.logError(new Error(`ZotMax e2e: could not write ${vault}/Zotero/Lin 2019.md`));
+				await delay(200);
+				R.runtime.confirm = (win, title, text) => {
+					shown.push(String(text));
+					return "open";
+				};
+				Zotero.launchURL = (url) => {
+					launched.push(String(url));
+				};
+				result = await ZBm.commands.execute(cmd, ZBm.commands.fromWindow(mainWindow(), "palette"));
+			}
+			finally {
+				Zotero.launchURL = launchURL;
+				R.runtime.confirm = confirm;
+				if (beforeVault) setPref("obsidian.vaultPath", beforeVault);
+				else Zotero.Prefs.clear(ZB_PREF + "obsidian.vaultPath", true);
+			}
+			check(Zotero.launchURL === launchURL, "Zotero.launchURL was not restored");
+			d.action = result ? String(result.action) : "none";
+			eq(d.action, "open", "result of the command");
+			eq(launched.length, 1, "URLs opened");
+			let url = launched[0];
+			d.urlLength = url.length;
+			d.urlStart = url.slice(0, 80);
+			check(url.startsWith("https://github.com/bobyu89/zotero-bridge/issues/new?template=bug.yml&env="), `URL ${d.urlStart}`);
+			check(url.length <= 6000, `URL is ${url.length} characters`);
+			let env = new URL(url).searchParams.get("env") || "";
+			d.env = env;
+			eq(env, String(result.env), "the env in the URL and the one the command returned");
+			check(shown.length === 1 && shown[0].includes(env), "the dialog did not show the env text that went into the URL");
+			check(env.split("\n").includes(`ZotMax：${ctx.expectedVersion}`), `no ZotMax version line in\n${env}`);
+			check(env.split("\n").includes(`Zotero：${Zotero.version}`), `no Zotero version line in\n${env}`);
+			check(/^系統：.+/m.test(env) && /^文獻數：(<100|100–1000|>1000)$/m.test(env), `OS or library bucket missing in\n${env}`);
+			check(env.split("\n").includes("筆記：Obsidian 有設定，Notion 沒有"), `note targets in\n${env}`);
+			check(/ZotMax e2e: could not write /.test(env), `the e2e error is not listed in\n${env}`);
+			let privateValues = [vault, "My Thesis Vault", "Lin 2019", workDir, PathUtils.profileDir, Zotero.DataDirectory.dir];
+			try {
+				if (PathUtils.homeDir && PathUtils.homeDir.length > 5) privateValues.push(PathUtils.homeDir);
+			}
+			catch (e) {}
+			let leaked = privateValues.filter(v => v && (env.includes(v) || url.includes(encodeURIComponent(v)) || shown[0].includes(v)));
+			d.leaked = leaked.map(String);
+			check(!leaked.length, `private values in the report: ${leaked.join(", ")}`);
+		},
+		// The error the test logs itself, in case its path happens to look like the plugin's
+		allow: /ZotMax e2e: could not write/,
+	},
+	{
 		name: "control: Zotero's own preferences window opens and closes cleanly",
 		timeout: 60000,
 		async fn(d) {
