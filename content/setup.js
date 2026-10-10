@@ -530,6 +530,13 @@
 			return { radio, label };
 		}
 
+		// A radio's choice: "change" for the user's click, "click" too, since Gecko does not fire
+		// "change" for a script's radio.click() (the e2e test, assistive tools)
+		function onPick(radio, fn) {
+			listen(radio, "change", fn);
+			listen(radio, "click", fn);
+		}
+
 		function checked(name) {
 			let r = body.querySelector(`input[name="zb-su-${name}"]:checked`);
 			return r ? r.value : null;
@@ -659,7 +666,7 @@
 					obsidianBox.hidden = !(c === "obsidian" || c === "both");
 					notionBox.hidden = !(c === "notion" || c === "both");
 				};
-				for (let o of opts4) listen(o.radio, "change", show);
+				for (let o of opts4) onPick(o.radio, show);
 
 				async function saveNotion() {
 					let check = checkNotion({ token: tokenInput.value, hasToken, database: dbInput.value });
@@ -766,8 +773,8 @@
 					invalid(keyInput, false);
 					setBusy(state.busy);
 				};
-				listen(claude, "change", refresh);
-				listen(openai, "change", refresh);
+				onPick(claude, refresh);
+				onPick(openai, refresh);
 				listen(keyInput, "input", () => setBusy(state.busy));
 				let el = h("section", { class: "zb-su-step", "data-zb-step": "ai", "aria-labelledby": "zb-su-h-ai" },
 					heading("zb-su-h-ai", "aiTitle"),

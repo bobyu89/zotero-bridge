@@ -1668,7 +1668,9 @@ const TESTS = [
 				d.steps.push(step());
 				$("zb-su-notes-obsidian").click();
 				let vaultInput = $("zb-su-vault");
-				check(vaultInput && !doc.querySelector('[data-zb-box="obsidian"]').hidden, "the Obsidian fields did not show after choosing Obsidian");
+				let obsidianBox = doc.querySelector('[data-zb-box="obsidian"]');
+				d.afterObsidian = { checked: !!$("zb-su-notes-obsidian").checked, boxHidden: obsidianBox ? !!obsidianBox.hidden : "none", input: !!vaultInput };
+				check(vaultInput && obsidianBox && !obsidianBox.hidden, `the Obsidian fields did not show after choosing Obsidian (${JSON.stringify(d.afterObsidian)})`);
 				vaultInput.value = vault;
 				vaultInput.dispatchEvent(new dialog.Event("change", { bubbles: true }));
 				d.vaultCheck = await waitFor(() => $("zb-su-vault-check").getAttribute("data-zb-state"), "the vault check", 10000);
