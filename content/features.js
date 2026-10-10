@@ -33,7 +33,7 @@
 	const PREF = "extensions.zotero-bridge.";
 	// Bumped when a later version needs another one-time migration (see MIGRATIONS)
 	const MIGRATION_PREF = "features.version";
-	const MIGRATION_VERSION = 3;
+	const MIGRATION_VERSION = 4;
 
 	const GROUPS = [
 		{ id: "organize", label: "整理與同步", l10n: "zotero-bridge-feature-group-organize" },
@@ -99,6 +99,9 @@
 		{ id: "toolbarButton", group: "organize", pref: "feature.toolbarButton", presets: { guided: true, advanced: true }, since: 2,
 			label: "工具列按鈕",
 			desc: "在文獻清單上方的工具列放一個 ZotMax 按鈕，常用功能依研究流程分組，不必再從右鍵或工具選單找。" },
+		{ id: "zhMeta", group: "organize", pref: "feature.zhMeta", presets: { guided: true, advanced: true }, since: 4,
+			label: "中文文獻補強",
+			desc: "檢查華藝、博碩士論文等匯入的中文文獻資料（作者拆錯、民國年、卷期頁、DOI、語言），列出建議讓你勾選後才修正，也能復原。不連網，也不呼叫 AI。" },
 		// 找文獻
 		{ id: "searchLinks", group: "search", pref: "feature.searchLinks", presets: { guided: true, advanced: true }, usesNetwork: true,
 			label: "醫學資料庫搜尋連結",
@@ -327,6 +330,8 @@
 		{ version: 2, run: s => ({ added: FEATURES.filter(f => f.since === 2).map(f => f.id), newSwitches: migrateNewSwitches(s, 2) }) },
 		// v0.12.0: 評讀陪練 and 讀懂統計 (every switch marked since: 3), the same way as step 2
 		{ version: 3, run: s => ({ added: FEATURES.filter(f => f.since === 3).map(f => f.id), newSwitches: migrateNewSwitches(s, 3) }) },
+		// v0.14.0: 中文文獻補強 (every switch marked since: 4), the same way as step 2
+		{ version: 4, run: s => ({ added: FEATURES.filter(f => f.since === 4).map(f => f.id), newSwitches: migrateNewSwitches(s, 4) }) },
 	];
 
 	/**

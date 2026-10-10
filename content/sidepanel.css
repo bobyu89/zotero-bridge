@@ -248,6 +248,14 @@
 	font-size: 0.92em;
 }
 
+/* 中文文獻補強: 「中文資料：3 個地方要檢查」 and its button */
+.zb-sp-zhmeta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--zb-space-1) var(--zb-space-2);
+}
+
 /* ---------- 動作 ---------- */
 
 .zb-sp-actions,

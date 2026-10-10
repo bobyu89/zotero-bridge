@@ -223,7 +223,7 @@ function key(env, target, keyName, opts = {}) {
 
 const GUIDED = {
 	sync: ["sync", "sync-no-ai", "sync-obsidian", "sync-notion", "status"],
-	organize: ["classify", "dashboard", "concepts", "bibliography", "export-collection"],
+	organize: ["classify", "dashboard", "concepts", "bibliography", "export-collection", "zh-meta"],
 	search: ["quick-search", "search-item"],
 	appraise: ["screen", "dedup", "prisma", "appraisal-summary"],
 	ai: ["regenerate"],
@@ -391,7 +391,14 @@ test("conditional entries follow the state: resume or stop a batch, undo a class
 	Zotero.Prefs.set(P + "classify.lastRun", JSON.stringify({ at: "2026-10-01", libraries: [] }));
 	ZB.features.setEnabled("autoClassify", false);
 	({ entries } = openMenu(env));
-	assert.deepEqual(entries.organize, ["classify-undo", "dashboard", "concepts", "bibliography", "export-collection"]);
+	assert.deepEqual(entries.organize, ["classify-undo", "dashboard", "concepts", "bibliography", "export-collection", "zh-meta"]);
+	// A 中文文獻補強 run to undo: the same, also with the switch off
+	Zotero.Prefs.set(P + "zhMeta.lastRun", JSON.stringify({ at: "2026-10-01", items: [{ libraryID: 1, key: "K", fields: {} }] }));
+	ZB.features.setEnabled("zhMeta", false);
+	({ entries } = openMenu(env));
+	assert.deepEqual(entries.organize, ["classify-undo", "dashboard", "concepts", "bibliography", "export-collection", "zh-meta-undo"]);
+	Zotero.Prefs.set(P + "zhMeta.lastRun", "");
+	ZB.features.setEnabled("zhMeta", true);
 	// AI batches pending: 檢查 AI 批次進度, and 取消 AI 批次 while one has not ended
 	ZB.aiBatch.readState = () => ({ batches: [{ id: "b1", status: "in_progress" }] });
 	({ entries } = openMenu(env));

@@ -243,7 +243,7 @@ const GATED_IN_GUIDED = {
 
 // On in both
 const ON_IN_GUIDED = ["sync", "sync-no-ai", "regenerate", "quick-search", "search-item", "dedup", "prisma", "dashboard", "concepts", "bibliography",
-	"export-collection", "appraisal-summary", "status", "classify", "screen"];
+	"export-collection", "appraisal-summary", "status", "classify", "screen", "zh-meta"];
 
 test("a fresh profile starts in 研究生引導: the gated commands hide everywhere, and come back with 進階 without a restart", async () => {
 	let env = await setup();
@@ -268,7 +268,7 @@ test("a fresh profile starts in 研究生引導: the gated commands hide everywh
 
 	// Everything the item submenu offers switched off: the submenu itself hides
 	F.applyPreset("guided");
-	for (let id of ["sync", "autoClassify", "searchLinks", "screening"]) F.setEnabled(id, false);
+	for (let id of ["sync", "autoClassify", "zhMeta", "searchLinks", "screening"]) F.setEnabled(id, false);
 	assert.equal(visible(itemMenu, ctx), false);
 	assert.ok(noneShown(env, "regenerate", ctx), "AI notes need the sync");
 	F.setEnabled("synthesis", true);

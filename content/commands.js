@@ -343,6 +343,24 @@
 				}
 				return ZB().bibliography.exportCollections(cols);
 			} },
+		// 中文文獻補強 (zh-meta.js): the selected items, else the selected collection's
+		{ id: "zh-meta", group: "organize", l10n: "zotero-bridge-cmd-zh-meta", label: "檢查中文文獻資料（選取項目或分類）…",
+			features: ["zhMeta"], needs: "itemsOrCollection", menus: ["item", "collection"],
+			keywords: ["中文文獻", "中文", "補強", "檢查", "資料", "華藝", "airiti", "博碩士", "ndltd", "民國", "卷期", "頁碼", "doi", "作者", "姓名",
+				"語言", "zh-tw", "apa", "metadata", "chinese", "fix", "check"],
+			run: (sel) => {
+				let items;
+				if (sel.surface === "item") items = sel.items;
+				else if (sel.surface === "collection") items = itemsInCollections(sel.collections);
+				else items = regular(sel).length ? sel.items : sel.collection ? ZB().adapter.itemsInCollection(sel.collection, true) : [];
+				return ZB().zhMeta.run(items);
+			} },
+		// Not gated: what was applied can always be taken back, also after the switch went off
+		{ id: "zh-meta-undo", group: "organize", l10n: "zotero-bridge-cmd-zh-meta-undo", label: "復原上一次中文文獻修正",
+			features: [], needs: null, menus: [],
+			when: () => !!ZB().zhMeta.readLastRun(),
+			keywords: ["復原", "還原", "undo", "revert", "中文文獻", "補強", "修正", "chinese"],
+			run: () => ZB().zhMeta.undoLast() },
 
 		// ---------- 找文獻 ----------
 		{ id: "quick-search", group: "search", l10n: "zotero-bridge-search-tools", label: "醫學文獻快速搜尋…",
